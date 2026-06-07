@@ -12,52 +12,52 @@ import OrderTracker from "./OrderTracker"
 import RiderDashboard from "./RiderDashboard"
 
 const ALL_LISTINGS = [
-  { id: 1,  title: "Calculus Textbook",      price: 380,  category: "Books",       seller: "Ahmad K.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "8th edition, some highlights but all pages intact. Perfect for MTH 151.",                         delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 2,  title: "MacBook Pro M2",          price: 8500, category: "Electronics", seller: "Priya S.",  university: "UG Legon", rating: 5.0, condition: "Excellent", desc: "Used for one semester only. Comes with original box and charger.",                              delivery: ["Pickup", "Rider", "Shipping"],section: "buy" },
-  { id: 3,  title: "University Hoodie",       price: 120,  category: "Clothing",    seller: "Tobias M.", university: "Ashesi",   rating: 4.5, condition: "Good",      desc: "Navy blue XL hoodie. Barely worn, washed once.",                                               delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 4,  title: "Room Sublet",             price: 1800, category: "Housing",     seller: "Leila N.",  university: "UG Legon", rating: 4.9, condition: "N/A",       desc: "Single en-suite room, 10 min walk to campus. Bills included. June–August.",                    delivery: ["Pickup"],                    section: "buy" },
-  { id: 5,  title: "Python Tutoring",         price: 80,   category: "Services",    seller: "James O.",  university: "KNUST",    rating: 4.7, condition: "N/A",       desc: "1hr session. Covers data structures, algorithms, and ML basics. Zoom or campus.",             delivery: ["Pickup"],                    section: "buy" },
-  { id: 6,  title: "Organic Chemistry Book",  price: 420,  category: "Books",       seller: "Sara B.",   university: "UDS",      rating: 4.6, condition: "Fair",      desc: "McMurry 9th edition. Annotated throughout — actually helpful for exams.",                      delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 7,  title: "Mini Fridge",             price: 550,  category: "Electronics", seller: "Chen W.",   university: "UCC",      rating: 4.4, condition: "Good",      desc: "3.2 cu ft, perfect dorm size. Works great. Moving out sale.",                                  delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 8,  title: "Meal Plan Credits",       price: 160,  category: "Food",        seller: "Maya R.",   university: "UG Legon", rating: 4.9, condition: "N/A",       desc: "200 meal plan points. Selling before they expire end of semester.",                           delivery: ["Pickup"],                    section: "buy" },
-  { id: 9,  title: "Trek Bicycle",            price: 1800, category: "Sports",      seller: "Elias T.",  university: "Ashesi",   rating: 5.0, condition: "Excellent", desc: "Trek FX3 campus commuter. Lock and front light included.",                                     delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 10, title: "Oil Painting",            price: 480,  category: "Art",         seller: "Nour H.",   university: "KNUST",    rating: 4.8, condition: "N/A",       desc: "Original 18x24in abstract canvas, signed. Pickup only — fragile.",                           delivery: ["Pickup"],                    section: "buy" },
-  { id: 11, title: "Graphic Design Service",  price: 200,  category: "Services",    seller: "Fiona L.",  university: "Ashesi",   rating: 4.9, condition: "N/A",       desc: "Logos, flyers, social media kits. 48hr turnaround. 3 revisions included.",                    delivery: ["Pickup"],                    section: "buy" },
-  { id: 12, title: "Desk Lamp",               price: 95,   category: "Electronics", seller: "Omar A.",   university: "UG Legon", rating: 4.6, condition: "Good",      desc: "LED adjustable brightness, USB charging port on base.",                                       delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 13, title: "Statistics Textbook",     price: 220,  category: "Books",       seller: "Kwame B.",  university: "UCC",      rating: 4.3, condition: "Fair",      desc: "Good notes inside, a few highlighted chapters. Solid for stats courses.",                      delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 14, title: "Dorm Desk Chair",         price: 310,  category: "Furniture",   seller: "Ama S.",    university: "UG Legon", rating: 4.5, condition: "Good",      desc: "Ergonomic with lumbar support. Height adjustable. Minor scratch on base.",                    delivery: ["Pickup"],                    section: "buy" },
-  { id: 15, title: "Guitar",                  price: 750,  category: "Music",       seller: "Kofi T.",   university: "KNUST",    rating: 4.7, condition: "Good",      desc: "Acoustic guitar with case and spare strings. Great for beginners.",                          delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 16, title: "Scientific Calculator",   price: 180,  category: "Electronics", seller: "Abena M.",  university: "GIJ",      rating: 4.8, condition: "Excellent", desc: "Casio fx-991EX. Barely used, all functions working perfectly.",                               delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 17, title: "Physics Textbook",        price: 200,  category: "Books",       seller: "Kweku A.",  university: "UDS",      rating: 4.5, condition: "Good",      desc: "Halliday & Resnick 10th edition. Perfect for first year physics.",                           delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 18, title: "Wireless Headphones",     price: 450,  category: "Electronics", seller: "Efua M.",   university: "Ashesi",   rating: 4.7, condition: "Excellent", desc: "Sony WH-1000XM4. Noise cancelling, 30hr battery. Barely used.",                              delivery: ["Pickup", "Rider", "Shipping"],section: "buy" },
-  { id: 19, title: "Yoga Mat",                price: 80,   category: "Sports",      seller: "Adwoa B.",  university: "UG Legon", rating: 4.3, condition: "Good",      desc: "6mm thick, non-slip surface. Comes with carry strap.",                                        delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 20, title: "Room Curtains",           price: 60,   category: "Furniture",   seller: "Kofi A.",   university: "KNUST",    rating: 4.2, condition: "Good",      desc: "Blackout curtains, 2 panels. Fits standard dorm windows.",                                    delivery: ["Pickup"],                    section: "buy" },
-  { id: 21, title: "Chemistry Lab Coat",      price: 45,   category: "Clothing",    seller: "Ama K.",    university: "UCC",      rating: 4.6, condition: "Excellent", desc: "Size M lab coat, never used. Required for CHEM labs.",                                        delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 22, title: "Accounting Textbook",     price: 280,  category: "Books",       seller: "Yaw D.",    university: "UG Legon", rating: 4.4, condition: "Fair",      desc: "Financial Accounting 15th edition. Some annotations throughout.",                             delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 23, title: "Electric Kettle",         price: 120,  category: "Electronics", seller: "Abena S.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "1.5L capacity, auto shut-off. Perfect for dorm room.",                                        delivery: ["Pickup", "Rider"],           section: "buy" },
-  { id: 24, title: "Basketball",              price: 90,   category: "Sports",      seller: "Kwame T.",  university: "Ashesi",   rating: 4.5, condition: "Good",      desc: "Size 7 Spalding basketball. Good grip, minor scuff marks.",                                   delivery: ["Pickup"],                    section: "buy" },
+  { id: 1,  title: "Calculus Textbook",       price: 380,  category: "Books",       seller: "Ahmad K.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "8th edition, some highlights but all pages intact. Perfect for MTH 151.",                       delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 2,  title: "MacBook Pro M2",           price: 8500, category: "Electronics", seller: "Priya S.",  university: "UG Legon", rating: 5.0, condition: "Excellent", desc: "Used for one semester only. Comes with original box and charger.",                            delivery: ["Pickup", "Rider", "Shipping"], section: "buy" },
+  { id: 3,  title: "University Hoodie",        price: 120,  category: "Clothing",    seller: "Tobias M.", university: "Ashesi",   rating: 4.5, condition: "Good",      desc: "Navy blue XL hoodie. Barely worn, washed once.",                                             delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 4,  title: "Room Sublet",              price: 1800, category: "Housing",     seller: "Leila N.",  university: "UG Legon", rating: 4.9, condition: "N/A",       desc: "Single en-suite room, 10 min walk to campus. Bills included. June–August.",                  delivery: ["Pickup"],                     section: "buy" },
+  { id: 5,  title: "Python Tutoring",          price: 80,   category: "Services",    seller: "James O.",  university: "KNUST",    rating: 4.7, condition: "N/A",       desc: "1hr session. Covers data structures, algorithms, and ML basics. Zoom or campus.",           delivery: ["Pickup"],                     section: "buy" },
+  { id: 6,  title: "Organic Chemistry Book",   price: 420,  category: "Books",       seller: "Sara B.",   university: "UDS",      rating: 4.6, condition: "Fair",      desc: "McMurry 9th edition. Annotated throughout — actually helpful for exams.",                    delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 7,  title: "Mini Fridge",              price: 550,  category: "Electronics", seller: "Chen W.",   university: "UCC",      rating: 4.4, condition: "Good",      desc: "3.2 cu ft, perfect dorm size. Works great. Moving out sale.",                                delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 8,  title: "Meal Plan Credits",        price: 160,  category: "Food",        seller: "Maya R.",   university: "UG Legon", rating: 4.9, condition: "N/A",       desc: "200 meal plan points. Selling before they expire end of semester.",                         delivery: ["Pickup"],                     section: "buy" },
+  { id: 9,  title: "Trek Bicycle",             price: 1800, category: "Sports",      seller: "Elias T.",  university: "Ashesi",   rating: 5.0, condition: "Excellent", desc: "Trek FX3 campus commuter. Lock and front light included.",                                   delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 10, title: "Oil Painting",             price: 480,  category: "Art",         seller: "Nour H.",   university: "KNUST",    rating: 4.8, condition: "N/A",       desc: "Original 18x24in abstract canvas, signed. Pickup only — fragile.",                         delivery: ["Pickup"],                     section: "buy" },
+  { id: 11, title: "Graphic Design Service",   price: 200,  category: "Services",    seller: "Fiona L.",  university: "Ashesi",   rating: 4.9, condition: "N/A",       desc: "Logos, flyers, social media kits. 48hr turnaround. 3 revisions included.",                  delivery: ["Pickup"],                     section: "buy" },
+  { id: 12, title: "Desk Lamp",                price: 95,   category: "Electronics", seller: "Omar A.",   university: "UG Legon", rating: 4.6, condition: "Good",      desc: "LED adjustable brightness, USB charging port on base.",                                     delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 13, title: "Statistics Textbook",      price: 220,  category: "Books",       seller: "Kwame B.",  university: "UCC",      rating: 4.3, condition: "Fair",      desc: "Good notes inside, a few highlighted chapters. Solid for stats courses.",                    delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 14, title: "Dorm Desk Chair",          price: 310,  category: "Furniture",   seller: "Ama S.",    university: "UG Legon", rating: 4.5, condition: "Good",      desc: "Ergonomic with lumbar support. Height adjustable. Minor scratch on base.",                  delivery: ["Pickup"],                     section: "buy" },
+  { id: 15, title: "Guitar",                   price: 750,  category: "Music",       seller: "Kofi T.",   university: "KNUST",    rating: 4.7, condition: "Good",      desc: "Acoustic guitar with case and spare strings. Great for beginners.",                        delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 16, title: "Scientific Calculator",    price: 180,  category: "Electronics", seller: "Abena M.",  university: "GIJ",      rating: 4.8, condition: "Excellent", desc: "Casio fx-991EX. Barely used, all functions working perfectly.",                             delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 17, title: "Physics Textbook",         price: 200,  category: "Books",       seller: "Kweku A.",  university: "UDS",      rating: 4.5, condition: "Good",      desc: "Halliday & Resnick 10th edition. Perfect for first year physics.",                         delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 18, title: "Wireless Headphones",      price: 450,  category: "Electronics", seller: "Efua M.",   university: "Ashesi",   rating: 4.7, condition: "Excellent", desc: "Sony WH-1000XM4. Noise cancelling, 30hr battery. Barely used.",                            delivery: ["Pickup", "Rider", "Shipping"], section: "buy" },
+  { id: 19, title: "Yoga Mat",                 price: 80,   category: "Sports",      seller: "Adwoa B.",  university: "UG Legon", rating: 4.3, condition: "Good",      desc: "6mm thick, non-slip surface. Comes with carry strap.",                                      delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 20, title: "Room Curtains",            price: 60,   category: "Furniture",   seller: "Kofi A.",   university: "KNUST",    rating: 4.2, condition: "Good",      desc: "Blackout curtains, 2 panels. Fits standard dorm windows.",                                  delivery: ["Pickup"],                     section: "buy" },
+  { id: 21, title: "Chemistry Lab Coat",       price: 45,   category: "Clothing",    seller: "Ama K.",    university: "UCC",      rating: 4.6, condition: "Excellent", desc: "Size M lab coat, never used. Required for CHEM labs.",                                      delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 22, title: "Accounting Textbook",      price: 280,  category: "Books",       seller: "Yaw D.",    university: "UG Legon", rating: 4.4, condition: "Fair",      desc: "Financial Accounting 15th edition. Some annotations throughout.",                           delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 23, title: "Electric Kettle",          price: 120,  category: "Electronics", seller: "Abena S.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "1.5L capacity, auto shut-off. Perfect for dorm room.",                                      delivery: ["Pickup", "Rider"],            section: "buy" },
+  { id: 24, title: "Basketball",               price: 90,   category: "Sports",      seller: "Kwame T.",  university: "Ashesi",   rating: 4.5, condition: "Good",      desc: "Size 7 Spalding basketball. Good grip, minor scuff marks.",                                 delivery: ["Pickup"],                     section: "buy" },
 ]
 
 const RENTALS_SEARCH = [
-  { id: 101, title: "Canon EOS M50 Camera",        category: "Electronics", image: 21, section: "rent" },
-  { id: 102, title: "Projector – Epson X41",       category: "Electronics", image: 22, section: "rent" },
-  { id: 103, title: "Mountain Bike",               category: "Sports",      image: 23, section: "rent" },
-  { id: 104, title: "MacBook Air M1",              category: "Electronics", image: 24, section: "rent" },
-  { id: 105, title: "Acoustic Guitar",             category: "Music",       image: 25, section: "rent" },
-  { id: 106, title: "Camping Tent (4-person)",     category: "Outdoors",    image: 26, section: "rent" },
-  { id: 107, title: "PS5 Console + 2 Controllers", category: "Gaming",      image: 27, section: "rent" },
-  { id: 108, title: "Scientific Calculator (Casio)",category: "Academic",   image: 28, section: "rent" },
+  { id: 101, title: "Canon EOS M50 Camera",         category: "Electronics", image: 21, section: "rent" },
+  { id: 102, title: "Projector – Epson X41",        category: "Electronics", image: 22, section: "rent" },
+  { id: 103, title: "Mountain Bike",                category: "Sports",      image: 23, section: "rent" },
+  { id: 104, title: "MacBook Air M1",               category: "Electronics", image: 24, section: "rent" },
+  { id: 105, title: "Acoustic Guitar",              category: "Music",       image: 25, section: "rent" },
+  { id: 106, title: "Camping Tent (4-person)",      category: "Outdoors",    image: 26, section: "rent" },
+  { id: 107, title: "PS5 Console + 2 Controllers",  category: "Gaming",      image: 27, section: "rent" },
+  { id: 108, title: "Scientific Calculator (Casio)", category: "Academic",   image: 28, section: "rent" },
 ]
 
 const SERVICES_SEARCH = [
-  { id: 201, title: "Mathematics Private Lessons",    category: "Lessons",       image: 31, section: "service" },
-  { id: 202, title: "Concert & Event Photography",    category: "Photography",   image: 32, section: "service" },
-  { id: 203, title: "Room & Hostel Cleaning",         category: "Cleaning",      image: 33, section: "service" },
-  { id: 204, title: "Python & Data Science Tutoring", category: "Lessons",       image: 34, section: "service" },
-  { id: 205, title: "Graphic Design – Logo & Branding",category: "Design",       image: 35, section: "service" },
-  { id: 206, title: "DJ Services for Events",         category: "Entertainment", image: 36, section: "service" },
-  { id: 207, title: "French Language Lessons",        category: "Lessons",       image: 37, section: "service" },
-  { id: 208, title: "CV & Cover Letter Writing",      category: "Career",        image: 38, section: "service" },
+  { id: 201, title: "Mathematics Private Lessons",     category: "Lessons",       image: 31, section: "service" },
+  { id: 202, title: "Concert & Event Photography",     category: "Photography",   image: 32, section: "service" },
+  { id: 203, title: "Room & Hostel Cleaning",          category: "Cleaning",      image: 33, section: "service" },
+  { id: 204, title: "Python & Data Science Tutoring",  category: "Lessons",       image: 34, section: "service" },
+  { id: 205, title: "Graphic Design – Logo & Branding",category: "Design",        image: 35, section: "service" },
+  { id: 206, title: "DJ Services for Events",          category: "Entertainment", image: 36, section: "service" },
+  { id: 207, title: "French Language Lessons",         category: "Lessons",       image: 37, section: "service" },
+  { id: 208, title: "CV & Cover Letter Writing",       category: "Career",        image: 38, section: "service" },
 ]
 
 const ALL_ITEMS = [
@@ -359,10 +359,8 @@ function App() {
   const visibleListings = ALL_LISTINGS.slice(0, visibleCount)
   const hasMore = visibleCount < ALL_LISTINGS.length
 
-  // Reset on tab change
   useEffect(() => { setVisibleCount(PAGE_SIZE) }, [activePage])
 
-  // Infinite scroll — only triggers after staying at bottom for 1 second
   useEffect(() => {
     const handleScroll = () => {
       const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 10
@@ -391,7 +389,6 @@ function App() {
     }
   }, [hasMore, loadingMore, activePage])
 
-  // Close search dropdown on outside click
   useEffect(() => {
     const handleClick = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) setShowDropdown(false)
@@ -400,7 +397,6 @@ function App() {
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
-  // Ctrl+Shift+A → admin panel
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === "A") setShowAdmin(true)
@@ -409,12 +405,10 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [])
 
-  // /admin route
   useEffect(() => {
     if (window.location.pathname === "/admin") setShowAdmin(true)
   }, [])
 
-  // Restore user from localStorage token
   useEffect(() => {
     const token = localStorage.getItem("silkroad_token")
     if (token && !user) {
@@ -441,7 +435,7 @@ function App() {
     try {
       const res = await axios.get("https://open.er-api.com/v6/latest/GHS")
       setRate(res.data.rates.USD)
-    } catch { }
+    } catch {}
     setRateLoading(false)
   }
 
@@ -482,7 +476,9 @@ function App() {
 
       {/* ── NAVBAR ── */}
       <nav style={{ position: "sticky", top: 0, zIndex: 90 }}>
-        <div style={{ background: "#0a0a0a", padding: "12px 16px", display: "flex", alignItems: "center", gap: "10px", borderBottom: "1px solid #1e1e1e" }}>
+
+        {/* Top row — Logo + actions */}
+        <div style={{ background: "#0a0a0a", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1a1a1a" }}>
 
           {/* Logo */}
           <h1 onClick={() => setActivePage("buy")}
@@ -490,58 +486,8 @@ function App() {
             Silk Road
           </h1>
 
-          {/* Search */}
-          <div ref={searchRef} style={{ flex: 1, position: "relative" }}>
-            <input
-              placeholder="Search e.g. 'rent guitar', 'buy electronics'..."
-              value={searchQuery}
-              onChange={e => { setSearchQuery(e.target.value); setShowDropdown(true) }}
-              onKeyDown={handleSearchKey}
-              onFocus={() => searchQuery.trim() && setShowDropdown(true)}
-              style={{ width: "100%", padding: "9px 36px 9px 14px", borderRadius: "8px", border: "none", background: "#1e1e1e", color: "#fff", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
-            />
-            {searchQuery ? (
-              <button onClick={() => { setSearchQuery(""); setShowDropdown(false); setShowFullResults(false) }}
-                style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "15px" }}>✕</button>
-            ) : (
-              <span style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "15px", opacity: .4, pointerEvents: "none" }}>🔍</span>
-            )}
-
-            {/* Dropdown */}
-            {showDropdown && searchQuery.trim() && dropdownResults.length > 0 && (
-              <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,.6)" }}>
-                {dropdownResults.map(item => (
-                  <div key={item.id} onClick={() => { setActivePage(item.section); setShowDropdown(false) }}
-                    style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #222" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#222"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <img src={`https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "34px", height: "34px", borderRadius: "6px", objectFit: "cover", flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "13px", fontWeight: "600", color: "#f0ede8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
-                      <div style={{ fontSize: "11px", color: "#555" }}>{item.category}</div>
-                    </div>
-                    <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}22`, padding: "2px 8px", borderRadius: "20px", flexShrink: 0 }}>
-                      {SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}
-                    </span>
-                  </div>
-                ))}
-                <div onClick={() => { setShowDropdown(false); setShowFullResults(true) }}
-                  style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600" }}
-                  onMouseEnter={e => e.currentTarget.style.background = "#222"}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                  See all results →
-                </div>
-              </div>
-            )}
-            {showDropdown && searchQuery.trim() && dropdownResults.length === 0 && (
-              <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, padding: "14px", textAlign: "center", color: "#555", fontSize: "13px" }}>
-                No results for "{searchQuery}"
-              </div>
-            )}
-          </div>
-
           {/* Right actions */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
 
             {/* Sell */}
             <button onClick={() => setShowSell(true)}
@@ -549,10 +495,10 @@ function App() {
               + Sell
             </button>
 
-            {/* Rider dashboard — only if user is a rider */}
+            {/* Rider dashboard */}
             {user?.isRider && (
               <button onClick={() => setShowRiderDashboard(true)}
-                style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "8px 10px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "16px" }}
+                style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
                 title="Rider Dashboard">
                 🛵
               </button>
@@ -591,19 +537,76 @@ function App() {
           </div>
         </div>
 
-        {/* Bottom nav */}
-        <div style={{ background: "#111", padding: "0 16px", display: "flex", gap: "4px", borderBottom: "1px solid #1e1e1e", overflowX: "auto" }}>
-          {[
-            { label: "Buy Products",   page: "buy" },
-            { label: "Rent Items",     page: "rent" },
-            { label: "Request Service",page: "service" },
-            { label: "Become a Rider", page: "rider" },
-          ].map(link => (
-            <button key={link.page} onClick={() => setActivePage(link.page)}
-              style={{ background: "transparent", border: "none", color: activePage === link.page ? "#c8a97e" : "#aaa", cursor: "pointer", fontSize: "13px", fontWeight: "600", borderBottom: activePage === link.page ? "2px solid #c8a97e" : "2px solid transparent", padding: "12px 14px", whiteSpace: "nowrap", fontFamily: "inherit" }}>
-              {link.label}
-            </button>
-          ))}
+        {/* Bottom section — nav tabs + search */}
+        <div style={{ background: "#111", borderBottom: "1px solid #1e1e1e" }}>
+
+          {/* Nav tabs */}
+          <div style={{ padding: "0 16px", display: "flex", gap: "4px", overflowX: "auto" }}>
+            {[
+              { label: "Buy Products",    page: "buy" },
+              { label: "Rent Items",      page: "rent" },
+              { label: "Request Service", page: "service" },
+              { label: "Become a Rider",  page: "rider" },
+            ].map(link => (
+              <button key={link.page} onClick={() => setActivePage(link.page)}
+                style={{ background: "transparent", border: "none", color: activePage === link.page ? "#c8a97e" : "#aaa", cursor: "pointer", fontSize: "13px", fontWeight: "600", borderBottom: activePage === link.page ? "2px solid #c8a97e" : "2px solid transparent", padding: "12px 14px", whiteSpace: "nowrap", fontFamily: "inherit" }}>
+                {link.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search bar */}
+          <div style={{ padding: "8px 16px 12px" }}>
+            <div ref={searchRef} style={{ position: "relative" }}>
+              <input
+                placeholder="Search e.g. 'rent guitar', 'buy electronics', 'service cleaning'..."
+                value={searchQuery}
+                onChange={e => { setSearchQuery(e.target.value); setShowDropdown(true) }}
+                onKeyDown={handleSearchKey}
+                onFocus={() => searchQuery.trim() && setShowDropdown(true)}
+                style={{ width: "100%", padding: "10px 36px 10px 14px", borderRadius: "8px", border: "none", background: "#1e1e1e", color: "#fff", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
+              />
+              {searchQuery ? (
+                <button onClick={() => { setSearchQuery(""); setShowDropdown(false); setShowFullResults(false) }}
+                  style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "15px" }}>✕</button>
+              ) : (
+                <span style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "15px", opacity: .4, pointerEvents: "none" }}>🔍</span>
+              )}
+
+              {/* Dropdown */}
+              {showDropdown && searchQuery.trim() && dropdownResults.length > 0 && (
+                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,.6)" }}>
+                  {dropdownResults.map(item => (
+                    <div key={item.id} onClick={() => { setActivePage(item.section); setShowDropdown(false) }}
+                      style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #222" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#222"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                      <img src={`https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "34px", height: "34px", borderRadius: "6px", objectFit: "cover", flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "13px", fontWeight: "600", color: "#f0ede8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
+                        <div style={{ fontSize: "11px", color: "#555" }}>{item.category}</div>
+                      </div>
+                      <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}22`, padding: "2px 8px", borderRadius: "20px", flexShrink: 0 }}>
+                        {SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}
+                      </span>
+                    </div>
+                  ))}
+                  <div onClick={() => { setShowDropdown(false); setShowFullResults(true) }}
+                    style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#222"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    See all results →
+                  </div>
+                </div>
+              )}
+
+              {showDropdown && searchQuery.trim() && dropdownResults.length === 0 && (
+                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, padding: "14px", textAlign: "center", color: "#555", fontSize: "13px" }}>
+                  No results for "{searchQuery}"
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </nav>
 
@@ -671,7 +674,11 @@ function App() {
       <FooterModal type={footerModal} onClose={() => setFooterModal(null)} siteSettings={siteSettings} />
 
       {showFullResults && searchQuery.trim() && (
-        <SearchResults query={searchQuery} onClose={() => setShowFullResults(false)} onNavigate={(section) => { setActivePage(section); setShowFullResults(false) }} />
+        <SearchResults
+          query={searchQuery}
+          onClose={() => setShowFullResults(false)}
+          onNavigate={(section) => { setActivePage(section); setShowFullResults(false) }}
+        />
       )}
 
       {selectedProduct && (
