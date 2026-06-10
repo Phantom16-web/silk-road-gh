@@ -28,9 +28,7 @@ export const loginUser = async (data) => {
 }
 
 export const getMe = async () => {
-  const res = await fetch(`${BASE_URL}/auth/me`, {
-    headers: getHeaders(),
-  })
+  const res = await fetch(`${BASE_URL}/auth/me`, { headers: getHeaders() })
   return res.json()
 }
 
@@ -64,6 +62,11 @@ export const deleteAccount = async () => {
 export const getListings = async (filters = {}) => {
   const params = new URLSearchParams(filters).toString()
   const res = await fetch(`${BASE_URL}/listings?${params}`)
+  return res.json()
+}
+
+export const getMyListings = async () => {
+  const res = await fetch(`${BASE_URL}/listings/my`, { headers: getHeaders() })
   return res.json()
 }
 
@@ -110,16 +113,12 @@ export const createOrder = async (data) => {
 }
 
 export const getMyOrders = async () => {
-  const res = await fetch(`${BASE_URL}/orders/my`, {
-    headers: getHeaders(),
-  })
+  const res = await fetch(`${BASE_URL}/orders/my`, { headers: getHeaders() })
   return res.json()
 }
 
 export const getSellingOrders = async () => {
-  const res = await fetch(`${BASE_URL}/orders/selling`, {
-    headers: getHeaders(),
-  })
+  const res = await fetch(`${BASE_URL}/orders/selling`, { headers: getHeaders() })
   return res.json()
 }
 
