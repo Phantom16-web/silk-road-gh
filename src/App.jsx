@@ -10,6 +10,7 @@ import SellListing from "./SellListing"
 import AdminPanel from "./AdminPanel"
 import OrderTracker from "./OrderTracker"
 import RiderDashboard from "./RiderDashboard"
+import { getListings } from "./api"
 
 const ALL_LISTINGS = [
   { id: 1,  title: "Calculus Textbook",       price: 380,  category: "Books",       seller: "Ahmad K.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "8th edition, some highlights but all pages intact. Perfect for MTH 151.",                       delivery: ["Pickup", "Rider"],            section: "buy" },
@@ -39,14 +40,14 @@ const ALL_LISTINGS = [
 ]
 
 const RENTALS_SEARCH = [
-  { id: 101, title: "Canon EOS M50 Camera",         category: "Electronics", image: 21, section: "rent" },
-  { id: 102, title: "Projector – Epson X41",        category: "Electronics", image: 22, section: "rent" },
-  { id: 103, title: "Mountain Bike",                category: "Sports",      image: 23, section: "rent" },
-  { id: 104, title: "MacBook Air M1",               category: "Electronics", image: 24, section: "rent" },
-  { id: 105, title: "Acoustic Guitar",              category: "Music",       image: 25, section: "rent" },
-  { id: 106, title: "Camping Tent (4-person)",      category: "Outdoors",    image: 26, section: "rent" },
-  { id: 107, title: "PS5 Console + 2 Controllers",  category: "Gaming",      image: 27, section: "rent" },
-  { id: 108, title: "Scientific Calculator (Casio)", category: "Academic",   image: 28, section: "rent" },
+  { id: 101, title: "Canon EOS M50 Camera",          category: "Electronics", image: 21, section: "rent" },
+  { id: 102, title: "Projector – Epson X41",         category: "Electronics", image: 22, section: "rent" },
+  { id: 103, title: "Mountain Bike",                 category: "Sports",      image: 23, section: "rent" },
+  { id: 104, title: "MacBook Air M1",                category: "Electronics", image: 24, section: "rent" },
+  { id: 105, title: "Acoustic Guitar",               category: "Music",       image: 25, section: "rent" },
+  { id: 106, title: "Camping Tent (4-person)",       category: "Outdoors",    image: 26, section: "rent" },
+  { id: 107, title: "PS5 Console + 2 Controllers",   category: "Gaming",      image: 27, section: "rent" },
+  { id: 108, title: "Scientific Calculator (Casio)", category: "Academic",    image: 28, section: "rent" },
 ]
 
 const SERVICES_SEARCH = [
@@ -106,42 +107,54 @@ const parseSearch = (query) => {
 // ── Product Modal ─────────────────────────────────────────────────────────────
 function ProductModal({ item, onClose, onCart, toUSD }) {
   if (!item) return null
+  const isDbItem = !!item._id
+  const sellerName = isDbItem ? item.seller?.name : item.seller
+  const university = isDbItem ? item.seller?.university : item.university
+  const itemImage = item.image || `https://picsum.photos/seed/${item.id}/600/350`
+  const delivery = item.delivery || []
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
       <div style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
         <div style={{ position: "relative" }}>
-          <img src={`https://picsum.photos/seed/${item.id}/600/350`} alt={item.title} style={{ width: "100%", height: "240px", objectFit: "cover", borderRadius: "16px 16px 0 0" }} />
+          <img src={itemImage} alt={item.title} style={{ width: "100%", height: "240px", objectFit: "cover", borderRadius: "16px 16px 0 0" }} />
           <button onClick={onClose} style={{ position: "absolute", top: "12px", right: "12px", background: "#000000aa", border: "none", color: "#fff", fontSize: "18px", cursor: "pointer", width: "32px", height: "32px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
         <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div>
             <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "6px" }}>{item.category}</div>
             <h2 style={{ fontSize: "22px", fontWeight: "700", color: "#f0ede8", marginBottom: "6px" }}>{item.title}</h2>
-            <div style={{ fontSize: "13px", color: "#666" }}>Listed by <span style={{ color: "#aaa", fontWeight: "600" }}>{item.seller}</span></div>
-            <div style={{ fontSize: "12px", color: "#555", marginTop: "2px" }}>🎓 {item.university}</div>
+            <div style={{ fontSize: "13px", color: "#666" }}>Listed by <span style={{ color: "#aaa", fontWeight: "600" }}>{sellerName}</span></div>
+            {university && <div style={{ fontSize: "12px", color: "#555", marginTop: "2px" }}>🎓 {university}</div>}
           </div>
           <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
-            <div style={{ fontSize: "14px", color: "#c8a97e" }}>{"★".repeat(Math.round(item.rating))}{"☆".repeat(5 - Math.round(item.rating))} <span style={{ color: "#666", fontSize: "13px" }}>{item.rating}</span></div>
-            <div style={{ fontSize: "13px", color: "#888" }}>Condition: <span style={{ color: "#f0ede8", fontWeight: "600" }}>{item.condition}</span></div>
+            {item.rating > 0 && (
+              <div style={{ fontSize: "14px", color: "#c8a97e" }}>{"★".repeat(Math.round(item.rating))}{"☆".repeat(5 - Math.round(item.rating))} <span style={{ color: "#666", fontSize: "13px" }}>{item.rating}</span></div>
+            )}
+            {item.condition && item.condition !== "N/A" && (
+              <div style={{ fontSize: "13px", color: "#888" }}>Condition: <span style={{ color: "#f0ede8", fontWeight: "600" }}>{item.condition}</span></div>
+            )}
           </div>
           <div style={{ background: "#1a1a1a", borderRadius: "10px", padding: "14px" }}>
             <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>About this item</div>
             <p style={{ fontSize: "14px", color: "#aaa", lineHeight: "1.7", margin: 0 }}>{item.desc}</p>
           </div>
-          <div>
-            <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>Delivery Options</div>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {item.delivery.map(d => (
-                <span key={d} style={{ fontSize: "12px", background: "#1e1e1e", border: "1px solid #2a2a2a", color: "#aaa", padding: "5px 12px", borderRadius: "20px", fontWeight: "600" }}>
-                  {d === "Pickup" ? "📍 Campus Pickup" : d === "Rider" ? "🛵 Rider Delivery" : "📦 Shipping"}
-                </span>
-              ))}
+          {delivery.length > 0 && (
+            <div>
+              <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>Delivery Options</div>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {delivery.map(d => (
+                  <span key={d} style={{ fontSize: "12px", background: "#1e1e1e", border: "1px solid #2a2a2a", color: "#aaa", padding: "5px 12px", borderRadius: "20px", fontWeight: "600" }}>
+                    {d === "Pickup" ? "📍 Campus Pickup" : d === "Rider" ? "🛵 Rider Delivery" : "📦 Shipping"}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #1e1e1e", paddingTop: "16px" }}>
             <div>
-              <div style={{ fontSize: "26px", fontWeight: "700", color: "#c8a97e" }}>₵{item.price.toLocaleString()}</div>
-              <div style={{ fontSize: "12px", color: "#555" }}>${toUSD(item.price)} USD</div>
+              <div style={{ fontSize: "26px", fontWeight: "700", color: "#c8a97e" }}>₵{(item.price || 0).toLocaleString()}</div>
+              <div style={{ fontSize: "12px", color: "#555" }}>${toUSD(item.price || 0)} USD</div>
             </div>
             <button onClick={() => { onCart(item); onClose() }} style={{ background: "#c8a97e", border: "none", padding: "12px 24px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}>
               🛒 Add to Cart
@@ -325,6 +338,24 @@ function SearchResults({ query, onClose, onNavigate }) {
   )
 }
 
+// ── Skeleton loader ───────────────────────────────────────────────────────────
+function ListingSkeleton() {
+  return (
+    <div style={{ background: "#111", borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e" }}>
+      <style>{`@keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:.8} }`}</style>
+      <div style={{ width: "100%", height: "180px", background: "#1a1a1a", animation: "shimmer 1.5s ease infinite" }} />
+      <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={{ height: "10px", background: "#1a1a1a", borderRadius: "4px", width: "40%", animation: "shimmer 1.5s ease infinite" }} />
+        <div style={{ height: "16px", background: "#1a1a1a", borderRadius: "4px", animation: "shimmer 1.5s ease infinite" }} />
+        <div style={{ height: "10px", background: "#1a1a1a", borderRadius: "4px", width: "60%", animation: "shimmer 1.5s ease infinite" }} />
+        <div style={{ height: "10px", background: "#1a1a1a", borderRadius: "4px", width: "50%", animation: "shimmer 1.5s ease infinite" }} />
+        <div style={{ height: "24px", background: "#1a1a1a", borderRadius: "4px", width: "50%", animation: "shimmer 1.5s ease infinite" }} />
+        <div style={{ height: "36px", background: "#1a1a1a", borderRadius: "8px", animation: "shimmer 1.5s ease infinite" }} />
+      </div>
+    </div>
+  )
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 function App() {
   const [rate, setRate] = useState(null)
@@ -349,18 +380,51 @@ function App() {
   const [authCallback, setAuthCallback] = useState(null)
   const [siteSettings, setSiteSettings] = useState(DEFAULT_SITE_SETTINGS)
 
-  // Infinite scroll
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  // Listings state
+  const [dbListings, setDbListings] = useState([])
+  const [listingsLoading, setListingsLoading] = useState(false)
+  const [listingsPage, setListingsPage] = useState(1)
+  const [hasMoreListings, setHasMoreListings] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
   const bottomReachedTimerRef = useRef(null)
   const isAtBottomRef = useRef(false)
   const searchRef = useRef(null)
 
-  const visibleListings = ALL_LISTINGS.slice(0, visibleCount)
-  const hasMore = visibleCount < ALL_LISTINGS.length
+  // Use DB listings if available, otherwise fall back to static
+  const usingDb = dbListings.length > 0
+  const displayListings = usingDb ? dbListings : ALL_LISTINGS.slice(0, visibleCount)
+  const hasMore = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
 
-  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [activePage])
+  // Fetch real listings from backend
+  const fetchListings = async (page = 1, reset = false) => {
+    if (page === 1) setListingsLoading(true)
+    else setLoadingMore(true)
+    try {
+      const data = await getListings({ type: "product", page, limit: PAGE_SIZE })
+      if (Array.isArray(data) && data.length > 0) {
+        if (reset || page === 1) setDbListings(data)
+        else setDbListings(prev => [...prev, ...data])
+        setHasMoreListings(data.length === PAGE_SIZE)
+        setListingsPage(page)
+      } else if (Array.isArray(data) && data.length === 0 && page === 1) {
+        setDbListings([]) // fall back to static
+        setHasMoreListings(false)
+      }
+    } catch {
+      // silently fall back to static data
+    }
+    setListingsLoading(false)
+    setLoadingMore(false)
+  }
 
+  useEffect(() => {
+    if (activePage === "buy") fetchListings(1, true)
+    setVisibleCount(PAGE_SIZE)
+  }, [activePage])
+
+  // Infinite scroll
   useEffect(() => {
     const handleScroll = () => {
       const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 10
@@ -369,11 +433,15 @@ function App() {
           isAtBottomRef.current = true
           bottomReachedTimerRef.current = setTimeout(() => {
             if (isAtBottomRef.current) {
-              setLoadingMore(true)
-              setTimeout(() => {
-                setVisibleCount(c => Math.min(c + PAGE_SIZE, ALL_LISTINGS.length))
-                setLoadingMore(false)
-              }, 600)
+              if (usingDb) {
+                fetchListings(listingsPage + 1)
+              } else {
+                setLoadingMore(true)
+                setTimeout(() => {
+                  setVisibleCount(c => Math.min(c + PAGE_SIZE, ALL_LISTINGS.length))
+                  setLoadingMore(false)
+                }, 600)
+              }
             }
           }, 1000)
         }
@@ -387,8 +455,9 @@ function App() {
       window.removeEventListener("scroll", handleScroll)
       if (bottomReachedTimerRef.current) clearTimeout(bottomReachedTimerRef.current)
     }
-  }, [hasMore, loadingMore, activePage])
+  }, [hasMore, loadingMore, activePage, usingDb, listingsPage])
 
+  // Close search on outside click
   useEffect(() => {
     const handleClick = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) setShowDropdown(false)
@@ -397,6 +466,7 @@ function App() {
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
+  // Ctrl+Shift+A admin shortcut
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === "A") setShowAdmin(true)
@@ -405,10 +475,12 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [])
 
+  // /admin route
   useEffect(() => {
     if (window.location.pathname === "/admin") setShowAdmin(true)
   }, [])
 
+  // Restore session from token
   useEffect(() => {
     const token = localStorage.getItem("silkroad_token")
     if (token && !user) {
@@ -443,18 +515,21 @@ function App() {
 
   const toUSD = (ghs) => rate ? (ghs * rate).toFixed(2) : "..."
 
+  const getItemId = (item) => item._id || item.id
+
   const addToCart = (item) => {
     setCart(prev => {
-      const exists = prev.find(i => i.id === item.id)
-      if (exists) return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i)
+      const id = getItemId(item)
+      const exists = prev.find(i => getItemId(i) === id)
+      if (exists) return prev.map(i => getItemId(i) === id ? { ...i, qty: i.qty + 1 } : i)
       return [...prev, { ...item, qty: 1 }]
     })
     setCartOpen(true)
   }
 
-  const updateQty = (id, delta) => setCart(prev => prev.map(i => i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i))
-  const removeItem = (id) => setCart(prev => prev.filter(i => i.id !== id))
-  const cartTotal = cart.reduce((sum, i) => sum + i.price * i.qty, 0)
+  const updateQty = (id, delta) => setCart(prev => prev.map(i => getItemId(i) === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i))
+  const removeItem = (id) => setCart(prev => prev.filter(i => getItemId(i) !== id))
+  const cartTotal = cart.reduce((sum, i) => sum + (i.price || i.dailyRate || 0) * i.qty, 0)
   const cartCount = cart.reduce((sum, i) => sum + i.qty, 0)
 
   const handleSearchKey = (e) => {
@@ -477,25 +552,20 @@ function App() {
       {/* ── NAVBAR ── */}
       <nav style={{ position: "sticky", top: 0, zIndex: 90 }}>
 
-        {/* Top row — Logo + actions */}
+        {/* Top row */}
         <div style={{ background: "#0a0a0a", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1a1a1a" }}>
 
-          {/* Logo */}
           <h1 onClick={() => setActivePage("buy")}
             style={{ color: "#c8a97e", fontWeight: "bold", fontSize: "20px", flexShrink: 0, cursor: "pointer", margin: 0 }}>
             Silk Road
           </h1>
 
-          {/* Right actions */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-
-            {/* Sell */}
             <button onClick={() => setShowSell(true)}
               style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "8px 12px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", whiteSpace: "nowrap" }}>
               + Sell
             </button>
 
-            {/* Rider dashboard */}
             {user?.isRider && (
               <button onClick={() => setShowRiderDashboard(true)}
                 style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
@@ -504,14 +574,12 @@ function App() {
               </button>
             )}
 
-            {/* Track order */}
             <button onClick={() => setShowTracker(true)}
               style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
               title="Track Order">
               📦
             </button>
 
-            {/* Auth */}
             {user ? (
               <button onClick={() => setShowAccount(true)}
                 style={{ background: "#c8a97e", border: "none", width: "34px", height: "34px", borderRadius: "50%", fontWeight: "800", cursor: "pointer", fontSize: "14px", color: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -524,7 +592,6 @@ function App() {
               </button>
             )}
 
-            {/* Cart */}
             <button onClick={() => setCartOpen(true)}
               style={{ position: "relative", background: "transparent", border: "none", color: "#fff", fontSize: "22px", cursor: "pointer", padding: "4px" }}>
               🛒
@@ -537,7 +604,7 @@ function App() {
           </div>
         </div>
 
-        {/* Bottom section — nav tabs + search */}
+        {/* Bottom nav + search */}
         <div style={{ background: "#111", borderBottom: "1px solid #1e1e1e" }}>
 
           {/* Nav tabs */}
@@ -573,7 +640,6 @@ function App() {
                 <span style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "15px", opacity: .4, pointerEvents: "none" }}>🔍</span>
               )}
 
-              {/* Dropdown */}
               {showDropdown && searchQuery.trim() && dropdownResults.length > 0 && (
                 <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,.6)" }}>
                   {dropdownResults.map(item => (
@@ -625,38 +691,53 @@ function App() {
               </button>
             </div>
 
+            {/* Listings grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "16px" }}>
-              {visibleListings.map(item => (
-                <div key={item.id}
-                  style={{ background: "#111", borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e", transition: "transform 0.2s" }}
-                  onMouseEnter={e => e.currentTarget.style.transform = "translateY(-4px)"}
-                  onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
-                  <img src={`https://picsum.photos/seed/${item.id}/300/200`} alt={item.title}
-                    onClick={() => setSelectedProduct(item)}
-                    style={{ width: "100%", height: "180px", objectFit: "cover", cursor: "pointer", display: "block" }} />
-                  <div style={{ padding: "14px" }}>
-                    <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>{item.category}</div>
-                    <div onClick={() => setSelectedProduct(item)} style={{ fontSize: "14px", fontWeight: "600", marginBottom: "4px", color: "#f0ede8", cursor: "pointer" }}>{item.title}</div>
-                    <div style={{ fontSize: "12px", color: "#666", marginBottom: "2px" }}>by {item.seller}</div>
-                    <div style={{ fontSize: "11px", color: "#555", marginBottom: "6px" }}>🎓 {item.university} · {item.condition}</div>
-                    <div style={{ fontSize: "13px", color: "#aaa", marginBottom: "10px" }}>{"★".repeat(Math.round(item.rating))} {item.rating}</div>
-                    <div style={{ fontSize: "18px", fontWeight: "700", color: "#c8a97e" }}>
-                      ₵{item.price.toLocaleString()}
-                      <span style={{ fontSize: "13px", color: "#666", fontWeight: "400" }}> (${toUSD(item.price)})</span>
-                    </div>
-                    <button onClick={() => addToCart(item)}
-                      style={{ marginTop: "10px", width: "100%", background: "#c8a97e", border: "none", padding: "9px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px" }}>
-                      Add to Cart
-                    </button>
-                  </div>
-                </div>
-              ))}
+              {listingsLoading
+                ? Array.from({ length: PAGE_SIZE }).map((_, i) => <ListingSkeleton key={i} />)
+                : displayListings.map(item => {
+                    const itemId = getItemId(item)
+                    const isDbItem = !!item._id
+                    const sellerName = isDbItem ? item.seller?.name : item.seller
+                    const university = isDbItem ? item.seller?.university : item.university
+                    const itemPrice = item.price || item.dailyRate || 0
+                    const itemImage = item.image || `https://picsum.photos/seed/${item.id}/300/200`
+
+                    return (
+                      <div key={itemId}
+                        style={{ background: "#111", borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e", transition: "transform 0.2s" }}
+                        onMouseEnter={e => e.currentTarget.style.transform = "translateY(-4px)"}
+                        onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
+                        <img src={itemImage} alt={item.title}
+                          onClick={() => setSelectedProduct(item)}
+                          style={{ width: "100%", height: "180px", objectFit: "cover", cursor: "pointer", display: "block" }} />
+                        <div style={{ padding: "14px" }}>
+                          <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>{item.category}</div>
+                          <div onClick={() => setSelectedProduct(item)} style={{ fontSize: "14px", fontWeight: "600", marginBottom: "4px", color: "#f0ede8", cursor: "pointer" }}>{item.title}</div>
+                          <div style={{ fontSize: "12px", color: "#666", marginBottom: "2px" }}>by {sellerName}</div>
+                          <div style={{ fontSize: "11px", color: "#555", marginBottom: "6px" }}>🎓 {university} · {item.condition || "N/A"}</div>
+                          {item.rating > 0 && (
+                            <div style={{ fontSize: "13px", color: "#aaa", marginBottom: "10px" }}>{"★".repeat(Math.round(item.rating))} {item.rating}</div>
+                          )}
+                          <div style={{ fontSize: "18px", fontWeight: "700", color: "#c8a97e" }}>
+                            ₵{itemPrice.toLocaleString()}
+                            <span style={{ fontSize: "13px", color: "#666", fontWeight: "400" }}> (${toUSD(itemPrice)})</span>
+                          </div>
+                          <button onClick={() => addToCart(item)}
+                            style={{ marginTop: "10px", width: "100%", background: "#c8a97e", border: "none", padding: "9px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px" }}>
+                            Add to Cart
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })
+              }
             </div>
 
             {loadingMore && (
               <div style={{ padding: "32px 0", textAlign: "center", color: "#555", fontSize: "13px" }}>⏳ Loading more listings...</div>
             )}
-            {!hasMore && visibleCount > PAGE_SIZE && (
+            {!hasMore && displayListings.length > PAGE_SIZE && (
               <div style={{ padding: "24px 0", textAlign: "center", color: "#333", fontSize: "12px" }}>You've seen all listings</div>
             )}
           </div>
@@ -674,11 +755,7 @@ function App() {
       <FooterModal type={footerModal} onClose={() => setFooterModal(null)} siteSettings={siteSettings} />
 
       {showFullResults && searchQuery.trim() && (
-        <SearchResults
-          query={searchQuery}
-          onClose={() => setShowFullResults(false)}
-          onNavigate={(section) => { setActivePage(section); setShowFullResults(false) }}
-        />
+        <SearchResults query={searchQuery} onClose={() => setShowFullResults(false)} onNavigate={(section) => { setActivePage(section); setShowFullResults(false) }} />
       )}
 
       {selectedProduct && (
@@ -709,7 +786,7 @@ function App() {
         <SellListing
           user={user}
           onRequestAuth={(cb) => { setAuthCallback(() => cb); setShowSell(false); setShowAuth(true) }}
-          onClose={() => setShowSell(false)}
+          onClose={() => { setShowSell(false); fetchListings(1, true) }}
         />
       )}
 
@@ -733,10 +810,7 @@ function App() {
       )}
 
       {showRiderDashboard && (
-        <RiderDashboard
-          user={user}
-          onClose={() => setShowRiderDashboard(false)}
-        />
+        <RiderDashboard user={user} onClose={() => setShowRiderDashboard(false)} />
       )}
 
       {/* ── CART DRAWER ── */}
@@ -755,24 +829,29 @@ function App() {
                   <div style={{ fontSize: "40px", marginBottom: "12px" }}>🛒</div>
                   <div>Your cart is empty</div>
                 </div>
-              ) : cart.map(item => (
-                <div key={item.id} style={{ display: "flex", gap: "12px", padding: "14px 0", borderBottom: "1px solid #1e1e1e", alignItems: "center" }}>
-                  <img src={`https://picsum.photos/seed/${item.id}/300/200`} alt={item.title} style={{ width: "56px", height: "56px", objectFit: "cover", borderRadius: "8px" }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px" }}>{item.title}</div>
-                    <div style={{ fontSize: "13px", color: "#c8a97e", fontWeight: "700" }}>
-                      ₵{(item.price * item.qty).toLocaleString()}
-                      <span style={{ color: "#555", fontWeight: "400" }}> (${toUSD(item.price * item.qty)})</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
-                      <button onClick={() => updateQty(item.id, -1)} style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}>−</button>
-                      <span style={{ fontSize: "13px" }}>{item.qty}</span>
-                      <button onClick={() => updateQty(item.id, 1)} style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}>+</button>
-                      <button onClick={() => removeItem(item.id)} style={{ marginLeft: "8px", background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "12px" }}>Remove</button>
+              ) : cart.map(item => {
+                const itemId = getItemId(item)
+                const itemPrice = item.price || item.dailyRate || 0
+                const itemImage = item.image || `https://picsum.photos/seed/${item.id}/300/200`
+                return (
+                  <div key={itemId} style={{ display: "flex", gap: "12px", padding: "14px 0", borderBottom: "1px solid #1e1e1e", alignItems: "center" }}>
+                    <img src={itemImage} alt={item.title} style={{ width: "56px", height: "56px", objectFit: "cover", borderRadius: "8px" }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px" }}>{item.title}</div>
+                      <div style={{ fontSize: "13px", color: "#c8a97e", fontWeight: "700" }}>
+                        ₵{(itemPrice * item.qty).toLocaleString()}
+                        <span style={{ color: "#555", fontWeight: "400" }}> (${toUSD(itemPrice * item.qty)})</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
+                        <button onClick={() => updateQty(itemId, -1)} style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}>−</button>
+                        <span style={{ fontSize: "13px" }}>{item.qty}</span>
+                        <button onClick={() => updateQty(itemId, 1)} style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}>+</button>
+                        <button onClick={() => removeItem(itemId)} style={{ marginLeft: "8px", background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "12px" }}>Remove</button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
             {cart.length > 0 && (
               <div style={{ padding: "20px", borderTop: "1px solid #1e1e1e" }}>
