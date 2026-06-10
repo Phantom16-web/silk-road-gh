@@ -3,198 +3,9 @@ import PaystackPayment from "./PaystackPayment"
 import { saveOrder, generateOrderId, updateOrder, OrderIdBanner } from "./OrderTracker"
 
 const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 const STEPS = ["Location", "Confirm Order", "Payment", "Track Delivery"]
-// ── Rating + Report Component ─────────────────────────────────────────────
-function StarRating({ value, onChange }) {
-  const [hovered, setHovered] = useState(null)
-  const stars = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
 
-  return (
-    <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-      {[1, 2, 3, 4, 5].map(star => {
-        const full = (hovered ?? value) >= star
-        const half = (hovered ?? value) >= star - 0.5 && (hovered ?? value) < star
-        return (
-          <div key={star} style={{ position: "relative", width: "36px", height: "36px", cursor: "pointer" }}>
-            {/* Empty star */}
-            <span style={{ fontSize: "32px", color: "#333", position: "absolute" }}>☆</span>
-            {/* Half fill */}
-            {half && (
-              <span style={{ fontSize: "32px", color: "#c8a97e", position: "absolute", overflow: "hidden", width: "50%" }}>★</span>
-            )}
-            {/* Full fill */}
-            {full && (
-              <span style={{ fontSize: "32px", color: "#c8a97e", position: "absolute" }}>★</span>
-            )}
-            {/* Half star hit zone */}
-            <div
-              style={{ position: "absolute", left: 0, top: 0, width: "50%", height: "100%" }}
-              onMouseEnter={() => setHovered(star - 0.5)}
-              onMouseLeave={() => setHovered(null)}
-              onClick={() => onChange(star - 0.5)}
-            />
-            {/* Full star hit zone */}
-            <div
-              style={{ position: "absolute", right: 0, top: 0, width: "50%", height: "100%" }}
-              onMouseEnter={() => setHovered(star)}
-              onMouseLeave={() => setHovered(null)}
-              onClick={() => onChange(star)}
-            />
-          </div>
-        )
-      })}
-      <span style={{ fontSize: "18px", fontWeight: "700", color: "#c8a97e", marginLeft: "8px" }}>
-        {(hovered ?? value) > 0 ? (hovered ?? value) : ""}
-      </span>
-    </div>
-  )
-}
-
-const REPORT_REASONS = [
-  "Item not as described",
-  "Never delivered",
-  "Rude or threatening behaviour",
-  "Fake listing",
-  "Item was damaged",
-  "Wrong item sent",
-  "Other",
-]
-
-function RatingAndReport({ orderId, sellerName, onClose }) {
-  const [rating, setRating] = useState(0)
-  const [rated, setRated] = useState(false)
-  const [showReport, setShowReport] = useState(false)
-  const [reportReason, setReportReason] = useState("")
-  const [reportSubmitted, setReportSubmitted] = useState(false)
-  const [reportError, setReportError] = useState("")
-
-  // Load existing rating if any
-  useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("silkroad_ratings") || "{}")
-      if (saved[orderId]) {
-        setRating(saved[orderId])
-        setRated(true)
-      }
-    } catch {}
-  })
-
-  const handleRate = () => {
-    if (rating === 0) return
-    const saved = JSON.parse(localStorage.getItem("silkroad_ratings") || "{}")
-    saved[orderId] = rating
-    localStorage.setItem("silkroad_ratings", JSON.stringify(saved))
-    setRated(true)
-  }
-
-  const handleChangeRating = () => {
-    setRated(false)
-  }
-
-  const handleReport = () => {
-    if (!reportReason) { setReportError("Please select a reason."); return }
-    // In real app this would POST to backend complaints
-    const reports = JSON.parse(localStorage.getItem("silkroad_reports") || "[]")
-    reports.push({ orderId, sellerName, reason: reportReason, date: new Date().toISOString() })
-    localStorage.setItem("silkroad_reports", JSON.stringify(reports))
-    setReportSubmitted(true)
-  }
-
-  if (reportSubmitted) return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px", textAlign: "center" }}>
-      <div style={{ fontSize: "48px" }}>📋</div>
-      <h3 style={{ fontSize: "20px", fontWeight: "700", color: "#f0ede8" }}>Report Submitted</h3>
-      <p style={{ fontSize: "14px", color: "#888" }}>Our team will review your report and get back to you. Thank you for helping keep Silk Road GH safe.</p>
-      <button onClick={onClose} style={{ background: "#c8a97e", border: "none", padding: "13px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}>Back to Marketplace</button>
-    </div>
-  )
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-
-      {/* Success banner */}
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: "48px", marginBottom: "8px" }}>🎉</div>
-        <h3 style={{ fontSize: "20px", fontWeight: "700", color: "#6ee7b7" }}>Delivery Confirmed!</h3>
-        <p style={{ fontSize: "13px", color: "#888" }}>Payment has been released to {sellerName}.</p>
-      </div>
-
-      {/* Rating */}
-      {!showReport && (
-        <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "14px" }}>
-          <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>⭐ Rate {sellerName}</div>
-
-          {!rated ? (
-            <>
-              <StarRating value={rating} onChange={setRating} />
-              {rating > 0 && (
-                <div style={{ fontSize: "12px", color: "#c8a97e" }}>
-                  {rating <= 1 ? "Very poor" : rating <= 2 ? "Poor" : rating <= 3 ? "Average" : rating <= 4 ? "Good" : "Excellent!"}
-                </div>
-              )}
-              <button
-                onClick={handleRate}
-                disabled={rating === 0}
-                style={{ background: rating > 0 ? "#c8a97e" : "#1e1e1e", border: `1px solid ${rating > 0 ? "#c8a97e" : "#333"}`, color: rating > 0 ? "#000" : "#555", padding: "11px", borderRadius: "8px", fontWeight: "700", cursor: rating > 0 ? "pointer" : "not-allowed", fontSize: "14px", fontFamily: "inherit" }}>
-                Submit Rating
-              </button>
-            </>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <StarRating value={rating} onChange={() => {}} />
-              </div>
-              <div style={{ fontSize: "13px", color: "#6ee7b7" }}>✅ Rating saved — you can change it anytime while your order ID is active.</div>
-              <button onClick={handleChangeRating}
-                style={{ background: "transparent", border: "1px solid #333", color: "#888", padding: "9px", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
-                ✏️ Change Rating
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Report seller */}
-      {!showReport ? (
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button onClick={onClose}
-            style={{ flex: 2, background: "#c8a97e", border: "none", padding: "12px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-            Back to Marketplace
-          </button>
-          <button onClick={() => setShowReport(true)}
-            style={{ flex: 1, background: "#7f1d1d22", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "12px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
-            🚩 Report
-          </button>
-        </div>
-      ) : (
-        <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #7f1d1d", display: "flex", flexDirection: "column", gap: "12px" }}>
-          <div style={{ fontSize: "14px", fontWeight: "700", color: "#fca5a5" }}>🚩 Report {sellerName}</div>
-          <div style={{ fontSize: "13px", color: "#888" }}>Select the reason for your report:</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {REPORT_REASONS.map(reason => (
-              <div key={reason} onClick={() => setReportReason(reason)}
-                style={{ padding: "10px 14px", borderRadius: "8px", background: reportReason === reason ? "#7f1d1d" : "#111", border: `1px solid ${reportReason === reason ? "#991b1b" : "#2a2a2a"}`, cursor: "pointer", fontSize: "13px", color: reportReason === reason ? "#fca5a5" : "#888", fontWeight: reportReason === reason ? "600" : "400", transition: "all .15s" }}>
-                {reason}
-              </div>
-            ))}
-          </div>
-          {reportError && <div style={{ fontSize: "12px", color: "#fca5a5" }}>⚠️ {reportError}</div>}
-          <div style={{ display: "flex", gap: "10px" }}>
-            <button onClick={() => { setShowReport(false); setReportError("") }}
-              style={{ flex: 1, background: "#1e1e1e", border: "1px solid #333", color: "#aaa", padding: "11px", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontFamily: "inherit" }}>
-              Cancel
-            </button>
-            <button onClick={handleReport}
-              style={{ flex: 2, background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "11px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-              Submit Report
-            </button>
-          </div>
-        </div>
-      )}
-
-    </div>
-  )
-}
 export default function Checkout({ cart, rate, onClose, initialOrder }) {
   const [step, setStep] = useState(initialOrder ? 3 : 0)
   const [location, setLocation] = useState(initialOrder?.location || null)
@@ -205,12 +16,12 @@ export default function Checkout({ cart, rate, onClose, initialOrder }) {
   const [landmark, setLandmark] = useState(initialOrder?.landmark || "")
   const [extraInfo, setExtraInfo] = useState(initialOrder?.extraInfo || "")
   const [contactInfo, setContactInfo] = useState(initialOrder?.contactInfo || "")
-  const [email, setEmail] = useState("")
   const [delivered, setDelivered] = useState(initialOrder?.delivered || null)
   const [paymentRef, setPaymentRef] = useState(initialOrder?.paymentRef || null)
   const [orderId] = useState(initialOrder?.id || generateOrderId())
+  const [savingOrder, setSavingOrder] = useState(false)
 
-  const total = initialOrder?.total || cart.reduce((sum, i) => sum + i.price * i.qty, 0)
+  const total = initialOrder?.total || cart.reduce((sum, i) => sum + (i.price || i.dailyRate || 0) * i.qty, 0)
   const cut = Math.round(total * 0.08)
 
   const toUSD = (ghs) => {
@@ -247,14 +58,13 @@ export default function Checkout({ cart, rate, onClose, initialOrder }) {
 
   const ErrorBanner = ({ type }) => {
     const errors = {
-      blocked: { icon: "🚫", title: "Location Access Blocked", msg: "Your browser or device is blocking Silk Road from accessing your location. No worries — describe your location in detail below." },
-      unavailable: { icon: "📡", title: "Location Unavailable", msg: "Silk Road couldn't get your location right now. Try again or enter your location manually." },
-      timeout: { icon: "⏱️", title: "Location Timed Out", msg: "It's taking too long to get your location. Try again or describe your location below." },
-      geolocation_unsupported: { icon: "⚠️", title: "GPS Not Supported", msg: "Your browser doesn't support location detection. Please describe your location below." },
-      unknown: { icon: "❓", title: "Something Went Wrong", msg: "Silk Road ran into an issue. Please try again or enter your location manually." },
-      no_phone: { icon: "📞", title: "Contact Info Missing", msg: "Please provide a contact the seller can reach you on before continuing." },
-      no_location: { icon: "📍", title: "Location Missing", msg: "Please either auto-detect your location or enter it manually before continuing." },
-      no_email: { icon: "📧", title: "Email Missing", msg: "Please provide your email address so Paystack can send you a payment receipt." },
+      blocked: { icon: "🚫", title: "Location Access Blocked", msg: "Your browser is blocking location access. Enter your location manually below." },
+      unavailable: { icon: "📡", title: "Location Unavailable", msg: "Could not get your location. Try again or enter manually." },
+      timeout: { icon: "⏱️", title: "Location Timed Out", msg: "Taking too long. Try again or enter manually." },
+      geolocation_unsupported: { icon: "⚠️", title: "GPS Not Supported", msg: "Your browser doesn't support location detection. Enter manually." },
+      unknown: { icon: "❓", title: "Something Went Wrong", msg: "Try again or enter your location manually." },
+      no_phone: { icon: "📞", title: "Contact Info Missing", msg: "Please provide a contact for the seller." },
+      no_location: { icon: "📍", title: "Location Missing", msg: "Please auto-detect or enter your location manually." },
     }
     const e = errors[type]
     if (!e) return null
@@ -262,7 +72,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder }) {
       <div style={{ background: "#78350f22", border: "1px solid #92400e", borderRadius: "10px", padding: "14px" }}>
         <div style={{ fontWeight: "700", color: "#fcd34d", marginBottom: "6px", fontSize: "14px" }}>{e.icon} {e.title}</div>
         <p style={{ fontSize: "13px", color: "#aaa", lineHeight: "1.6", margin: 0 }}>{e.msg}</p>
-        {!["no_phone", "no_location", "no_email"].includes(type) && (
+        {!["no_phone", "no_location"].includes(type) && (
           <button onClick={detectLocation} style={{ marginTop: "10px", background: "#78350f", border: "1px solid #92400e", color: "#fcd34d", padding: "8px 16px", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontSize: "13px" }}>
             ↻ Try Again
           </button>
@@ -271,11 +81,42 @@ export default function Checkout({ cart, rate, onClose, initialOrder }) {
     )
   }
 
-  const handlePaymentSuccess = (response) => {
+  const handlePaymentSuccess = async (response) => {
     const ref = response.reference
     setPaymentRef(ref)
+    setSavingOrder(true)
 
-    // Save order to localStorage with 24hr expiry
+    // Save order to backend
+    try {
+      const token = localStorage.getItem("silkroad_token")
+      if (token && cart.length > 0) {
+        const firstItem = cart[0]
+        await fetch(`${API_URL}/orders`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            listingId: firstItem._id || firstItem.id,
+            sellerId: firstItem.seller?._id || firstItem.seller,
+            type: "product",
+            amount: total,
+            paystackRef: ref,
+            location: location ? `${location.lat},${location.lng}` : manualLocation,
+            landmark,
+            extraInfo,
+            contactInfo,
+          }),
+        })
+      }
+    } catch {
+      // Falls back to localStorage
+    }
+
+    setSavingOrder(false)
+
+    // Always save to localStorage as fallback/tracker
     const order = {
       id: orderId,
       type: "buy",
@@ -289,15 +130,31 @@ export default function Checkout({ cart, rate, onClose, initialOrder }) {
       paymentRef: ref,
       delivered: null,
       createdAt: Date.now(),
-      expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
     }
     saveOrder(order)
     setStep(3)
   }
 
-  const handleConfirmDelivery = () => {
+  const handleConfirmDelivery = async () => {
     setDelivered(true)
-    updateOrder(orderId, { delivered: true, expiresAt: Date.now() }) // expire immediately on confirm
+    updateOrder(orderId, { delivered: true, expiresAt: Date.now() })
+
+    // Update backend order status
+    try {
+      const token = localStorage.getItem("silkroad_token")
+      if (token && paymentRef) {
+        // Find order by paystack ref and confirm
+        await fetch(`${API_URL}/orders/confirm-by-ref`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ paystackRef: paymentRef }),
+        })
+      }
+    } catch {}
   }
 
   const handleCancelDelivery = () => {
@@ -329,19 +186,19 @@ export default function Checkout({ cart, rate, onClose, initialOrder }) {
 
         <div style={{ padding: "24px" }}>
 
-          {/* STEP 0 — Location */}
+          {/* ── STEP 0: Location ── */}
           {step === 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <h2 style={{ fontSize: "18px", fontWeight: "700" }}>📍 Delivery Location</h2>
-              <p style={{ fontSize: "13px", color: "#666", marginTop: "-8px" }}>Choose how you want to share your location with the seller.</p>
+              <p style={{ fontSize: "13px", color: "#666", marginTop: "-8px" }}>Share your location with the seller.</p>
 
               <div style={{ display: "flex", gap: "10px" }}>
                 <button onClick={detectLocation}
-                  style={{ flex: 1, background: location ? "#064e3b" : "#1e1e1e", border: `1px solid ${location ? "#065f46" : "#333"}`, color: location ? "#6ee7b7" : "#c8a97e", padding: "13px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                  style={{ flex: 1, background: location ? "#064e3b" : "#1e1e1e", border: `1px solid ${location ? "#065f46" : "#333"}`, color: location ? "#6ee7b7" : "#c8a97e", padding: "13px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px" }}>
                   {locLoading ? "⏳ Detecting..." : location ? "✅ Auto-Detected" : "📍 Auto-Detect"}
                 </button>
                 <button onClick={() => { setLocation(null); setLocBlocked(true); setLocError(null) }}
-                  style={{ flex: 1, background: locBlocked ? "#1e3a5f" : "#1e1e1e", border: `1px solid ${locBlocked ? "#1d4ed8" : "#333"}`, color: locBlocked ? "#93c5fd" : "#aaa", padding: "13px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                  style={{ flex: 1, background: locBlocked ? "#1e3a5f" : "#1e1e1e", border: `1px solid ${locBlocked ? "#1d4ed8" : "#333"}`, color: locBlocked ? "#93c5fd" : "#aaa", padding: "13px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px" }}>
                   ✏️ Enter Manually
                 </button>
               </div>
@@ -396,19 +253,19 @@ export default function Checkout({ cart, rate, onClose, initialOrder }) {
             </div>
           )}
 
-          {/* STEP 1 — Confirm Order */}
+          {/* ── STEP 1: Confirm Order ── */}
           {step === 1 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <h2 style={{ fontSize: "18px", fontWeight: "700" }}>✅ Confirm Your Order</h2>
 
               <div style={{ background: "#1a1a1a", borderRadius: "10px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                {cart.map(item => (
-                  <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {cart.map((item, i) => (
+                  <div key={item._id || item.id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <div style={{ fontSize: "14px", fontWeight: "600" }}>{item.title}</div>
                       <div style={{ fontSize: "12px", color: "#666" }}>Qty: {item.qty}</div>
                     </div>
-                    <div style={{ fontSize: "14px", fontWeight: "700", color: "#c8a97e" }}>₵{(item.price * item.qty).toLocaleString()}</div>
+                    <div style={{ fontSize: "14px", fontWeight: "700", color: "#c8a97e" }}>₵{((item.price || item.dailyRate || 0) * item.qty).toLocaleString()}</div>
                   </div>
                 ))}
               </div>
@@ -432,7 +289,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder }) {
                   <span>Subtotal</span><span>₵{total.toLocaleString()} (${toUSD(total)})</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#888" }}>
-                  <span>Platform fee (8%)</span><span>₵{cut} (${toUSD(cut)})</span>
+                  <span>Platform fee (8%)</span><span>₵{cut}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "17px", fontWeight: "700", color: "#c8a97e", borderTop: "1px solid #2a2a2a", paddingTop: "8px" }}>
                   <span>Total</span><span>₵{total.toLocaleString()} (${toUSD(total)})</span>
@@ -446,11 +303,11 @@ export default function Checkout({ cart, rate, onClose, initialOrder }) {
             </div>
           )}
 
-          {/* STEP 2 — Payment */}
+          {/* ── STEP 2: Payment ── */}
           {step === 2 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <h2 style={{ fontSize: "18px", fontWeight: "700" }}>📱 MTN Mobile Money</h2>
-              <p style={{ color: "#888", fontSize: "14px" }}>Pay securely via Paystack. You'll be prompted to complete payment on your phone.</p>
+              <p style={{ color: "#888", fontSize: "14px" }}>Pay securely via Paystack. You'll get a prompt on your phone.</p>
 
               <div style={{ background: "#ffd700", borderRadius: "12px", padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px" }}>
                 <span style={{ fontSize: "32px" }}>📱</span>
@@ -460,53 +317,50 @@ export default function Checkout({ cart, rate, onClose, initialOrder }) {
                 </div>
               </div>
 
-              <div>
-                <div style={{ fontSize: "12px", color: "#888", fontWeight: "600", marginBottom: "6px" }}>YOUR EMAIL</div>
-                <input placeholder="you@example.com" type="email" value={email} onChange={e => setEmail(e.target.value)}
-                  style={{ width: "100%", background: "#1e1e1e", border: "1px solid #333", color: "#fff", padding: "12px 16px", borderRadius: "10px", fontSize: "14px", outline: "none", boxSizing: "border-box" }} />
-                <div style={{ fontSize: "11px", color: "#555", marginTop: "5px" }}>Required by Paystack to send your payment receipt.</div>
-              </div>
-
               <div style={{ background: "#1a1a1a", borderRadius: "10px", padding: "14px", fontSize: "13px", color: "#888" }}>
                 <div>Amount: <span style={{ color: "#c8a97e", fontWeight: "700", fontSize: "16px" }}>₵{total.toLocaleString()}</span> <span style={{ color: "#555" }}>(${toUSD(total)})</span></div>
                 <div style={{ marginTop: "6px", fontSize: "12px" }}>💰 Funds held securely in escrow until you confirm delivery</div>
               </div>
 
-              {locError === "no_email" && <ErrorBanner type="no_email" />}
-
               <div style={{ display: "flex", gap: "10px" }}>
                 <button onClick={() => setStep(1)} style={{ flex: 1, background: "#1e1e1e", border: "1px solid #333", color: "#aaa", padding: "12px", borderRadius: "10px", cursor: "pointer", fontWeight: "600" }}>← Back</button>
                 <div style={{ flex: 2 }}>
-                  {email.trim() && email.includes("@") ? (
-                    <PaystackPayment
-                      email={email}
-                      amount={total}
-                      publicKey={PAYSTACK_KEY}
-                      metadata={{ cart, location, manualLocation, landmark, extraInfo, contactInfo, platformFee: cut }}
-                      onSuccess={handlePaymentSuccess}
-                      onClose={() => setLocError(null)}
-                    />
-                  ) : (
-                    <button onClick={() => setLocError("no_email")}
-                      style={{ width: "100%", background: "#ffd700", border: "none", padding: "14px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px", color: "#000" }}>
-                      Pay ₵{total.toLocaleString()} with MoMo
-                    </button>
-                  )}
+                  <PaystackPayment
+                    email={`order-${orderId}@silkroadgh.com`}
+                    amount={total}
+                    publicKey={PAYSTACK_KEY}
+                    metadata={{
+                      orderId,
+                      cart: cart.map(i => ({ id: i._id || i.id, title: i.title, qty: i.qty, price: i.price || i.dailyRate })),
+                      location: location ? `${location.lat},${location.lng}` : manualLocation,
+                      landmark,
+                      extraInfo,
+                      contactInfo,
+                      platformFee: cut,
+                    }}
+                    onSuccess={handlePaymentSuccess}
+                    onClose={() => {}}
+                  />
                 </div>
               </div>
+
+              {savingOrder && (
+                <div style={{ textAlign: "center", fontSize: "13px", color: "#555" }}>⏳ Saving your order...</div>
+              )}
             </div>
           )}
 
-          {/* STEP 3 — Track Delivery */}
+          {/* ── STEP 3: Track Delivery ── */}
           {step === 3 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px", textAlign: "center" }}>
               {delivered === null && (
                 <>
                   <div style={{ fontSize: "56px" }}>✅</div>
                   <h2 style={{ fontSize: "22px", fontWeight: "700", color: "#c8a97e" }}>Payment Successful!</h2>
-                  <p style={{ color: "#888", fontSize: "14px" }}>Your money is held securely. Confirm delivery when your order arrives.</p>
+                  <p style={{ color: "#888", fontSize: "14px" }}>
+                    Your money is held securely. Confirm delivery when your order arrives.
+                  </p>
 
-                  {/* Order ID Banner */}
                   <OrderIdBanner orderId={orderId} />
 
                   <div style={{ background: "#1a1a1a", borderRadius: "10px", padding: "14px", fontSize: "13px", textAlign: "left", display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -516,8 +370,8 @@ export default function Checkout({ cart, rate, onClose, initialOrder }) {
                       : <div>📍 Location: <span style={{ color: "#aaa" }}>{manualLocation}</span></div>}
                     {landmark && <div>🗺️ Landmark: <span style={{ color: "#aaa" }}>{landmark}</span></div>}
                     {extraInfo && <div>📝 Notes: <span style={{ color: "#aaa" }}>{extraInfo}</span></div>}
-                    <div>📞 Contact shared with seller: <span style={{ color: "#c8a97e" }}>{contactInfo}</span></div>
-                    {paymentRef && <div style={{ fontSize: "11px", color: "#444", marginTop: "4px" }}>Paystack Ref: {paymentRef}</div>}
+                    <div>📞 Contact: <span style={{ color: "#c8a97e" }}>{contactInfo}</span></div>
+                    {paymentRef && <div style={{ fontSize: "11px", color: "#444", marginTop: "4px" }}>Ref: {paymentRef}</div>}
                   </div>
 
                   {mapEmbedUrl && (
@@ -533,17 +387,18 @@ export default function Checkout({ cart, rate, onClose, initialOrder }) {
 
                   <button onClick={handleCancelDelivery}
                     style={{ background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "14px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}>
-                    ❌ Cancel Delivery — Refund My Money
+                    ❌ Cancel — Refund My Money
                   </button>
                 </>
               )}
 
               {delivered === true && (
-               <RatingAndReport
-                orderId={orderId}
-                sellerName={cart[0]?.seller || "the seller"}
-                onClose={onClose}
-               />
+                <>
+                  <div style={{ fontSize: "56px" }}>🎉</div>
+                  <h2 style={{ fontSize: "22px", fontWeight: "700", color: "#6ee7b7" }}>Delivery Confirmed!</h2>
+                  <p style={{ color: "#888", fontSize: "14px" }}>Payment released to seller. Silk Road kept ₵{cut} (8%) as platform fee.</p>
+                  <button onClick={onClose} style={{ background: "#c8a97e", border: "none", padding: "13px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}>Back to Marketplace</button>
+                </>
               )}
 
               {delivered === false && (
