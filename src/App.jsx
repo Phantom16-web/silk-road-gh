@@ -274,22 +274,50 @@ function Footer({ onOpen, siteSettings }) {
 // ── Search Results ────────────────────────────────────────────────────────────
 function SearchResults({ query, onClose, onNavigate }) {
   const { detectedSection, keyword } = parseSearch(query)
-  const results = ALL_ITEMS.filter(item => {
+  const [dbResults, setDbResults] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    const q = keyword || query
+    getListings({ search: q, limit: 20 })
+      .then(data => setDbResults(Array.isArray(data) ? data : []))
+      .catch(() => setDbResults([]))
+      .finally(() => setLoading(false))
+  }, [query])
+
+  const staticResults = ALL_ITEMS.filter(item => {
+    if (item.section === "buy") return false
     const matchesSection = detectedSection ? item.section === detectedSection : true
     const matchesKeyword = keyword ? item.title.toLowerCase().includes(keyword) || item.category.toLowerCase().includes(keyword) : true
     return matchesSection && matchesKeyword
   })
+
+  const dbBuyResults = (detectedSection && detectedSection !== "buy") ? [] : dbResults.map(item => ({
+    id: item._id,
+    imageId: item._id,
+    title: item.title,
+    category: item.category,
+    section: "buy",
+    image: item.image,
+  }))
+
+  const results = [...dbBuyResults, ...staticResults]
+
   const grouped = {
     buy:     results.filter(r => r.section === "buy"),
     rent:    results.filter(r => r.section === "rent"),
     service: results.filter(r => r.section === "service"),
   }
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "80px 20px 20px" }} onClick={onClose}>
       <div style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "680px", maxHeight: "80vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#111", zIndex: 1 }}>
           <div>
-            <span style={{ fontSize: "14px", color: "#888" }}>{results.length} results for <strong style={{ color: "#f0ede8" }}>"{query}"</strong></span>
+            <span style={{ fontSize: "14px", color: "#888" }}>
+              {loading ? "Searching..." : `${results.length} results for`} <strong style={{ color: "#f0ede8" }}>"{query}"</strong>
+            </span>
             {detectedSection && (
               <span style={{ marginLeft: "8px", fontSize: "11px", fontWeight: "700", color: SECTION_COLOR[detectedSection], background: `${SECTION_COLOR[detectedSection]}22`, padding: "2px 8px", borderRadius: "20px" }}>
                 {SECTION_LABEL[detectedSection]}
@@ -298,7 +326,12 @@ function SearchResults({ query, onClose, onNavigate }) {
           </div>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#666", fontSize: "20px", cursor: "pointer" }}>✕</button>
         </div>
-        {results.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: "48px", textAlign: "center", color: "#555" }}>
+            <div style={{ fontSize: "40px", marginBottom: "12px" }}>⏳</div>
+            <div style={{ fontSize: "14px" }}>Searching...</div>
+          </div>
+        ) : results.length === 0 ? (
           <div style={{ padding: "48px", textAlign: "center", color: "#555" }}>
             <div style={{ fontSize: "40px", marginBottom: "12px" }}>🔍</div>
             <div style={{ fontSize: "16px", fontWeight: "600", marginBottom: "6px", color: "#888" }}>No results found</div>
@@ -318,7 +351,7 @@ function SearchResults({ query, onClose, onNavigate }) {
                       style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px", borderRadius: "10px", background: "#1a1a1a", cursor: "pointer", border: "1px solid #1e1e1e", transition: "border .2s" }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = "#c8a97e44"}
                       onMouseLeave={e => e.currentTarget.style.borderColor = "#1e1e1e"}>
-                      <img src={`https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }} />
+                      <img src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "2px" }}>{item.title}</div>
                         <div style={{ fontSize: "11px", color: "#666" }}>{item.category}</div>
@@ -388,6 +421,11 @@ function App() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
+  // Search state
+  const [dbSearchResults, setDbSearchResults] = useState([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const searchDebounceRef = useRef(null)
+
   const bottomReachedTimerRef = useRef(null)
   const isAtBottomRef = useRef(false)
   const searchRef = useRef(null)
@@ -409,7 +447,7 @@ function App() {
         setHasMoreListings(data.length === PAGE_SIZE)
         setListingsPage(page)
       } else if (Array.isArray(data) && data.length === 0 && page === 1) {
-        setDbListings([]) // fall back to static
+        setDbListings([])
         setHasMoreListings(false)
       }
     } catch {
@@ -456,6 +494,28 @@ function App() {
       if (bottomReachedTimerRef.current) clearTimeout(bottomReachedTimerRef.current)
     }
   }, [hasMore, loadingMore, activePage, usingDb, listingsPage])
+
+  // Debounced live search against backend
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setDbSearchResults([])
+      return
+    }
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = setTimeout(async () => {
+      setSearchLoading(true)
+      try {
+        const { keyword } = parseSearch(searchQuery)
+        const q = keyword || searchQuery
+        const data = await getListings({ search: q, limit: 10 })
+        setDbSearchResults(Array.isArray(data) ? data : [])
+      } catch {
+        setDbSearchResults([])
+      }
+      setSearchLoading(false)
+    }, 350)
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
+  }, [searchQuery])
 
   // Close search on outside click
   useEffect(() => {
@@ -539,11 +599,28 @@ function App() {
   const dropdownResults = (() => {
     if (!searchQuery.trim()) return []
     const { detectedSection, keyword } = parseSearch(searchQuery)
-    return ALL_ITEMS.filter(item => {
+
+    // Static rent/service items (DB doesn't have these for search yet)
+    const staticMatches = ALL_ITEMS.filter(item => {
+      if (item.section === "buy") return false
       const matchesSection = detectedSection ? item.section === detectedSection : true
       const matchesKeyword = keyword ? item.title.toLowerCase().includes(keyword) || item.category.toLowerCase().includes(keyword) : true
       return matchesSection && matchesKeyword
-    }).slice(0, 6)
+    })
+
+    // Real DB results for buy section
+    const dbMatches = (detectedSection && detectedSection !== "buy")
+      ? []
+      : dbSearchResults.map(item => ({
+          id: item._id,
+          imageId: item._id,
+          title: item.title,
+          category: item.category,
+          section: "buy",
+          image: item.image,
+        }))
+
+    return [...dbMatches, ...staticMatches].slice(0, 8)
   })()
 
   return (
@@ -647,7 +724,7 @@ function App() {
                       style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #222" }}
                       onMouseEnter={e => e.currentTarget.style.background = "#222"}
                       onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                      <img src={`https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "34px", height: "34px", borderRadius: "6px", objectFit: "cover", flexShrink: 0 }} />
+                      <img src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "34px", height: "34px", borderRadius: "6px", objectFit: "cover", flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: "13px", fontWeight: "600", color: "#f0ede8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
                         <div style={{ fontSize: "11px", color: "#555" }}>{item.category}</div>
@@ -668,7 +745,7 @@ function App() {
 
               {showDropdown && searchQuery.trim() && dropdownResults.length === 0 && (
                 <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, padding: "14px", textAlign: "center", color: "#555", fontSize: "13px" }}>
-                  No results for "{searchQuery}"
+                  {searchLoading ? "⏳ Searching..." : `No results for "${searchQuery}"`}
                 </div>
               )}
             </div>
