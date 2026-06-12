@@ -1,8 +1,5 @@
 import { useState } from "react"
 
-const OWNER_KEY = "SILKROAD-OWNER-2025"
-const MASTER_KEY = "SILKROAD-MASTER-9X7K"
-
 const ROLE_COLORS = {
   user:       { bg: "#1e1e24", color: "#888", border: "#2a2a35" },
   support:    { bg: "#1e3a5f22", color: "#93c5fd", border: "#1d4ed8" },
@@ -99,12 +96,15 @@ const INIT_PROMOS = [
   { id: 2, code: "KNUST20",   type: "percentage",    value: 20, target: "university", uni: "KNUST", user: null,              uses: 8,  active: true },
 ]
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+
 export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings }) {
   const [authStep, setAuthStep] = useState("login")
   const [credentials, setCredentials] = useState({ key: "" })
   const [currentRole, setCurrentRole] = useState(null)
   const [currentPermissions, setCurrentPermissions] = useState([])
   const [loginError, setLoginError] = useState("")
+  const [loginLoading, setLoginLoading] = useState(false)
   const [activeTab, setActiveTab] = useState("dashboard")
 
   // Live state
@@ -124,6 +124,7 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
   const [adminForm, setAdminForm] = useState({ name: "", email: "", role: "support", permissions: [] })
   const [masterKeyInput, setMasterKeyInput] = useState("")
   const [masterKeyVerified, setMasterKeyVerified] = useState(false)
+  const [masterKeyError, setMasterKeyError] = useState("")
 
   // Complaint response
   const [respondingTo, setRespondingTo] = useState(null)
@@ -141,19 +142,28 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
   }
 
   // ── Login ─────────────────────────────────────────────────────────────────
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setLoginError("")
-    if (credentials.key === OWNER_KEY) {
-      setCurrentRole("owner"); setCurrentPermissions(ROLE_DEFAULT_PERMISSIONS.owner); setAuthStep("panel"); return
+    setLoginLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: credentials.key }),
+      })
+      const data = await res.json()
+      if (data.role) {
+        setCurrentRole(data.role)
+        setCurrentPermissions(data.permissions || [])
+        sessionStorage.setItem("silkroad_admin_token", data.token)
+        setAuthStep("panel")
+      } else {
+        setLoginError(data.message || "Invalid credentials. Access denied.")
+      }
+    } catch {
+      setLoginError("Could not connect to server. Please try again.")
     }
-    if (credentials.key === MASTER_KEY) {
-      setCurrentRole("superadmin"); setCurrentPermissions(ROLE_DEFAULT_PERMISSIONS.superadmin); setAuthStep("panel"); return
-    }
-    const found = users.find(u => u.email === credentials.key && u.role !== "user")
-    if (found) {
-      setCurrentRole(found.role); setCurrentPermissions(ROLE_DEFAULT_PERMISSIONS[found.role] || []); setAuthStep("panel"); return
-    }
-    setLoginError("Invalid credentials. Access denied.")
+    setLoginLoading(false)
   }
 
   const hasPermission = (perm) => currentRole === "owner" || currentRole === "superadmin" || currentPermissions.includes(perm)
@@ -191,6 +201,23 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
 
   const handleTogglePromo = (id) => {
     setPromos(p => p.map(x => x.id === id ? { ...x, active: !x.active } : x))
+  }
+
+  // ── Master key verification ────────────────────────────────────────────────
+  const handleVerifyMasterKey = async () => {
+    setMasterKeyError("")
+    try {
+      const res = await fetch(`${API_URL}/admin/verify-master`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: masterKeyInput }),
+      })
+      const data = await res.json()
+      if (data.valid) setMasterKeyVerified(true)
+      else setMasterKeyError("Invalid master key.")
+    } catch {
+      setMasterKeyError("Could not connect to server.")
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -268,9 +295,9 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
               🚫 {loginError}
             </div>
           )}
-          <button onClick={handleLogin}
-            style={{ background: "#c8a97e", border: "none", padding: "13px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px", fontFamily: "inherit" }}>
-            Access Panel →
+          <button onClick={handleLogin} disabled={loginLoading}
+            style={{ background: "#c8a97e", border: "none", padding: "13px", borderRadius: "10px", fontWeight: "700", cursor: loginLoading ? "not-allowed" : "pointer", fontSize: "15px", fontFamily: "inherit", opacity: loginLoading ? 0.7 : 1 }}>
+            {loginLoading ? "⏳ Verifying..." : "Access Panel →"}
           </button>
           <div style={{ textAlign: "center", fontSize: "12px", color: "#444" }}>Unauthorized access attempts are logged.</div>
         </div>
@@ -338,7 +365,6 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
                   </div>
                 ))}
               </div>
-              {/* Open complaints alert */}
               {complaints.filter(c => c.status === "Open").length > 0 && (
                 <div style={{ background: "#7f1d1d22", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: "13px", color: "#fca5a5" }}>⚠️ {complaints.filter(c => c.status === "Open").length} open complaints need attention</span>
@@ -524,7 +550,6 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
               <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>Promo Codes</h2>
 
-              {/* Add promo */}
               <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #1e1e1e" }}>
                 <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8", marginBottom: "16px" }}>➕ Create Promo Code</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -603,7 +628,6 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
                 </div>
               </div>
 
-              {/* Promo list */}
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {promos.map(promo => (
                   <div key={promo.id} style={{ background: "#1a1a1a", borderRadius: "12px", padding: "14px 16px", display: "flex", alignItems: "center", gap: "12px", border: "1px solid #1e1e1e" }}>
@@ -731,7 +755,6 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
               <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>Site Settings</h2>
               <p style={{ fontSize: "13px", color: "#666", marginTop: "-12px" }}>Changes apply immediately across the entire platform.</p>
 
-              {/* Contact */}
               <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>📞 Contact Info</div>
                 <div>
@@ -744,7 +767,6 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
                 </div>
               </div>
 
-              {/* Delivery fee */}
               <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>🛵 Delivery Fee</div>
                 <div style={{ fontSize: "13px", color: "#888" }}>Fixed platform delivery rate charged to buyers per order.</div>
@@ -755,21 +777,18 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
                 <div style={{ fontSize: "12px", color: "#555" }}>Riders receive 100% of this fee. Silk Road takes no cut from deliveries.</div>
               </div>
 
-              {/* Footer tagline */}
               <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>🦶 Footer Tagline</div>
                 <textarea value={siteSettings.footerTagline} onChange={e => onUpdateSiteSettings(s => ({ ...s, footerTagline: e.target.value }))} rows={3}
                   style={{ ...inputStyle, resize: "vertical" }} />
               </div>
 
-              {/* About text */}
               <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>ℹ️ About Text</div>
                 <textarea value={siteSettings.aboutText} onChange={e => onUpdateSiteSettings(s => ({ ...s, aboutText: e.target.value }))} rows={5}
                   style={{ ...inputStyle, resize: "vertical" }} />
               </div>
 
-              {/* Privacy text */}
               <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>🔒 Privacy Policy (Information We Collect)</div>
                 <textarea value={siteSettings.privacyText} onChange={e => onUpdateSiteSettings(s => ({ ...s, privacyText: e.target.value }))} rows={5}
@@ -787,28 +806,24 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
               <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>Admin Management</h2>
 
-              {/* Master key verification for non-owners */}
               {!masterKeyVerified && currentRole !== "owner" && (
                 <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #92400e" }}>
                   <div style={{ fontSize: "14px", fontWeight: "700", color: "#fcd34d", marginBottom: "12px" }}>🔑 Master Key Required</div>
                   <div style={{ display: "flex", gap: "10px" }}>
                     <input placeholder="Enter master key..." type="password" value={masterKeyInput} onChange={e => setMasterKeyInput(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && handleVerifyMasterKey()}
                       style={{ flex: 1, ...inputStyle }} />
-                    <button
-                      onClick={() => {
-                        if (masterKeyInput === MASTER_KEY || masterKeyInput === OWNER_KEY) setMasterKeyVerified(true)
-                        else alert("Invalid master key.")
-                      }}
+                    <button onClick={handleVerifyMasterKey}
                       style={{ background: "#c8a97e", border: "none", padding: "10px 20px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
                       Verify
                     </button>
                   </div>
+                  {masterKeyError && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "8px" }}>⚠️ {masterKeyError}</div>}
                 </div>
               )}
 
               {(masterKeyVerified || currentRole === "owner") && (
                 <>
-                  {/* Add admin */}
                   <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #1e1e1e" }}>
                     <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8", marginBottom: "16px" }}>➕ Add Admin</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -866,7 +881,6 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
                     </div>
                   </div>
 
-                  {/* Current admins */}
                   <div>
                     <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8", marginBottom: "12px" }}>Current Admins & Staff</div>
                     {users.filter(u => u.role !== "user").map(u => (
