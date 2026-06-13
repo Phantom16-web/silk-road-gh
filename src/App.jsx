@@ -949,14 +949,16 @@ function App() {
         </div>
       )}
 
-      {checkoutOpen && (
-        <Checkout
-          cart={trackedOrder?.cart || cart}
-          rate={rate}
-          onClose={() => { setCheckoutOpen(false); setTrackedOrder(null) }}
-          initialOrder={trackedOrder}
-        />
-      )}
+{checkoutOpen && (
+  <Checkout
+    cart={trackedOrder?.cart || cart}
+    rate={rate}
+    onClose={() => { setCheckoutOpen(false); setTrackedOrder(null) }}
+    initialOrder={trackedOrder}
+    siteSettings={siteSettings}
+  />
+)}
+
 
     </div>
   )
