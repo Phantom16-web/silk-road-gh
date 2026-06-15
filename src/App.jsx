@@ -114,49 +114,55 @@ function ProductModal({ item, onClose, onCart, toUSD }) {
   const delivery = item.delivery || []
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
-      <div style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
+      <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
         <div style={{ position: "relative" }}>
-          <img src={itemImage} alt={item.title} style={{ width: "100%", height: "240px", objectFit: "cover", borderRadius: "16px 16px 0 0" }} />
-          <button onClick={onClose} style={{ position: "absolute", top: "12px", right: "12px", background: "#000000aa", border: "none", color: "#fff", fontSize: "18px", cursor: "pointer", width: "32px", height: "32px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          <img src={itemImage} alt={item.title} style={{ width: "100%", height: "260px", objectFit: "cover", borderRadius: "20px 20px 0 0", display: "block" }} />
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 50%, #111)", borderRadius: "20px 20px 0 0", pointerEvents: "none" }} />
+          <button onClick={onClose} style={{ position: "absolute", top: "14px", right: "14px", background: "#000000aa", border: "none", color: "#fff", fontSize: "18px", cursor: "pointer", width: "34px", height: "34px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(8px)" }}>✕</button>
         </div>
-        <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "14px" }}>
+        <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
-            <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "6px" }}>{item.category}</div>
-            <h2 style={{ fontSize: "22px", fontWeight: "700", color: "#f0ede8", marginBottom: "6px" }}>{item.title}</h2>
-            <div style={{ fontSize: "13px", color: "#666" }}>Listed by <span style={{ color: "#aaa", fontWeight: "600" }}>{sellerName}</span></div>
-            {university && <div style={{ fontSize: "12px", color: "#555", marginTop: "2px" }}>🎓 {university}</div>}
+            <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "8px" }}>{item.category}</div>
+            <h2 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>{item.title}</h2>
+            <div style={{ fontSize: "13px", color: "#555" }}>Listed by <span style={{ color: "#888", fontWeight: "600" }}>{sellerName}</span></div>
+            {university && <div style={{ fontSize: "12px", color: "#444", marginTop: "3px" }}>🎓 {university}</div>}
           </div>
-          <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+
+          <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
             {item.rating > 0 && (
-              <div style={{ fontSize: "14px", color: "#c8a97e" }}>{"★".repeat(Math.round(item.rating))}{"☆".repeat(5 - Math.round(item.rating))} <span style={{ color: "#666", fontSize: "13px" }}>{item.rating}</span></div>
+              <div style={{ fontSize: "13px", color: "#c8a97e" }}>{"★".repeat(Math.round(item.rating))}{"☆".repeat(5 - Math.round(item.rating))} <span style={{ color: "#555", fontSize: "12px" }}>{item.rating}</span></div>
             )}
             {item.condition && item.condition !== "N/A" && (
-              <div style={{ fontSize: "13px", color: "#888" }}>Condition: <span style={{ color: "#f0ede8", fontWeight: "600" }}>{item.condition}</span></div>
+              <span style={{ fontSize: "11px", color: "#666", background: "#1a1a1a", border: "1px solid #222", padding: "3px 10px", borderRadius: "20px", fontWeight: "600" }}>{item.condition}</span>
             )}
           </div>
-          <div style={{ background: "#1a1a1a", borderRadius: "10px", padding: "14px" }}>
-            <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>About this item</div>
-            <p style={{ fontSize: "14px", color: "#aaa", lineHeight: "1.7", margin: 0 }}>{item.desc}</p>
+
+          <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "16px" }}>
+            <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "8px" }}>About this item</div>
+            <p style={{ fontSize: "14px", color: "#888", lineHeight: "1.7", margin: 0 }}>{item.desc}</p>
           </div>
+
           {delivery.length > 0 && (
             <div>
-              <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>Delivery Options</div>
+              <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "10px" }}>Delivery Options</div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 {delivery.map(d => (
-                  <span key={d} style={{ fontSize: "12px", background: "#1e1e1e", border: "1px solid #2a2a2a", color: "#aaa", padding: "5px 12px", borderRadius: "20px", fontWeight: "600" }}>
+                  <span key={d} style={{ fontSize: "12px", background: "#1a1a1a", border: "1px solid #222", color: "#888", padding: "5px 14px", borderRadius: "20px", fontWeight: "600" }}>
                     {d === "Pickup" ? "📍 Campus Pickup" : d === "Rider" ? "🛵 Rider Delivery" : "📦 Shipping"}
                   </span>
                 ))}
               </div>
             </div>
           )}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #1e1e1e", paddingTop: "16px" }}>
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #1a1a1a", paddingTop: "18px" }}>
             <div>
-              <div style={{ fontSize: "26px", fontWeight: "700", color: "#c8a97e" }}>₵{(item.price || 0).toLocaleString()}</div>
-              <div style={{ fontSize: "12px", color: "#555" }}>${toUSD(item.price || 0)} USD</div>
+              <div style={{ fontSize: "28px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.03em" }}>₵{(item.price || 0).toLocaleString()}</div>
+              <div style={{ fontSize: "12px", color: "#444" }}>${toUSD(item.price || 0)} USD</div>
             </div>
-            <button onClick={() => { onCart(item); onClose() }} style={{ background: "#c8a97e", border: "none", padding: "12px 24px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}>
+            <button className="btn-gold" onClick={() => { onCart(item); onClose() }}
+              style={{ padding: "13px 28px", borderRadius: "12px", fontSize: "14px" }}>
               🛒 Add to Cart
             </button>
           </div>
@@ -173,53 +179,53 @@ function FooterModal({ type, onClose, siteSettings }) {
     about: {
       title: "About Silk Road GH",
       body: (
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "14px", color: "#aaa", lineHeight: "1.8" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "14px", color: "#888", lineHeight: "1.8" }}>
           <p>{siteSettings.aboutText}</p>
           <p>We connect university students across Ghana to buy, sell, rent, and trade goods and services safely. Every transaction is protected by our escrow system — your money is held securely until you confirm everything is good.</p>
           <p>Our rider network ensures fast, reliable on-campus delivery so you never have to worry about getting your items safely.</p>
-          <div style={{ background: "#1a1a1a", borderRadius: "10px", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
-            <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em" }}>Our Values</div>
+          <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em" }}>Our Values</div>
             {[
               "🔒 Security — Every payment is held in escrow until delivery is confirmed.",
               "⚡ Speed — Campus riders deliver fast within your zone.",
               "🤝 Trust — Verified student community with ratings and reviews.",
               "💰 Fairness — We only take 8% when a transaction is completed.",
-            ].map(v => <div key={v} style={{ fontSize: "13px", color: "#aaa" }}>{v}</div>)}
+            ].map(v => <div key={v} style={{ fontSize: "13px", color: "#666" }}>{v}</div>)}
           </div>
-          <p style={{ fontSize: "13px", color: "#666" }}>Silk Road GH is proudly built for Ghanaian university students. Payments powered by MTN Mobile Money via Paystack.</p>
+          <p style={{ fontSize: "13px", color: "#555" }}>Silk Road GH is proudly built for Ghanaian university students. Payments powered by MTN Mobile Money via Paystack.</p>
         </div>
       )
     },
     privacy: {
       title: "Privacy Policy",
       body: (
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "14px", color: "#aaa", lineHeight: "1.8" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "14px", color: "#888", lineHeight: "1.8" }}>
           {[
             ["📋 Information We Collect", siteSettings.privacyText],
             ["🔒 How We Use Your Data", "Your data is used solely to process transactions, connect buyers with sellers, coordinate deliveries, and improve the platform. We do not sell your personal information to third parties."],
             ["📍 Location Data", "Location is only accessed during checkout when you choose to share it. It is used to coordinate delivery and is shared only with the seller or rider fulfilling your order."],
-            ["💳 Payment Information", "All payments are processed securely via Paystack. Silk Road GH does not store your MTN MoMo PIN or full payment credentials."],
+            ["💳 Payment Information", "All payments are processed securely. Silk Road GH does not store your MTN MoMo PIN or full payment credentials."],
             ["🤝 Data Sharing", "Your contact details are only shared with the relevant seller or rider after a confirmed payment. No data is shared with advertisers or unrelated third parties."],
             ["🗑️ Data Deletion", "You may request deletion of your account and associated data at any time by contacting us directly."],
             ["📞 Contact", `For any privacy concerns, reach us at ${siteSettings.contactPhone}.`],
           ].map(([title, text]) => (
             <div key={title}>
-              <div style={{ fontWeight: "700", color: "#f0ede8", marginBottom: "6px" }}>{title}</div>
+              <div style={{ fontWeight: "700", color: "#f0ede8", marginBottom: "6px", fontSize: "13px" }}>{title}</div>
               <p style={{ margin: 0 }}>{text}</p>
             </div>
           ))}
-          <p style={{ fontSize: "12px", color: "#555" }}>Last updated: {new Date().getFullYear()}. Silk Road GH reserves the right to update this policy.</p>
+          <p style={{ fontSize: "12px", color: "#444" }}>Last updated: {new Date().getFullYear()}. Silk Road GH reserves the right to update this policy.</p>
         </div>
       )
     }
   }
   const c = content[type]
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
-      <div style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "560px", maxHeight: "85vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#111", zIndex: 1 }}>
+    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
+      <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "560px", maxHeight: "85vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: "20px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#111", zIndex: 1 }}>
           <span style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>{c.title}</span>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#666", fontSize: "22px", cursor: "pointer" }}>✕</button>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer" }}>✕</button>
         </div>
         <div style={{ padding: "24px" }}>{c.body}</div>
       </div>
@@ -230,41 +236,48 @@ function FooterModal({ type, onClose, siteSettings }) {
 // ── Footer ────────────────────────────────────────────────────────────────────
 function Footer({ onOpen, siteSettings }) {
   return (
-    <footer style={{ background: "#0a0a0a", borderTop: "1px solid #1e1e1e", marginTop: "60px" }}>
-      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "48px 24px 24px" }}>
-        <div style={{ display: "flex", gap: "48px", flexWrap: "wrap", marginBottom: "40px" }}>
+    <footer style={{ background: "#080808", borderTop: "1px solid #141414", marginTop: "80px" }}>
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "56px 24px 28px" }}>
+        <div style={{ display: "flex", gap: "56px", flexWrap: "wrap", marginBottom: "48px" }}>
           <div style={{ flex: 2, minWidth: "220px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-              <div style={{ width: "32px", height: "32px", background: "linear-gradient(135deg,#c8a97e,#9a7040)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>🕸</div>
-              <span style={{ fontSize: "20px", fontWeight: "700", color: "#c8a97e" }}>Silk Road GH</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+              <div style={{ width: "34px", height: "34px", background: "linear-gradient(135deg,#c8a97e,#9a7040)", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "17px" }}>🕸</div>
+              <span style={{ fontSize: "20px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.02em" }}>Silk Road GH</span>
             </div>
-            <p style={{ fontSize: "13px", color: "#555", lineHeight: "1.7", maxWidth: "280px" }}>{siteSettings.footerTagline}</p>
+            <p style={{ fontSize: "13px", color: "#444", lineHeight: "1.8", maxWidth: "260px" }}>{siteSettings.footerTagline}</p>
           </div>
-          <div style={{ flex: 1, minWidth: "160px" }}>
-            <div style={{ fontSize: "12px", color: "#666", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "16px" }}>Company</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <button onClick={() => onOpen("about")} style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit" }}>About Silk Road</button>
-              <button onClick={() => onOpen("privacy")} style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit" }}>Privacy Policy</button>
+          <div style={{ flex: 1, minWidth: "140px" }}>
+            <div style={{ fontSize: "10px", color: "#333", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "18px" }}>Company</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <button onClick={() => onOpen("about")} style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit", transition: "color 0.2s" }}
+                onMouseEnter={e => e.target.style.color = "#c8a97e"}
+                onMouseLeave={e => e.target.style.color = "#555"}>About Silk Road</button>
+              <button onClick={() => onOpen("privacy")} style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit", transition: "color 0.2s" }}
+                onMouseEnter={e => e.target.style.color = "#c8a97e"}
+                onMouseLeave={e => e.target.style.color = "#555"}>Privacy Policy</button>
             </div>
           </div>
-          <div style={{ flex: 1, minWidth: "160px" }}>
-            <div style={{ fontSize: "12px", color: "#666", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "16px" }}>Contact Us</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div style={{ flex: 1, minWidth: "140px" }}>
+            <div style={{ fontSize: "10px", color: "#333", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "18px" }}>Contact</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <a href={`tel:+${siteSettings.contactWhatsApp}`} style={{ color: "#c8a97e", fontSize: "14px", textDecoration: "none", fontWeight: "600" }}>📞 {siteSettings.contactPhone}</a>
-              <a href={`https://wa.me/${siteSettings.contactWhatsApp}`} target="_blank" rel="noreferrer" style={{ color: "#888", fontSize: "14px", textDecoration: "none" }}>💬 WhatsApp Us</a>
+              <a href={`https://wa.me/${siteSettings.contactWhatsApp}`} target="_blank" rel="noreferrer" style={{ color: "#555", fontSize: "14px", textDecoration: "none", transition: "color 0.2s" }}
+                onMouseEnter={e => e.target.style.color = "#c8a97e"}
+                onMouseLeave={e => e.target.style.color = "#555"}>💬 WhatsApp</a>
             </div>
           </div>
-          <div style={{ flex: 1, minWidth: "160px" }}>
-            <div style={{ fontSize: "12px", color: "#666", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "16px" }}>Payments</div>
+          <div style={{ flex: 1, minWidth: "140px" }}>
+            <div style={{ fontSize: "10px", color: "#333", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "18px" }}>Payments</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ background: "#ffd700", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: "700", color: "#1a1a00", display: "inline-flex", alignItems: "center", gap: "6px", width: "fit-content" }}>📱 MTN MoMo</div>
-              <div style={{ fontSize: "11px", color: "#555" }}>Secured by Paystack</div>
+              <div style={{ background: "#ffd700", borderRadius: "8px", padding: "8px 14px", fontSize: "12px", fontWeight: "700", color: "#1a1a00", display: "inline-flex", alignItems: "center", gap: "6px", width: "fit-content" }}>📱 MTN MoMo</div>
+              <div style={{ fontSize: "11px", color: "#333" }}>Escrow protected</div>
             </div>
           </div>
         </div>
-        <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-          <div style={{ fontSize: "12px", color: "#444" }}>© {new Date().getFullYear()} Silk Road GH. All rights reserved.</div>
-          <div style={{ fontSize: "12px", color: "#444" }}>Built for Ghanaian students 🇬🇭</div>
+        <hr className="divider" />
+        <div style={{ paddingTop: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ fontSize: "12px", color: "#333" }}>© {new Date().getFullYear()} Silk Road GH. All rights reserved.</div>
+          <div style={{ fontSize: "12px", color: "#333" }}>Built for Ghanaian students 🇬🇭</div>
         </div>
       </div>
     </footer>
@@ -294,16 +307,11 @@ function SearchResults({ query, onClose, onNavigate }) {
   })
 
   const dbBuyResults = (detectedSection && detectedSection !== "buy") ? [] : dbResults.map(item => ({
-    id: item._id,
-    imageId: item._id,
-    title: item.title,
-    category: item.category,
-    section: "buy",
-    image: item.image,
+    id: item._id, imageId: item._id, title: item.title,
+    category: item.category, section: "buy", image: item.image,
   }))
 
   const results = [...dbBuyResults, ...staticResults]
-
   const grouped = {
     buy:     results.filter(r => r.section === "buy"),
     rent:    results.filter(r => r.section === "rent"),
@@ -311,52 +319,53 @@ function SearchResults({ query, onClose, onNavigate }) {
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "80px 20px 20px" }} onClick={onClose}>
-      <div style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "680px", maxHeight: "80vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#111", zIndex: 1 }}>
+    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "80px 20px 20px" }} onClick={onClose}>
+      <div className="modal-content" style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "680px", maxHeight: "80vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#111", zIndex: 1 }}>
           <div>
-            <span style={{ fontSize: "14px", color: "#888" }}>
+            <span style={{ fontSize: "14px", color: "#555" }}>
               {loading ? "Searching..." : `${results.length} results for`} <strong style={{ color: "#f0ede8" }}>"{query}"</strong>
             </span>
             {detectedSection && (
-              <span style={{ marginLeft: "8px", fontSize: "11px", fontWeight: "700", color: SECTION_COLOR[detectedSection], background: `${SECTION_COLOR[detectedSection]}22`, padding: "2px 8px", borderRadius: "20px" }}>
+              <span style={{ marginLeft: "10px", fontSize: "11px", fontWeight: "700", color: SECTION_COLOR[detectedSection], background: `${SECTION_COLOR[detectedSection]}22`, padding: "2px 10px", borderRadius: "20px" }}>
                 {SECTION_LABEL[detectedSection]}
               </span>
             )}
           </div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#666", fontSize: "20px", cursor: "pointer" }}>✕</button>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "20px", cursor: "pointer" }}>✕</button>
         </div>
+
         {loading ? (
-          <div style={{ padding: "48px", textAlign: "center", color: "#555" }}>
-            <div style={{ fontSize: "40px", marginBottom: "12px" }}>⏳</div>
-            <div style={{ fontSize: "14px" }}>Searching...</div>
+          <div className="empty-state">
+            <div className="icon">⏳</div>
+            <div className="title">Searching...</div>
           </div>
         ) : results.length === 0 ? (
-          <div style={{ padding: "48px", textAlign: "center", color: "#555" }}>
-            <div style={{ fontSize: "40px", marginBottom: "12px" }}>🔍</div>
-            <div style={{ fontSize: "16px", fontWeight: "600", marginBottom: "6px", color: "#888" }}>No results found</div>
-            <div style={{ fontSize: "13px" }}>Try searching for something else</div>
+          <div className="empty-state">
+            <div className="icon">🔍</div>
+            <div className="title">No results found</div>
+            <div className="sub">Try a different search term</div>
           </div>
         ) : (
           <div style={{ padding: "16px" }}>
             {Object.entries(grouped).map(([section, items]) => items.length > 0 && (
               <div key={section} style={{ marginBottom: "24px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                  <div style={{ fontSize: "12px", fontWeight: "700", color: SECTION_COLOR[section], textTransform: "uppercase", letterSpacing: ".06em" }}>{SECTION_LABEL[section]}</div>
-                  <button onClick={() => { onNavigate(section); onClose() }} style={{ background: "transparent", border: "none", color: "#555", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>See all →</button>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[section], textTransform: "uppercase", letterSpacing: ".1em" }}>{SECTION_LABEL[section]}</div>
+                  <button onClick={() => { onNavigate(section); onClose() }} style={{ background: "transparent", border: "none", color: "#444", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>See all →</button>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   {items.map(item => (
                     <div key={item.id} onClick={() => { onNavigate(item.section); onClose() }}
-                      style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px", borderRadius: "10px", background: "#1a1a1a", cursor: "pointer", border: "1px solid #1e1e1e", transition: "border .2s" }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor = "#c8a97e44"}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = "#1e1e1e"}>
-                      <img src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }} />
+                      style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 12px", borderRadius: "12px", background: "#1a1a1a", cursor: "pointer", border: "1px solid #1a1a1a", transition: "border-color 0.2s, background 0.2s" }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = "#c8a97e33"; e.currentTarget.style.background = "#1e1e1e" }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = "#1a1a1a"; e.currentTarget.style.background = "#1a1a1a" }}>
+                      <img src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "44px", height: "44px", borderRadius: "10px", objectFit: "cover", flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "2px" }}>{item.title}</div>
-                        <div style={{ fontSize: "11px", color: "#666" }}>{item.category}</div>
+                        <div style={{ fontSize: "11px", color: "#444" }}>{item.category}</div>
                       </div>
-                      <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}22`, padding: "3px 10px", borderRadius: "20px", flexShrink: 0 }}>
+                      <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}18`, padding: "3px 10px", borderRadius: "20px", flexShrink: 0 }}>
                         {SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}
                       </span>
                     </div>
@@ -374,16 +383,14 @@ function SearchResults({ query, onClose, onNavigate }) {
 // ── Skeleton loader ───────────────────────────────────────────────────────────
 function ListingSkeleton() {
   return (
-    <div style={{ background: "#111", borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e" }}>
-      <style>{`@keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:.8} }`}</style>
-      <div style={{ width: "100%", height: "180px", background: "#1a1a1a", animation: "shimmer 1.5s ease infinite" }} />
-      <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
-        <div style={{ height: "10px", background: "#1a1a1a", borderRadius: "4px", width: "40%", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "16px", background: "#1a1a1a", borderRadius: "4px", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "10px", background: "#1a1a1a", borderRadius: "4px", width: "60%", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "10px", background: "#1a1a1a", borderRadius: "4px", width: "50%", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "24px", background: "#1a1a1a", borderRadius: "4px", width: "50%", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "36px", background: "#1a1a1a", borderRadius: "8px", animation: "shimmer 1.5s ease infinite" }} />
+    <div style={{ background: "#111", borderRadius: "16px", overflow: "hidden", border: "1px solid #1a1a1a" }}>
+      <div style={{ width: "100%", height: "200px", background: "#161616", animation: "shimmer 1.5s ease infinite" }} />
+      <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={{ height: "10px", background: "#161616", borderRadius: "4px", width: "35%", animation: "shimmer 1.5s ease infinite" }} />
+        <div style={{ height: "16px", background: "#161616", borderRadius: "4px", animation: "shimmer 1.5s ease infinite" }} />
+        <div style={{ height: "10px", background: "#161616", borderRadius: "4px", width: "55%", animation: "shimmer 1.5s ease infinite" }} />
+        <div style={{ height: "22px", background: "#161616", borderRadius: "4px", width: "45%", animation: "shimmer 1.5s ease infinite", marginTop: "4px" }} />
+        <div style={{ height: "40px", background: "#161616", borderRadius: "10px", animation: "shimmer 1.5s ease infinite", marginTop: "4px" }} />
       </div>
     </div>
   )
@@ -413,7 +420,7 @@ function App() {
   const [authCallback, setAuthCallback] = useState(null)
   const [siteSettings, setSiteSettings] = useState(DEFAULT_SITE_SETTINGS)
 
-  // Listings state
+  // Listings
   const [dbListings, setDbListings] = useState([])
   const [listingsLoading, setListingsLoading] = useState(false)
   const [listingsPage, setListingsPage] = useState(1)
@@ -421,7 +428,7 @@ function App() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
-  // Search state
+  // Search
   const [dbSearchResults, setDbSearchResults] = useState([])
   const [searchLoading, setSearchLoading] = useState(false)
   const searchDebounceRef = useRef(null)
@@ -430,12 +437,11 @@ function App() {
   const isAtBottomRef = useRef(false)
   const searchRef = useRef(null)
 
-  // Use DB listings if available, otherwise fall back to static
   const usingDb = dbListings.length > 0
   const displayListings = usingDb ? dbListings : ALL_LISTINGS.slice(0, visibleCount)
   const hasMore = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
 
-  // Fetch real listings from backend
+  // Fetch listings
   const fetchListings = async (page = 1, reset = false) => {
     if (page === 1) setListingsLoading(true)
     else setLoadingMore(true)
@@ -450,9 +456,7 @@ function App() {
         setDbListings([])
         setHasMoreListings(false)
       }
-    } catch {
-      // silently fall back to static data
-    }
+    } catch {}
     setListingsLoading(false)
     setLoadingMore(false)
   }
@@ -461,6 +465,17 @@ function App() {
     if (activePage === "buy") fetchListings(1, true)
     setVisibleCount(PAGE_SIZE)
   }, [activePage])
+
+  // Scroll reveal observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add("visible") }),
+      { threshold: 0.08, rootMargin: "0px 0px -30px 0px" }
+    )
+    const cards = document.querySelectorAll(".reveal")
+    cards.forEach(c => observer.observe(c))
+    return () => observer.disconnect()
+  }, [displayListings, activePage, listingsLoading])
 
   // Infinite scroll
   useEffect(() => {
@@ -471,9 +486,8 @@ function App() {
           isAtBottomRef.current = true
           bottomReachedTimerRef.current = setTimeout(() => {
             if (isAtBottomRef.current) {
-              if (usingDb) {
-                fetchListings(listingsPage + 1)
-              } else {
+              if (usingDb) fetchListings(listingsPage + 1)
+              else {
                 setLoadingMore(true)
                 setTimeout(() => {
                   setVisibleCount(c => Math.min(c + PAGE_SIZE, ALL_LISTINGS.length))
@@ -495,23 +509,17 @@ function App() {
     }
   }, [hasMore, loadingMore, activePage, usingDb, listingsPage])
 
-  // Debounced live search against backend
+  // Debounced search
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setDbSearchResults([])
-      return
-    }
+    if (!searchQuery.trim()) { setDbSearchResults([]); return }
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
     searchDebounceRef.current = setTimeout(async () => {
       setSearchLoading(true)
       try {
         const { keyword } = parseSearch(searchQuery)
-        const q = keyword || searchQuery
-        const data = await getListings({ search: q, limit: 10 })
+        const data = await getListings({ search: keyword || searchQuery, limit: 10 })
         setDbSearchResults(Array.isArray(data) ? data : [])
-      } catch {
-        setDbSearchResults([])
-      }
+      } catch { setDbSearchResults([]) }
       setSearchLoading(false)
     }, 350)
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
@@ -540,7 +548,7 @@ function App() {
     if (window.location.pathname === "/admin") setShowAdmin(true)
   }, [])
 
-  // Restore session from token
+  // Restore session
   useEffect(() => {
     const token = localStorage.getItem("silkroad_token")
     if (token && !user) {
@@ -599,72 +607,58 @@ function App() {
   const dropdownResults = (() => {
     if (!searchQuery.trim()) return []
     const { detectedSection, keyword } = parseSearch(searchQuery)
-
-    // Static rent/service items (DB doesn't have these for search yet)
     const staticMatches = ALL_ITEMS.filter(item => {
       if (item.section === "buy") return false
       const matchesSection = detectedSection ? item.section === detectedSection : true
       const matchesKeyword = keyword ? item.title.toLowerCase().includes(keyword) || item.category.toLowerCase().includes(keyword) : true
       return matchesSection && matchesKeyword
     })
-
-    // Real DB results for buy section
-    const dbMatches = (detectedSection && detectedSection !== "buy")
-      ? []
-      : dbSearchResults.map(item => ({
-          id: item._id,
-          imageId: item._id,
-          title: item.title,
-          category: item.category,
-          section: "buy",
-          image: item.image,
-        }))
-
+    const dbMatches = (detectedSection && detectedSection !== "buy") ? []
+      : dbSearchResults.map(item => ({ id: item._id, imageId: item._id, title: item.title, category: item.category, section: "buy", image: item.image }))
     return [...dbMatches, ...staticMatches].slice(0, 8)
   })()
 
   return (
-    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#f0ede8", display: "flex", flexDirection: "column" }}>
 
       {/* ── NAVBAR ── */}
-      <nav style={{ position: "sticky", top: 0, zIndex: 90 }}>
+      <nav className="navbar" style={{ position: "sticky", top: 0, zIndex: 90 }}>
 
         {/* Top row */}
-        <div style={{ background: "#0a0a0a", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1a1a1a" }}>
-
+        <div style={{ padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h1 onClick={() => setActivePage("buy")}
-            style={{ color: "#c8a97e", fontWeight: "bold", fontSize: "20px", flexShrink: 0, cursor: "pointer", margin: 0 }}>
+            style={{ color: "#c8a97e", fontWeight: "800", fontSize: "20px", cursor: "pointer", margin: 0, letterSpacing: "-0.03em" }}>
             Silk Road
           </h1>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <button onClick={() => setShowSell(true)}
-              style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "8px 12px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+              style={{ background: "#1a1a1a", border: "1px solid #252525", color: "#c8a97e", padding: "8px 14px", borderRadius: "9px", fontWeight: "700", cursor: "pointer", fontSize: "13px", whiteSpace: "nowrap" }}>
               + Sell
             </button>
 
             {user?.isRider && (
               <button onClick={() => setShowRiderDashboard(true)}
-                style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
+                style={{ background: "transparent", border: "1px solid #222", color: "#888", padding: "7px 10px", borderRadius: "9px", cursor: "pointer", fontSize: "16px" }}
                 title="Rider Dashboard">
                 🛵
               </button>
             )}
 
             <button onClick={() => setShowTracker(true)}
-              style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
+              style={{ background: "transparent", border: "1px solid #222", color: "#888", padding: "7px 10px", borderRadius: "9px", cursor: "pointer", fontSize: "16px" }}
               title="Track Order">
               📦
             </button>
 
             {user ? (
               <button onClick={() => setShowAccount(true)}
-                style={{ background: "#c8a97e", border: "none", width: "34px", height: "34px", borderRadius: "50%", fontWeight: "800", cursor: "pointer", fontSize: "14px", color: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                style={{ background: "linear-gradient(135deg,#c8a97e,#9a7040)", border: "none", width: "34px", height: "34px", borderRadius: "50%", fontWeight: "800", cursor: "pointer", fontSize: "14px", color: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {user.name.charAt(0).toUpperCase()}
               </button>
             ) : (
               <button onClick={() => setShowAuth(true)}
-                style={{ background: "#c8a97e", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                style={{ background: "#c8a97e", border: "none", padding: "8px 16px", borderRadius: "9px", fontWeight: "700", cursor: "pointer", fontSize: "13px", color: "#000", whiteSpace: "nowrap" }}>
                 Sign In
               </button>
             )}
@@ -673,70 +667,67 @@ function App() {
               style={{ position: "relative", background: "transparent", border: "none", color: "#fff", fontSize: "22px", cursor: "pointer", padding: "4px" }}>
               🛒
               {cartCount > 0 && (
-                <span style={{ position: "absolute", top: "-2px", right: "-2px", background: "#c8a97e", color: "#000", fontSize: "9px", fontWeight: "800", borderRadius: "50%", width: "16px", height: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {cartCount}
-                </span>
+                <span className="badge">{cartCount}</span>
               )}
             </button>
           </div>
         </div>
 
-        {/* Bottom nav + search */}
-        <div style={{ background: "#111", borderBottom: "1px solid #1e1e1e" }}>
-
-          {/* Nav tabs */}
-          <div style={{ padding: "0 16px", display: "flex", gap: "4px", overflowX: "auto" }}>
+        {/* Nav tabs + search */}
+        <div style={{ borderTop: "1px solid #141414" }}>
+          <div style={{ padding: "0 18px", display: "flex", gap: "2px", overflowX: "auto" }}>
             {[
-              { label: "Buy Products",    page: "buy" },
-              { label: "Rent Items",      page: "rent" },
-              { label: "Request Service", page: "service" },
-              { label: "Become a Rider",  page: "rider" },
+              { label: "Buy",     page: "buy" },
+              { label: "Rent",    page: "rent" },
+              { label: "Services",page: "service" },
+              { label: "Ride",    page: "rider" },
             ].map(link => (
               <button key={link.page} onClick={() => setActivePage(link.page)}
-                style={{ background: "transparent", border: "none", color: activePage === link.page ? "#c8a97e" : "#aaa", cursor: "pointer", fontSize: "13px", fontWeight: "600", borderBottom: activePage === link.page ? "2px solid #c8a97e" : "2px solid transparent", padding: "12px 14px", whiteSpace: "nowrap", fontFamily: "inherit" }}>
+                style={{ background: "transparent", border: "none", color: activePage === link.page ? "#c8a97e" : "#444", cursor: "pointer", fontSize: "13px", fontWeight: activePage === link.page ? "700" : "500", borderBottom: activePage === link.page ? "2px solid #c8a97e" : "2px solid transparent", padding: "11px 16px", whiteSpace: "nowrap", fontFamily: "inherit", transition: "color 0.2s", letterSpacing: "0.01em" }}>
                 {link.label}
               </button>
             ))}
           </div>
 
-          {/* Search bar */}
-          <div style={{ padding: "8px 16px 12px" }}>
+          {/* Search */}
+          <div style={{ padding: "8px 18px 12px" }}>
             <div ref={searchRef} style={{ position: "relative" }}>
               <input
-                placeholder="Search e.g. 'rent guitar', 'buy electronics', 'service cleaning'..."
+                className="search-input"
+                placeholder="Search listings, rentals, services..."
                 value={searchQuery}
                 onChange={e => { setSearchQuery(e.target.value); setShowDropdown(true) }}
                 onKeyDown={handleSearchKey}
                 onFocus={() => searchQuery.trim() && setShowDropdown(true)}
-                style={{ width: "100%", padding: "10px 36px 10px 14px", borderRadius: "8px", border: "none", background: "#1e1e1e", color: "#fff", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
               />
               {searchQuery ? (
                 <button onClick={() => { setSearchQuery(""); setShowDropdown(false); setShowFullResults(false) }}
-                  style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "15px" }}>✕</button>
+                  style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "14px", minHeight: "auto" }}>✕</button>
               ) : (
-                <span style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "15px", opacity: .4, pointerEvents: "none" }}>🔍</span>
+                <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "14px", opacity: .25, pointerEvents: "none" }}>🔍</span>
               )}
 
+              {/* Dropdown */}
               {showDropdown && searchQuery.trim() && dropdownResults.length > 0 && (
-                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,.6)" }}>
+                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", zIndex: 500, overflow: "hidden", boxShadow: "0 16px 48px rgba(0,0,0,.7)" }}>
                   {dropdownResults.map(item => (
                     <div key={item.id} onClick={() => { setActivePage(item.section); setShowDropdown(false) }}
-                      style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #222" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#222"}
+                      style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #1a1a1a", transition: "background 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#1e1e1e"}
                       onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                      <img src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "34px", height: "34px", borderRadius: "6px", objectFit: "cover", flexShrink: 0 }} />
+                      <img src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "36px", height: "36px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: "13px", fontWeight: "600", color: "#f0ede8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
-                        <div style={{ fontSize: "11px", color: "#555" }}>{item.category}</div>
+                        <div style={{ fontSize: "11px", color: "#444" }}>{item.category}</div>
                       </div>
-                      <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}22`, padding: "2px 8px", borderRadius: "20px", flexShrink: 0 }}>
+                      <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}18`, padding: "2px 8px", borderRadius: "20px", flexShrink: 0 }}>
                         {SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}
                       </span>
                     </div>
                   ))}
                   <div onClick={() => { setShowDropdown(false); setShowFullResults(true) }}
-                    style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#222"}
+                    style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600", transition: "background 0.15s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#1e1e1e"}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                     See all results →
                   </div>
@@ -744,7 +735,7 @@ function App() {
               )}
 
               {showDropdown && searchQuery.trim() && dropdownResults.length === 0 && (
-                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, padding: "14px", textAlign: "center", color: "#555", fontSize: "13px" }}>
+                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", zIndex: 500, padding: "16px", textAlign: "center", color: "#444", fontSize: "13px" }}>
                   {searchLoading ? "⏳ Searching..." : `No results for "${searchQuery}"`}
                 </div>
               )}
@@ -758,21 +749,33 @@ function App() {
 
         {/* BUY */}
         {activePage === "buy" && (
-          <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
-              <span style={{ color: "#888", fontSize: "13px" }}>
-                {rateLoading ? "Fetching live rate..." : `Live rate: ₵1 = $${rate?.toFixed(4)}`}
-              </span>
-              <button onClick={fetchRate} style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "4px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px" }}>
-                ↻ Refresh
-              </button>
+          <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "36px 18px 24px" }}>
+
+            {/* Hero */}
+            <div style={{ marginBottom: "36px" }}>
+              <h1 style={{ fontSize: "clamp(26px, 5vw, 40px)", fontWeight: "800", color: "#f0ede8", letterSpacing: "-0.03em", lineHeight: "1.1", marginBottom: "10px" }}>
+                Campus Marketplace 🇬🇭
+              </h1>
+              <p style={{ fontSize: "14px", color: "#444", maxWidth: "380px", lineHeight: "1.7" }}>
+                Buy, sell and trade with students across Ghana. Every transaction secured by escrow.
+              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "16px" }}>
+                <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: rate ? "#6ee7b7" : "#555", animation: rate ? "pulse 2s infinite" : "none" }} />
+                <span style={{ fontSize: "12px", color: "#444" }}>
+                  {rateLoading ? "Fetching live rate..." : `₵1 = $${rate?.toFixed(4)} USD`}
+                </span>
+                <button onClick={fetchRate}
+                  style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "13px", padding: "2px 6px", minHeight: "auto", borderRadius: "6px" }}>
+                  ↻
+                </button>
+              </div>
             </div>
 
-            {/* Listings grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "16px" }}>
+            {/* Grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "20px" }}>
               {listingsLoading
                 ? Array.from({ length: PAGE_SIZE }).map((_, i) => <ListingSkeleton key={i} />)
-                : displayListings.map(item => {
+                : displayListings.map((item, index) => {
                     const itemId = getItemId(item)
                     const isDbItem = !!item._id
                     const sellerName = isDbItem ? item.seller?.name : item.seller
@@ -781,27 +784,33 @@ function App() {
                     const itemImage = item.image || `https://picsum.photos/seed/${item.id}/300/200`
 
                     return (
-                      <div key={itemId}
-                        style={{ background: "#111", borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e", transition: "transform 0.2s" }}
-                        onMouseEnter={e => e.currentTarget.style.transform = "translateY(-4px)"}
-                        onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
-                        <img src={itemImage} alt={item.title}
-                          onClick={() => setSelectedProduct(item)}
-                          style={{ width: "100%", height: "180px", objectFit: "cover", cursor: "pointer", display: "block" }} />
-                        <div style={{ padding: "14px" }}>
-                          <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>{item.category}</div>
-                          <div onClick={() => setSelectedProduct(item)} style={{ fontSize: "14px", fontWeight: "600", marginBottom: "4px", color: "#f0ede8", cursor: "pointer" }}>{item.title}</div>
-                          <div style={{ fontSize: "12px", color: "#666", marginBottom: "2px" }}>by {sellerName}</div>
-                          <div style={{ fontSize: "11px", color: "#555", marginBottom: "6px" }}>🎓 {university} · {item.condition || "N/A"}</div>
-                          {item.rating > 0 && (
-                            <div style={{ fontSize: "13px", color: "#aaa", marginBottom: "10px" }}>{"★".repeat(Math.round(item.rating))} {item.rating}</div>
-                          )}
-                          <div style={{ fontSize: "18px", fontWeight: "700", color: "#c8a97e" }}>
-                            ₵{itemPrice.toLocaleString()}
-                            <span style={{ fontSize: "13px", color: "#666", fontWeight: "400" }}> (${toUSD(itemPrice)})</span>
+                      <div key={itemId} className="listing-card reveal"
+                        style={{ animationDelay: `${(index % 8) * 55}ms` }}>
+                        <div style={{ overflow: "hidden", position: "relative" }}>
+                          <img src={itemImage} alt={item.title}
+                            onClick={() => setSelectedProduct(item)}
+                            style={{ width: "100%", height: "200px", objectFit: "cover", cursor: "pointer" }} />
+                          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "70px", background: "linear-gradient(to top, #111 0%, transparent 100%)", pointerEvents: "none" }} />
+                        </div>
+                        <div style={{ padding: "16px" }}>
+                          <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "6px" }}>{item.category}</div>
+                          <div onClick={() => setSelectedProduct(item)}
+                            style={{ fontSize: "15px", fontWeight: "700", marginBottom: "6px", color: "#f0ede8", cursor: "pointer", lineHeight: "1.3", letterSpacing: "-0.01em" }}>
+                            {item.title}
                           </div>
-                          <button onClick={() => addToCart(item)}
-                            style={{ marginTop: "10px", width: "100%", background: "#c8a97e", border: "none", padding: "9px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px" }}>
+                          <div style={{ fontSize: "12px", color: "#444", marginBottom: "2px" }}>by <span style={{ color: "#666" }}>{sellerName}</span></div>
+                          <div style={{ fontSize: "11px", color: "#333", marginBottom: "14px" }}>🎓 {university}</div>
+                          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: "14px" }}>
+                            <div>
+                              <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.02em", lineHeight: 1 }}>₵{itemPrice.toLocaleString()}</div>
+                              <div style={{ fontSize: "11px", color: "#333", marginTop: "3px" }}>${toUSD(itemPrice)} USD</div>
+                            </div>
+                            {item.condition && item.condition !== "N/A" && (
+                              <span style={{ fontSize: "10px", fontWeight: "600", color: "#444", background: "#161616", border: "1px solid #1e1e1e", padding: "3px 10px", borderRadius: "20px" }}>{item.condition}</span>
+                            )}
+                          </div>
+                          <button className="btn-gold" onClick={() => addToCart(item)}
+                            style={{ width: "100%", padding: "11px", borderRadius: "10px", fontSize: "13px" }}>
                             Add to Cart
                           </button>
                         </div>
@@ -812,10 +821,10 @@ function App() {
             </div>
 
             {loadingMore && (
-              <div style={{ padding: "32px 0", textAlign: "center", color: "#555", fontSize: "13px" }}>⏳ Loading more listings...</div>
+              <div style={{ padding: "40px 0", textAlign: "center", color: "#333", fontSize: "13px" }}>⏳ Loading more...</div>
             )}
             {!hasMore && displayListings.length > PAGE_SIZE && (
-              <div style={{ padding: "24px 0", textAlign: "center", color: "#333", fontSize: "12px" }}>You've seen all listings</div>
+              <div style={{ padding: "32px 0", textAlign: "center", color: "#2a2a2a", fontSize: "12px" }}>You've seen all listings</div>
             )}
           </div>
         )}
@@ -893,54 +902,59 @@ function App() {
       {/* ── CART DRAWER ── */}
       {cartOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex" }}>
-          <div onClick={() => setCartOpen(false)} style={{ flex: 1, background: "#000000aa" }} />
-          <div style={{ width: "340px", background: "#111", borderLeft: "1px solid #1e1e1e", display: "flex", flexDirection: "column", height: "100vh", animation: "slideIn 0.3s ease" }}>
-            <style>{`@keyframes slideIn { from { transform: translateX(100%) } to { transform: translateX(0) } }`}</style>
-            <div style={{ padding: "20px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "18px", fontWeight: "700" }}>Your Cart ({cartCount})</span>
-              <button onClick={() => setCartOpen(false)} style={{ background: "transparent", border: "none", color: "#666", fontSize: "22px", cursor: "pointer" }}>✕</button>
+          <div onClick={() => setCartOpen(false)} style={{ flex: 1, background: "#000000bb" }} />
+          <div className="cart-drawer" style={{ width: "340px", background: "#111", borderLeft: "1px solid #1a1a1a", display: "flex", flexDirection: "column", height: "100vh" }}>
+            <div style={{ padding: "20px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "17px", fontWeight: "700", letterSpacing: "-0.01em" }}>Your Cart ({cartCount})</span>
+              <button onClick={() => setCartOpen(false)} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>
             </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+
+            <div className="scroll-container" style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
               {cart.length === 0 ? (
-                <div style={{ textAlign: "center", color: "#555", paddingTop: "60px" }}>
-                  <div style={{ fontSize: "40px", marginBottom: "12px" }}>🛒</div>
-                  <div>Your cart is empty</div>
+                <div className="empty-state">
+                  <div className="icon">🛒</div>
+                  <div className="title">Your cart is empty</div>
+                  <div className="sub">Add items to get started</div>
                 </div>
               ) : cart.map(item => {
                 const itemId = getItemId(item)
                 const itemPrice = item.price || item.dailyRate || 0
                 const itemImage = item.image || `https://picsum.photos/seed/${item.id}/300/200`
                 return (
-                  <div key={itemId} style={{ display: "flex", gap: "12px", padding: "14px 0", borderBottom: "1px solid #1e1e1e", alignItems: "center" }}>
-                    <img src={itemImage} alt={item.title} style={{ width: "56px", height: "56px", objectFit: "cover", borderRadius: "8px" }} />
+                  <div key={itemId} style={{ display: "flex", gap: "12px", padding: "14px 0", borderBottom: "1px solid #1a1a1a", alignItems: "center" }}>
+                    <img src={itemImage} alt={item.title} style={{ width: "58px", height: "58px", objectFit: "cover", borderRadius: "10px" }} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px" }}>{item.title}</div>
-                      <div style={{ fontSize: "13px", color: "#c8a97e", fontWeight: "700" }}>
+                      <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px", color: "#f0ede8", lineHeight: "1.3" }}>{item.title}</div>
+                      <div style={{ fontSize: "14px", color: "#c8a97e", fontWeight: "700" }}>
                         ₵{(itemPrice * item.qty).toLocaleString()}
-                        <span style={{ color: "#555", fontWeight: "400" }}> (${toUSD(itemPrice * item.qty)})</span>
+                        <span style={{ color: "#333", fontWeight: "400", fontSize: "12px" }}> (${toUSD(itemPrice * item.qty)})</span>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
-                        <button onClick={() => updateQty(itemId, -1)} style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}>−</button>
-                        <span style={{ fontSize: "13px" }}>{item.qty}</span>
-                        <button onClick={() => updateQty(itemId, 1)} style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}>+</button>
-                        <button onClick={() => removeItem(itemId)} style={{ marginLeft: "8px", background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "12px" }}>Remove</button>
+                        <button onClick={() => updateQty(itemId, -1)}
+                          style={{ width: "28px", height: "28px", background: "#1a1a1a", border: "1px solid #222", color: "#fff", borderRadius: "7px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", minHeight: "auto" }}>−</button>
+                        <span style={{ fontSize: "13px", fontWeight: "600", minWidth: "20px", textAlign: "center" }}>{item.qty}</span>
+                        <button onClick={() => updateQty(itemId, 1)}
+                          style={{ width: "28px", height: "28px", background: "#1a1a1a", border: "1px solid #222", color: "#fff", borderRadius: "7px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", minHeight: "auto" }}>+</button>
+                        <button onClick={() => removeItem(itemId)}
+                          style={{ marginLeft: "6px", background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "12px", minHeight: "auto" }}>Remove</button>
                       </div>
                     </div>
                   </div>
                 )
               })}
             </div>
+
             {cart.length > 0 && (
-              <div style={{ padding: "20px", borderTop: "1px solid #1e1e1e" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
-                  <span style={{ color: "#888" }}>Total</span>
-                  <span style={{ fontSize: "18px", fontWeight: "700", color: "#c8a97e" }}>
-                    ₵{cartTotal.toLocaleString()}
-                    <span style={{ fontSize: "13px", color: "#555" }}> (${toUSD(cartTotal)})</span>
-                  </span>
+              <div style={{ padding: "20px", borderTop: "1px solid #1a1a1a" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px", alignItems: "baseline" }}>
+                  <span style={{ color: "#555", fontSize: "14px" }}>Total</span>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.02em" }}>₵{cartTotal.toLocaleString()}</div>
+                    <div style={{ fontSize: "12px", color: "#333" }}>${toUSD(cartTotal)} USD</div>
+                  </div>
                 </div>
-                <button onClick={() => { setCartOpen(false); setCheckoutOpen(true) }}
-                  style={{ width: "100%", background: "#c8a97e", border: "none", padding: "14px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}>
+                <button className="btn-gold" onClick={() => { setCartOpen(false); setCheckoutOpen(true) }}
+                  style={{ width: "100%", padding: "14px", borderRadius: "12px", fontSize: "14px" }}>
                   📱 Checkout with MTN MoMo
                 </button>
               </div>
@@ -949,16 +963,15 @@ function App() {
         </div>
       )}
 
-{checkoutOpen && (
-  <Checkout
-    cart={trackedOrder?.cart || cart}
-    rate={rate}
-    onClose={() => { setCheckoutOpen(false); setTrackedOrder(null) }}
-    initialOrder={trackedOrder}
-    siteSettings={siteSettings}
-  />
-)}
-
+      {checkoutOpen && (
+        <Checkout
+          cart={trackedOrder?.cart || cart}
+          rate={rate}
+          onClose={() => { setCheckoutOpen(false); setTrackedOrder(null) }}
+          initialOrder={trackedOrder}
+          siteSettings={siteSettings}
+        />
+      )}
 
     </div>
   )
