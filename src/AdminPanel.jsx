@@ -756,61 +756,6 @@ export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings
               <p style={{ fontSize: "13px", color: "#666", marginTop: "-12px" }}>Changes apply immediately across the entire platform.</p>
 
               <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
-                {activeTab === "settings" && (
-  <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-    <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>Site Settings</h2>
-    <p style={{ fontSize: "13px", color: "#666", marginTop: "-12px" }}>Changes apply immediately across the entire platform.</p>
-
-    {/* Payment Mode Switch — owner/superadmin only */}
-    {(currentRole === "owner" || currentRole === "superadmin") && (
-      <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: `1px solid ${siteSettings.paymentMode === "automated" ? "#065f46" : "#92400e"}`, display: "flex", flexDirection: "column", gap: "14px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>💳 Payment Processing Mode</div>
-          <span style={{ fontSize: "10px", fontWeight: "700", color: siteSettings.paymentMode === "automated" ? "#6ee7b7" : "#fcd34d", background: siteSettings.paymentMode === "automated" ? "#064e3b22" : "#78350f22", border: `1px solid ${siteSettings.paymentMode === "automated" ? "#065f46" : "#92400e"}`, padding: "4px 10px", borderRadius: "20px" }}>
-            {siteSettings.paymentMode === "automated" ? "🟢 LIVE — AUTOMATED" : "🟡 MANUAL MODE"}
-          </span>
-        </div>
-
-        <p style={{ fontSize: "13px", color: "#888", margin: 0, lineHeight: "1.6" }}>
-          Controls how every checkout on the platform is processed. This affects all buyers immediately.
-        </p>
-
-        <div style={{ display: "flex", gap: "10px" }}>
-          <div onClick={() => handleSetPaymentMode("manual")}
-            style={{ flex: 1, padding: "16px", borderRadius: "10px", border: `1.5px solid ${siteSettings.paymentMode === "manual" ? "#92400e" : "#2a2a2a"}`, background: siteSettings.paymentMode === "manual" ? "#78350f18" : "#111", cursor: "pointer", textAlign: "center" }}>
-            <div style={{ fontSize: "24px", marginBottom: "6px" }}>📱</div>
-            <div style={{ fontSize: "13px", fontWeight: "700", color: siteSettings.paymentMode === "manual" ? "#fcd34d" : "#888" }}>Manual MoMo</div>
-            <div style={{ fontSize: "11px", color: "#555", marginTop: "4px" }}>Buyers send money directly, you confirm manually</div>
-          </div>
-          <div onClick={() => handleSetPaymentMode("automated")}
-            style={{ flex: 1, padding: "16px", borderRadius: "10px", border: `1.5px solid ${siteSettings.paymentMode === "automated" ? "#065f46" : "#2a2a2a"}`, background: siteSettings.paymentMode === "automated" ? "#064e3b18" : "#111", cursor: "pointer", textAlign: "center" }}>
-            <div style={{ fontSize: "24px", marginBottom: "6px" }}>⚡</div>
-            <div style={{ fontSize: "13px", fontWeight: "700", color: siteSettings.paymentMode === "automated" ? "#6ee7b7" : "#888" }}>Automated Paystack</div>
-            <div style={{ fontSize: "11px", color: "#555", marginTop: "4px" }}>Instant payment via Paystack, fully automatic</div>
-          </div>
-        </div>
-
-        {paymentModeError && (
-          <div style={{ background: "#7f1d1d22", border: "1px solid #7f1d1d", borderRadius: "8px", padding: "10px 14px", fontSize: "12px", color: "#fca5a5" }}>
-            ⚠️ {paymentModeError}
-          </div>
-        )}
-
-        {paymentModeSaving && (
-          <div style={{ fontSize: "12px", color: "#555", textAlign: "center" }}>⏳ Updating payment mode...</div>
-        )}
-
-        <div style={{ background: siteSettings.paymentMode === "automated" ? "#064e3b18" : "#78350f18", border: `1px solid ${siteSettings.paymentMode === "automated" ? "#065f46" : "#92400e"}`, borderRadius: "8px", padding: "12px", fontSize: "12px", color: siteSettings.paymentMode === "automated" ? "#6ee7b7" : "#fcd34d", lineHeight: "1.6" }}>
-          {siteSettings.paymentMode === "automated"
-            ? "✅ Paystack is live. Buyers pay instantly through Paystack's MoMo prompt — no manual confirmation needed."
-            : "⚠️ Buyers see your MoMo number at checkout and submit proof of payment manually. You must confirm each order yourself."}
-        </div>
-      </div>
-    )}
-
-    <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
-      <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>📞 Contact Info</div>
-
                 <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>📞 Contact Info</div>
                 <div>
                   <div style={{ fontSize: "11px", color: "#888", fontWeight: "600", marginBottom: "5px" }}>PHONE NUMBER</div>
