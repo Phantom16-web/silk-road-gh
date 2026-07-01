@@ -5,14 +5,16 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY
 const STEPS = ["Location", "Confirm Order", "Payment", "Track Delivery"]
 
-// Your personal MoMo number for manual mode — change this to yours
 const SILK_ROAD_MOMO = "0543883608"
 const SILK_ROAD_MOMO_NAME = "Silk Road GH"
 
 export default function Checkout({ cart, rate, onClose, initialOrder, siteSettings }) {
   const paymentMode = siteSettings?.paymentMode || "manual"
+  const deliveryFee = siteSettings?.deliveryFee ?? 10
 
+  // ── Hydrate all state from initialOrder when reopening ─────────────────────
   const [step, setStep] = useState(initialOrder ? 3 : 0)
+  const [orderId] = useState(initialOrder?.id || generateOrderId())
   const [location, setLocation] = useState(initialOrder?.location || null)
   const [locLoading, setLocLoading] = useState(false)
   const [locBlocked, setLocBlocked] = useState(false)
@@ -21,35 +23,35 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const [landmark, setLandmark] = useState(initialOrder?.landmark || "")
   const [extraInfo, setExtraInfo] = useState(initialOrder?.extraInfo || "")
   const [contactInfo, setContactInfo] = useState(initialOrder?.contactInfo || "")
-  const [delivered, setDelivered] = useState(initialOrder?.delivered || null)
+  const [deliveryMethod, setDeliveryMethod] = useState(initialOrder?.deliveryMethod || "pickup")
+  const [delivered, setDelivered] = useState(initialOrder?.delivered ?? null)
   const [paymentRef, setPaymentRef] = useState(initialOrder?.paymentRef || null)
-  const [orderId] = useState(initialOrder?.id || generateOrderId())
   const [submitting, setSubmitting] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  // Manual mode fields
-  const [payerName, setPayerName] = useState("")
-  const [payerPhone, setPayerPhone] = useState("")
+  // Manual mode
+  const [payerName, setPayerName] = useState(initialOrder?.payerName || "")
+  const [payerPhone, setPayerPhone] = useState(initialOrder?.payerPhone || "")
 
-  // Automated mode fields
-  const [paystackLoaded, setPaystackLoaded] = useState(false)
+  // Paystack
   const [paystackLoading, setPaystackLoading] = useState(false)
 
-  // Promo code state
+  // Promo
   const [promoInput, setPromoInput] = useState("")
-  const [appliedPromo, setAppliedPromo] = useState(null)
+  const [appliedPromo, setAppliedPromo] = useState(
+    initialOrder?.promoCode
+      ? { code: initialOrder.promoCode, type: "percentage", value: 0 }
+      : null
+  )
   const [promoLoading, setPromoLoading] = useState(false)
   const [promoError, setPromoError] = useState("")
   const [promoSuccess, setPromoSuccess] = useState("")
 
-  // Delivery method
-  const [deliveryMethod, setDeliveryMethod] = useState("pickup")
-
-  const deliveryFee = siteSettings?.deliveryFee ?? 10
-  const subtotal = initialOrder?.total || cart.reduce((sum, i) => sum + (i.price || i.dailyRate || 0) * i.qty, 0)
+  const subtotal = initialOrder?.subtotal
+    || cart.reduce((sum, i) => sum + (i.price || i.dailyRate || 0) * i.qty, 0)
 
   const getDiscount = () => {
-    if (!appliedPromo) return 0
+    if (!appliedPromo) return initialOrder?.discount || 0
     if (appliedPromo.type === "percentage") return Math.round(subtotal * appliedPromo.value / 100)
     if (appliedPromo.type === "fixed") return Math.min(appliedPromo.value, subtotal)
     if (appliedPromo.type === "free_delivery") return deliveryFee
@@ -60,17 +62,16 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const deliveryCharge = deliveryMethod === "rider"
     ? (appliedPromo?.type === "free_delivery" ? 0 : deliveryFee)
     : 0
-  const total = Math.max(0, subtotal - (appliedPromo?.type !== "free_delivery" ? discount : 0) + deliveryCharge)
+  const total = initialOrder?.total
+    || Math.max(0, subtotal - (appliedPromo?.type !== "free_delivery" ? discount : 0) + deliveryCharge)
   const cut = Math.round(total * 0.08)
 
   const toUSD = (ghs) => rate ? (ghs * rate).toFixed(2) : "..."
 
-  // ── Promo validation ────────────────────────────────────────────────────────
+  // ── Promo ──────────────────────────────────────────────────────────────────
   const handleApplyPromo = async () => {
     if (!promoInput.trim()) { setPromoError("Please enter a promo code."); return }
-    setPromoLoading(true)
-    setPromoError("")
-    setPromoSuccess("")
+    setPromoLoading(true); setPromoError(""); setPromoSuccess("")
     try {
       const res = await fetch(`${API_URL}/promos/validate`, {
         method: "POST",
@@ -83,24 +84,21 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
         const disc = data.promo.type === "percentage" ? `${data.promo.value}% off`
           : data.promo.type === "fixed" ? `₵${data.promo.value} off` : "Free delivery"
         setPromoSuccess(`✅ Code applied — ${disc}!`)
-        setPromoError("")
       } else {
         setPromoError(data.message || "Invalid or expired promo code.")
         setAppliedPromo(null)
       }
     } catch {
-      const DEMO_PROMOS = [
-        { code: "WELCOME10", type: "percentage", value: 10, active: true },
-        { code: "KNUST20",   type: "percentage", value: 20, active: true },
-        { code: "FREESHIP",  type: "free_delivery", value: 0, active: true },
+      const DEMO = [
+        { code: "WELCOME10", type: "percentage", value: 10 },
+        { code: "KNUST20",   type: "percentage", value: 20 },
+        { code: "FREESHIP",  type: "free_delivery", value: 0 },
       ]
-      const found = DEMO_PROMOS.find(p => p.code === promoInput.trim().toUpperCase() && p.active)
+      const found = DEMO.find(p => p.code === promoInput.trim().toUpperCase())
       if (found) {
         setAppliedPromo(found)
-        const disc = found.type === "percentage" ? `${found.value}% off`
-          : found.type === "fixed" ? `₵${found.value} off` : "Free delivery"
+        const disc = found.type === "percentage" ? `${found.value}% off` : "Free delivery"
         setPromoSuccess(`✅ Code applied — ${disc}!`)
-        setPromoError("")
       } else {
         setPromoError("Invalid or expired promo code.")
         setAppliedPromo(null)
@@ -109,30 +107,19 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     setPromoLoading(false)
   }
 
-  const handleRemovePromo = () => {
-    setAppliedPromo(null)
-    setPromoInput("")
-    setPromoError("")
-    setPromoSuccess("")
-  }
+  const handleRemovePromo = () => { setAppliedPromo(null); setPromoInput(""); setPromoError(""); setPromoSuccess("") }
 
-  // ── Location ────────────────────────────────────────────────────────────────
+  // ── Location ───────────────────────────────────────────────────────────────
   const detectLocation = () => {
-    setLocLoading(true)
-    setLocError(null)
-    setLocBlocked(false)
+    setLocLoading(true); setLocError(null); setLocBlocked(false)
     if (!navigator.geolocation) { setLocLoading(false); setLocError("geolocation_unsupported"); return }
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocation({ lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6) })
-        setLocBlocked(false); setLocError(null); setLocLoading(false)
-      },
+      (pos) => { setLocation({ lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6) }); setLocLoading(false) },
       (err) => {
         setLocLoading(false)
         if (err.code === 1) { setLocBlocked(true); setLocError("blocked") }
         else if (err.code === 2) setLocError("unavailable")
-        else if (err.code === 3) setLocError("timeout")
-        else setLocError("unknown")
+        else setLocError("timeout")
       },
       { timeout: 10000 }
     )
@@ -144,40 +131,34 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       ? `https://www.google.com/maps?q=${encodeURIComponent(manualLocation + " " + landmark)}&output=embed`
       : null
 
+  const locErrors = {
+    blocked:                 { icon: "🚫", title: "Location Blocked",      msg: "Your browser is blocking location access. Enter manually below." },
+    unavailable:             { icon: "📡", title: "Location Unavailable",   msg: "Could not get your location. Try again or enter manually." },
+    timeout:                 { icon: "⏱️", title: "Location Timed Out",     msg: "Taking too long. Enter manually below." },
+    geolocation_unsupported: { icon: "⚠️", title: "GPS Not Supported",      msg: "Enter your location manually." },
+    no_phone:                { icon: "📞", title: "Contact Missing",        msg: "Please provide a contact for the seller." },
+    no_location:             { icon: "📍", title: "Location Missing",       msg: "Please auto-detect or enter your location." },
+  }
+
   const ErrorBanner = ({ type }) => {
-    const errors = {
-      blocked:                 { icon: "🚫", title: "Location Access Blocked",  msg: "Your browser is blocking location access. Enter your location manually below." },
-      unavailable:             { icon: "📡", title: "Location Unavailable",      msg: "Could not get your location. Try again or enter manually." },
-      timeout:                 { icon: "⏱️", title: "Location Timed Out",        msg: "Taking too long. Try again or enter manually." },
-      geolocation_unsupported: { icon: "⚠️", title: "GPS Not Supported",         msg: "Your browser doesn't support location detection. Enter manually." },
-      unknown:                 { icon: "❓", title: "Something Went Wrong",       msg: "Try again or enter your location manually." },
-      no_phone:                { icon: "📞", title: "Contact Info Missing",       msg: "Please provide a contact for the seller." },
-      no_location:             { icon: "📍", title: "Location Missing",           msg: "Please auto-detect or enter your location manually." },
-    }
-    const e = errors[type]
+    const e = locErrors[type]
     if (!e) return null
     return (
       <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "12px", padding: "14px" }}>
         <div style={{ fontWeight: "700", color: "#fcd34d", marginBottom: "6px", fontSize: "14px" }}>{e.icon} {e.title}</div>
         <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.6", margin: 0 }}>{e.msg}</p>
         {!["no_phone", "no_location"].includes(type) && (
-          <button onClick={detectLocation}
-            style={{ marginTop: "10px", background: "#78350f", border: "1px solid #92400e", color: "#fcd34d", padding: "9px 16px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px" }}>
-            ↻ Try Again
-          </button>
+          <button onClick={detectLocation} style={{ marginTop: "10px", background: "#78350f", border: "1px solid #92400e", color: "#fcd34d", padding: "9px 16px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>↻ Try Again</button>
         )}
       </div>
     )
   }
 
   const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
   }
 
-  // ── Save order to backend (shared by both modes) ──────────────────────────────
+  // ── Persist order to backend ───────────────────────────────────────────────
   const persistOrder = async (ref, extra = {}) => {
     try {
       const token = localStorage.getItem("silkroad_token")
@@ -207,38 +188,58 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     } catch {}
   }
 
-  // ── Manual MoMo submit ────────────────────────────────────────────────────────
-  const handleSubmitManualPayment = async () => {
-    if (!payerName.trim()) return alert("Please enter your name.")
-    if (!payerPhone.trim()) return alert("Please enter your MoMo number.")
-    setSubmitting(true)
+  // ── Build complete order snapshot (full persistence fix) ───────────────────
+  const buildOrderSnapshot = (ref, extra = {}) => ({
+    id: orderId,
+    type: "buy",
+    total,
+    subtotal,
+    discount,
+    promoCode: appliedPromo?.code || null,
+    deliveryMethod,
+    deliveryCharge,
+    cart,
+    location,
+    manualLocation,
+    landmark,
+    extraInfo,
+    contactInfo,
+    payerName,
+    payerPhone,
+    paymentRef: ref,
+    delivered: null,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 48 * 60 * 60 * 1000,
+    ...extra,
+  })
 
+  // ── Manual MoMo ────────────────────────────────────────────────────────────
+  const handleSubmitManualPayment = async () => {
+    if (!payerName.trim()) { alert("Please enter your name."); return }
+    if (!payerPhone.trim()) { alert("Please enter your MoMo number."); return }
+    setSubmitting(true)
     const ref = `MOMO-${orderId}`
     setPaymentRef(ref)
     await persistOrder(ref, { payerName, payerPhone })
-
-    const order = {
-      id: orderId, type: "buy", total, subtotal, discount, promoCode: appliedPromo?.code || null,
-      deliveryMethod, deliveryCharge, cart, location, manualLocation, landmark, extraInfo, contactInfo,
-      payerName, payerPhone, paymentRef: ref, paymentMethod: "manual_momo", status: "Pending Confirmation",
-      delivered: null, createdAt: Date.now(), expiresAt: Date.now() + 48 * 60 * 60 * 1000,
-    }
-    saveOrder(order)
+    saveOrder(buildOrderSnapshot(ref, {
+      payerName,
+      payerPhone,
+      paymentMethod: "manual_momo",
+      status: "Pending Confirmation",
+    }))
     setSubmitting(false)
     setStep(3)
   }
 
-  // ── Paystack automated submit ───────────────────────────────────────────────
-  const loadPaystackScript = () => {
-    return new Promise((resolve, reject) => {
-      if (window.PaystackPop) { resolve(); return }
-      const script = document.createElement("script")
-      script.src = "https://js.paystack.co/v1/inline.js"
-      script.onload = resolve
-      script.onerror = reject
-      document.body.appendChild(script)
-    })
-  }
+  // ── Paystack ───────────────────────────────────────────────────────────────
+  const loadPaystackScript = () => new Promise((resolve, reject) => {
+    if (window.PaystackPop) { resolve(); return }
+    const script = document.createElement("script")
+    script.src = "https://js.paystack.co/v1/inline.js"
+    script.onload = resolve
+    script.onerror = reject
+    document.body.appendChild(script)
+  })
 
   const handlePaystackPay = async () => {
     if (!PAYSTACK_KEY) { alert("Paystack key not configured."); return }
@@ -248,25 +249,16 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       const handler = window.PaystackPop.setup({
         key: PAYSTACK_KEY,
         email: `order-${orderId}@silkroadgh.com`,
-        amount: Math.round(total * 100), // kobo/pesewas
+        amount: Math.round(total * 100),
         currency: "GHS",
         ref: `PS-${orderId}-${Date.now()}`,
-        metadata: {
-          orderId,
-          custom_fields: [
-            { display_name: "Order ID", variable_name: "order_id", value: orderId },
-          ],
-        },
-        callback: (response) => {
-          handlePaystackSuccess(response)
-        },
-        onClose: () => {
-          setPaystackLoading(false)
-        },
+        metadata: { orderId, custom_fields: [{ display_name: "Order ID", variable_name: "order_id", value: orderId }] },
+        callback: (response) => handlePaystackSuccess(response),
+        onClose: () => setPaystackLoading(false),
       })
       handler.openIframe()
     } catch {
-      alert("Could not load payment system. Please check your connection and try again.")
+      alert("Could not load payment system. Check your connection and try again.")
       setPaystackLoading(false)
     }
   }
@@ -276,19 +268,16 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     setPaymentRef(ref)
     setSubmitting(true)
     await persistOrder(ref)
-
-    const order = {
-      id: orderId, type: "buy", total, subtotal, discount, promoCode: appliedPromo?.code || null,
-      deliveryMethod, deliveryCharge, cart, location, manualLocation, landmark, extraInfo, contactInfo,
-      paymentRef: ref, paymentMethod: "paystack", status: "Paid",
-      delivered: null, createdAt: Date.now(), expiresAt: Date.now() + 24 * 60 * 60 * 1000,
-    }
-    saveOrder(order)
+    saveOrder(buildOrderSnapshot(ref, {
+      paymentMethod: "paystack",
+      status: "Paid",
+    }))
     setSubmitting(false)
     setPaystackLoading(false)
     setStep(3)
   }
 
+  // ── Confirm / Cancel delivery ──────────────────────────────────────────────
   const handleConfirmDelivery = async () => {
     setDelivered(true)
     updateOrder(orderId, { delivered: true, expiresAt: Date.now() })
@@ -319,11 +308,13 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
       <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "540px", maxHeight: "90vh", overflowY: "auto", border: "1px solid #1e1e1e" }}>
 
+        {/* Header */}
         <div style={{ padding: "20px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: "18px", fontWeight: "700" }}>Checkout</span>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>
         </div>
 
+        {/* Steps */}
         <div style={{ padding: "16px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", gap: "8px" }}>
           {STEPS.map((s, i) => (
             <div key={s} style={{ flex: 1, textAlign: "center" }}>
@@ -341,7 +332,6 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           {step === 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <h2 style={{ fontSize: "18px", fontWeight: "700" }}>📍 Delivery Location</h2>
-              <p style={{ fontSize: "13px", color: "#555", marginTop: "-8px" }}>Share your location with the seller.</p>
 
               <div>
                 <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "10px", textTransform: "uppercase", letterSpacing: ".06em" }}>DELIVERY METHOD</div>
@@ -361,11 +351,11 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
 
               <div style={{ display: "flex", gap: "10px" }}>
                 <button onClick={detectLocation}
-                  style={{ flex: 1, background: location ? "#064e3b" : "#161616", border: `1px solid ${location ? "#065f46" : "#222"}`, color: location ? "#6ee7b7" : "#c8a97e", padding: "13px", borderRadius: "12px", cursor: "pointer", fontWeight: "600", fontSize: "13px" }}>
+                  style={{ flex: 1, background: location ? "#064e3b" : "#161616", border: `1px solid ${location ? "#065f46" : "#222"}`, color: location ? "#6ee7b7" : "#c8a97e", padding: "13px", borderRadius: "12px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
                   {locLoading ? "⏳ Detecting..." : location ? "✅ Auto-Detected" : "📍 Auto-Detect"}
                 </button>
                 <button onClick={() => { setLocation(null); setLocBlocked(true); setLocError(null) }}
-                  style={{ flex: 1, background: locBlocked ? "#1e3a5f" : "#161616", border: `1px solid ${locBlocked ? "#1d4ed8" : "#222"}`, color: locBlocked ? "#93c5fd" : "#888", padding: "13px", borderRadius: "12px", cursor: "pointer", fontWeight: "600", fontSize: "13px" }}>
+                  style={{ flex: 1, background: locBlocked ? "#1e3a5f" : "#161616", border: `1px solid ${locBlocked ? "#1d4ed8" : "#222"}`, color: locBlocked ? "#93c5fd" : "#888", padding: "13px", borderRadius: "12px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
                   ✏️ Enter Manually
                 </button>
               </div>
@@ -376,8 +366,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <div>
                     <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR LOCATION</div>
-                    <textarea placeholder="e.g. Mensah Sarbah Hall, Room 204, University of Ghana, Legon..." value={manualLocation} onChange={e => setManualLocation(e.target.value)} rows={3}
-                      style={{ ...inputStyle, resize: "vertical" }} />
+                    <textarea placeholder="e.g. Mensah Sarbah Hall, Room 204, UG Legon..." value={manualLocation} onChange={e => setManualLocation(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
                   </div>
                   <div>
                     <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>NEAREST LANDMARK</div>
@@ -398,8 +387,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
 
               <div>
                 <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>EXTRA DETAILS FOR SELLER</div>
-                <textarea placeholder="e.g. Call when you arrive, knock twice..." value={extraInfo} onChange={e => setExtraInfo(e.target.value)} rows={3}
-                  style={{ ...inputStyle, resize: "vertical" }} />
+                <textarea placeholder="e.g. Call when you arrive, knock twice..." value={extraInfo} onChange={e => setExtraInfo(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
               </div>
 
               <div>
@@ -435,19 +423,14 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 ))}
               </div>
 
+              {/* Promo */}
               <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px" }}>
                 <div style={{ fontSize: "12px", color: "#444", fontWeight: "700" }}>🎟️ PROMO CODE</div>
                 {!appliedPromo ? (
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <input
-                      placeholder="Enter promo code..."
-                      value={promoInput}
-                      onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoError("") }}
-                      onKeyDown={e => e.key === "Enter" && handleApplyPromo()}
-                      style={{ ...inputStyle, flex: 1 }}
-                    />
+                    <input placeholder="Enter promo code..." value={promoInput} onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoError("") }} onKeyDown={e => e.key === "Enter" && handleApplyPromo()} style={{ ...inputStyle, flex: 1 }} />
                     <button onClick={handleApplyPromo} disabled={promoLoading}
-                      style={{ background: "#c8a97e", border: "none", padding: "12px 20px", borderRadius: "10px", fontWeight: "700", cursor: promoLoading ? "not-allowed" : "pointer", fontSize: "13px", whiteSpace: "nowrap", opacity: promoLoading ? 0.7 : 1, color: "#000" }}>
+                      style={{ background: "#c8a97e", border: "none", padding: "12px 20px", borderRadius: "10px", fontWeight: "700", cursor: promoLoading ? "not-allowed" : "pointer", fontSize: "13px", whiteSpace: "nowrap", opacity: promoLoading ? 0.7 : 1, color: "#000", fontFamily: "inherit" }}>
                       {promoLoading ? "..." : "Apply"}
                     </button>
                   </div>
@@ -459,24 +442,24 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                         {appliedPromo.type === "percentage" ? `${appliedPromo.value}% off` : appliedPromo.type === "fixed" ? `₵${appliedPromo.value} off` : "Free delivery"}
                       </div>
                     </div>
-                    <button onClick={handleRemovePromo}
-                      style={{ background: "transparent", border: "none", color: "#fca5a5", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", minHeight: "auto" }}>
-                      Remove
-                    </button>
+                    <button onClick={handleRemovePromo} style={{ background: "transparent", border: "none", color: "#fca5a5", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", minHeight: "auto" }}>Remove</button>
                   </div>
                 )}
                 {promoError && <div style={{ fontSize: "12px", color: "#fca5a5" }}>⚠️ {promoError}</div>}
+                {promoSuccess && <div style={{ fontSize: "12px", color: "#6ee7b7" }}>{promoSuccess}</div>}
               </div>
 
+              {/* Delivery summary */}
               <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", fontSize: "13px", color: "#888", display: "flex", flexDirection: "column", gap: "9px" }}>
                 <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "4px" }}>DELIVERY DETAILS</div>
                 <div>🛵 Method: <span style={{ color: "#c8a97e" }}>{deliveryMethod === "rider" ? `Rider Delivery (+₵${deliveryFee})` : "Campus Pickup (Free)"}</span></div>
                 {location ? <div>📍 <span style={{ color: "#c8a97e" }}>{location.lat}, {location.lng}</span></div>
-                  : <><div>📍 <span style={{ color: "#c8a97e" }}>{manualLocation}</span></div>{landmark && <div>🗺️ <span style={{ color: "#888" }}>{landmark}</span></div>}</>}
-                {extraInfo && <div>📝 <span style={{ color: "#888" }}>{extraInfo}</span></div>}
-                <div>📞 <span style={{ color: "#888" }}>{contactInfo}</span></div>
+                  : <><div>📍 <span style={{ color: "#c8a97e" }}>{manualLocation}</span></div>{landmark && <div>🗺️ {landmark}</div>}</>}
+                {extraInfo && <div>📝 {extraInfo}</div>}
+                <div>📞 {contactInfo}</div>
               </div>
 
+              {/* Totals */}
               <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}>
                   <span>Subtotal</span><span>₵{subtotal.toLocaleString()}</span>
@@ -493,7 +476,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 )}
                 {appliedPromo?.type === "free_delivery" && (
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#6ee7b7" }}>
-                    <span>🎟️ {appliedPromo.code} — Free delivery</span><span>-₵{deliveryFee}</span>
+                    <span>🎟️ Free delivery</span><span>-₵{deliveryFee}</span>
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}>
@@ -502,11 +485,6 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "19px", fontWeight: "800", color: "#c8a97e", borderTop: "1px solid #222", paddingTop: "10px", letterSpacing: "-0.02em" }}>
                   <span>Total</span><span>₵{total.toLocaleString()} (${toUSD(total)})</span>
                 </div>
-                {appliedPromo && (
-                  <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#6ee7b7" }}>
-                    🎉 You're saving ₵{appliedPromo.type === "free_delivery" ? deliveryFee : discount} with code {appliedPromo.code}!
-                  </div>
-                )}
               </div>
 
               <div style={{ display: "flex", gap: "10px" }}>
@@ -516,7 +494,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
             </div>
           )}
 
-          {/* ── STEP 2: Payment (branches by mode) ── */}
+          {/* ── STEP 2: Payment — Manual MoMo ── */}
           {step === 2 && paymentMode === "manual" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <h2 style={{ fontSize: "18px", fontWeight: "700" }}>📱 MTN Mobile Money</h2>
@@ -535,17 +513,17 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     <div style={{ fontSize: "12px", color: "#444", marginTop: "4px" }}>{SILK_ROAD_MOMO_NAME}</div>
                   </div>
                   <button onClick={() => copyToClipboard(SILK_ROAD_MOMO)}
-                    style={{ background: copied ? "#064e3b" : "#1a1a1a", border: `1px solid ${copied ? "#065f46" : "#2a2a2a"}`, color: copied ? "#6ee7b7" : "#c8a97e", padding: "9px 16px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}>
+                    style={{ background: copied ? "#064e3b" : "#1a1a1a", border: `1px solid ${copied ? "#065f46" : "#2a2a2a"}`, color: copied ? "#6ee7b7" : "#c8a97e", padding: "9px 16px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "12px", fontFamily: "inherit" }}>
                     {copied ? "✅ Copied!" : "📋 Copy"}
                   </button>
                 </div>
                 <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#fcd34d", display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <div style={{ fontWeight: "700" }}>⚠️ Before you send:</div>
+                  <div style={{ fontWeight: "700" }}>⚠️ Steps:</div>
                   <div>1. Dial *170# on your MTN phone</div>
                   <div>2. Choose Transfer Money → MoMo User</div>
                   <div>3. Enter number: <strong>{SILK_ROAD_MOMO}</strong></div>
                   <div>4. Enter amount: <strong>₵{total.toLocaleString()}</strong></div>
-                  <div>5. Use your Order ID as reference: <strong style={{ fontFamily: "monospace" }}>{orderId}</strong></div>
+                  <div>5. Use Order ID as reference: <strong style={{ fontFamily: "monospace" }}>{orderId}</strong></div>
                   <div>6. Come back here and confirm below</div>
                 </div>
               </div>
@@ -557,25 +535,26 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                   <input placeholder="e.g. Kwame Asante" value={payerName} onChange={e => setPayerName(e.target.value)} style={inputStyle} />
                 </div>
                 <div>
-                  <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>MTN MOMO NUMBER YOU SENT FROM</div>
+                  <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>MOMO NUMBER YOU SENT FROM</div>
                   <input placeholder="e.g. 0241234567" value={payerPhone} onChange={e => setPayerPhone(e.target.value)} style={inputStyle} />
                 </div>
               </div>
 
               <div style={{ background: "#161616", borderRadius: "12px", padding: "14px", fontSize: "12px", color: "#555", lineHeight: "1.7" }}>
-                🔒 Once we confirm your payment, your order will be processed and the seller will be notified. This usually takes under 5 minutes during business hours.
+                🔒 Once we confirm your payment, the seller will be notified. This usually takes under 5 minutes during business hours.
               </div>
 
               <div style={{ display: "flex", gap: "10px" }}>
                 <button className="btn-ghost" onClick={() => setStep(1)} style={{ flex: 1, padding: "13px", borderRadius: "12px" }}>← Back</button>
                 <button onClick={handleSubmitManualPayment} disabled={submitting}
-                  style={{ flex: 2, background: "#c8a97e", border: "none", padding: "13px", borderRadius: "12px", fontWeight: "700", cursor: submitting ? "not-allowed" : "pointer", fontSize: "15px", opacity: submitting ? 0.7 : 1, color: "#000" }}>
+                  style={{ flex: 2, background: "#c8a97e", border: "none", padding: "13px", borderRadius: "12px", fontWeight: "700", cursor: submitting ? "not-allowed" : "pointer", fontSize: "15px", opacity: submitting ? 0.7 : 1, color: "#000", fontFamily: "inherit" }}>
                   {submitting ? "⏳ Submitting..." : "✅ I've Sent the Money"}
                 </button>
               </div>
             </div>
           )}
 
+          {/* ── STEP 2: Payment — Automated Paystack ── */}
           {step === 2 && paymentMode === "automated" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <h2 style={{ fontSize: "18px", fontWeight: "700" }}>📱 MTN Mobile Money</h2>
@@ -590,15 +569,8 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
               </div>
 
               <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", fontSize: "13px", color: "#888", display: "flex", flexDirection: "column", gap: "8px" }}>
-                {discount > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span>Subtotal</span><span>₵{subtotal.toLocaleString()}</span>
-                  </div>
-                )}
                 {deliveryCharge > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span>🛵 Delivery</span><span>₵{deliveryCharge}</span>
-                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>🛵 Delivery</span><span>₵{deliveryCharge}</span></div>
                 )}
                 {appliedPromo && (
                   <div style={{ display: "flex", justifyContent: "space-between", color: "#6ee7b7" }}>
@@ -616,30 +588,33 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
               <div style={{ display: "flex", gap: "10px" }}>
                 <button className="btn-ghost" onClick={() => setStep(1)} style={{ flex: 1, padding: "13px", borderRadius: "12px" }}>← Back</button>
                 <button onClick={handlePaystackPay} disabled={paystackLoading}
-                  style={{ flex: 2, background: "#ffd700", border: "none", padding: "13px", borderRadius: "12px", fontWeight: "700", cursor: paystackLoading ? "not-allowed" : "pointer", fontSize: "15px", color: "#000", opacity: paystackLoading ? 0.7 : 1 }}>
+                  style={{ flex: 2, background: "#ffd700", border: "none", padding: "13px", borderRadius: "12px", fontWeight: "700", cursor: paystackLoading ? "not-allowed" : "pointer", fontSize: "15px", color: "#000", opacity: paystackLoading ? 0.7 : 1, fontFamily: "inherit" }}>
                   {paystackLoading ? "⏳ Loading..." : `Pay ₵${total.toLocaleString()} Now`}
                 </button>
               </div>
 
-              {submitting && (
-                <div style={{ textAlign: "center", fontSize: "13px", color: "#555" }}>⏳ Saving your order...</div>
-              )}
+              {submitting && <div style={{ textAlign: "center", fontSize: "13px", color: "#555" }}>⏳ Saving your order...</div>}
             </div>
           )}
 
           {/* ── STEP 3: Track Delivery ── */}
           {step === 3 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px", textAlign: "center" }}>
+
               {delivered === null && (
                 <>
-                  <div style={{ fontSize: "56px" }}>{paymentMode === "automated" ? "✅" : "⏳"}</div>
+                  <div style={{ fontSize: "56px" }}>
+                    {initialOrder?.status === "Pending Confirmation" || paymentMode === "manual" ? "⏳" : "✅"}
+                  </div>
                   <h2 style={{ fontSize: "22px", fontWeight: "700", color: "#c8a97e" }}>
-                    {paymentMode === "automated" ? "Payment Successful!" : "Payment Submitted!"}
+                    {initialOrder?.status === "Pending Confirmation"
+                      ? "Payment Submitted!"
+                      : paymentMode === "automated" ? "Payment Successful!" : "Payment Submitted!"}
                   </h2>
                   <p style={{ color: "#888", fontSize: "14px", lineHeight: "1.7" }}>
                     {paymentMode === "automated"
-                      ? <>Your money is held securely. Confirm delivery when your order arrives.</>
-                      : <>We're confirming your MoMo payment of <strong style={{ color: "#c8a97e" }}>₵{total.toLocaleString()}</strong>. Once confirmed, the seller will be notified.</>}
+                      ? "Your money is held securely in escrow. Confirm delivery when your order arrives."
+                      : "We're confirming your MoMo payment. Once confirmed, the seller will be notified."}
                   </p>
 
                   <div style={{ background: "#161616", border: "1px solid #c8a97e33", borderRadius: "16px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px", textAlign: "left" }}>
@@ -648,26 +623,31 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                       <span style={{ color: "#555" }}>Total</span>
                       <span style={{ color: "#c8a97e", fontWeight: "700" }}>₵{total.toLocaleString()}</span>
                     </div>
-                    {paymentMode === "manual" && (
+                    {(payerPhone || initialOrder?.payerPhone) && (
                       <>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
-                          <span style={{ color: "#555" }}>From number</span><span style={{ color: "#888" }}>{payerPhone}</span>
+                          <span style={{ color: "#555" }}>From number</span>
+                          <span style={{ color: "#888" }}>{payerPhone || initialOrder?.payerPhone}</span>
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
-                          <span style={{ color: "#555" }}>Name</span><span style={{ color: "#888" }}>{payerName}</span>
+                          <span style={{ color: "#555" }}>Name</span>
+                          <span style={{ color: "#888" }}>{payerName || initialOrder?.payerName}</span>
                         </div>
                       </>
                     )}
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
-                      <span style={{ color: "#555" }}>Delivery</span><span style={{ color: "#888" }}>{deliveryMethod === "rider" ? "🛵 Rider Delivery" : "📍 Campus Pickup"}</span>
+                      <span style={{ color: "#555" }}>Delivery</span>
+                      <span style={{ color: "#888" }}>{(deliveryMethod || initialOrder?.deliveryMethod) === "rider" ? "🛵 Rider Delivery" : "📍 Campus Pickup"}</span>
                     </div>
-                    {appliedPromo && (
+                    {(appliedPromo || initialOrder?.promoCode) && (
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
                         <span style={{ color: "#555" }}>Promo</span>
-                        <span style={{ color: "#6ee7b7" }}>🎟️ {appliedPromo.code}</span>
+                        <span style={{ color: "#6ee7b7" }}>🎟️ {appliedPromo?.code || initialOrder?.promoCode}</span>
                       </div>
                     )}
-                    {paymentRef && <div style={{ fontSize: "11px", color: "#333", marginTop: "4px" }}>Ref: {paymentRef}</div>}
+                    {(paymentRef || initialOrder?.paymentRef) && (
+                      <div style={{ fontSize: "11px", color: "#333", marginTop: "4px" }}>Ref: {paymentRef || initialOrder?.paymentRef}</div>
+                    )}
                   </div>
 
                   <OrderIdBanner orderId={orderId} />
@@ -679,21 +659,19 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                   )}
 
                   <button onClick={handleConfirmDelivery}
-                    style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "15px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}>
+                    style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "15px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "15px", fontFamily: "inherit" }}>
                     ✅ {paymentMode === "automated" ? "Confirm Delivery — Release Payment to Seller" : "I Received My Order"}
                   </button>
 
                   <button onClick={handleCancelDelivery}
-                    style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "14px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "14px" }}>
+                    style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "14px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
                     ❌ Cancel — Refund My Money
                   </button>
 
-                  {paymentMode === "manual" && (
-                    <button onClick={onClose}
-                      style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", padding: "8px", minHeight: "auto" }}>
-                      Close — I'll check back later
-                    </button>
-                  )}
+                  <button onClick={onClose}
+                    style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", padding: "8px", minHeight: "auto" }}>
+                    Close — I'll check back later
+                  </button>
                 </>
               )}
 
@@ -724,4 +702,3 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     </div>
   )
 }
-
