@@ -8,11 +8,9 @@ import Auth from "./Auth"
 import Account from "./Account"
 import SellListing from "./SellListing"
 import AdminPanel from "./AdminPanel"
-import OrderTracker from "./OrderTracker"
+import OrderTracker, { NotificationBell } from "./OrderTracker"
 import RiderDashboard from "./RiderDashboard"
 import { getListings } from "./api"
-import { NotificationBell } from "./OrderTracker"
-
 
 const ALL_LISTINGS = [
   { id: 1,  title: "Calculus Textbook",       price: 380,  category: "Books",       seller: "Ahmad K.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "8th edition, some highlights but all pages intact. Perfect for MTH 151.",                       delivery: ["Pickup", "Rider"],            section: "buy" },
@@ -109,7 +107,7 @@ const parseSearch = (query) => {
   return { detectedSection, keyword: remainingWords.join(" ").trim() }
 }
 
-// ── Product Modal ─────────────────────────────────────────────────────────────
+// ── Product Modal ──────────────────────────────────────────────────────────────
 function ProductModal({ item, onClose, onCart, toUSD }) {
   if (!item) return null
   const isDbItem = !!item._id
@@ -172,7 +170,7 @@ function ProductModal({ item, onClose, onCart, toUSD }) {
   )
 }
 
-// ── Footer Modal ──────────────────────────────────────────────────────────────
+// ── Footer Modal ───────────────────────────────────────────────────────────────
 function FooterModal({ type, onClose, siteSettings }) {
   if (!type) return null
   const content = {
@@ -182,15 +180,11 @@ function FooterModal({ type, onClose, siteSettings }) {
         <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "14px", color: "#888", lineHeight: "1.8" }}>
           <p>{siteSettings.aboutText}</p>
           <p>We connect university students across Ghana to buy, sell, rent, and trade goods and services safely. Every transaction is protected by our escrow system — your money is held securely until you confirm everything is good.</p>
-          <p>Our rider network ensures fast, reliable on-campus delivery so you never have to worry about getting your items safely.</p>
           <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px" }}>
             <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em" }}>Our Values</div>
-            {[
-              "🔒 Security — Every payment is held in escrow until delivery is confirmed.",
-              "⚡ Speed — Campus riders deliver fast within your zone.",
-              "🤝 Trust — Verified student community with ratings and reviews.",
-              "💰 Fairness — We only take 8% when a transaction is completed.",
-            ].map(v => <div key={v} style={{ fontSize: "13px", color: "#666" }}>{v}</div>)}
+            {["🔒 Security — Every payment is held in escrow until delivery is confirmed.", "⚡ Speed — Campus riders deliver fast within your zone.", "🤝 Trust — Verified student community with ratings and reviews.", "💰 Fairness — We only take 8% when a transaction is completed."].map(v => (
+              <div key={v} style={{ fontSize: "13px", color: "#666" }}>{v}</div>
+            ))}
           </div>
           <p style={{ fontSize: "13px", color: "#555" }}>Silk Road GH is proudly built for Ghanaian university students.</p>
         </div>
@@ -205,7 +199,6 @@ function FooterModal({ type, onClose, siteSettings }) {
             ["🔒 How We Use Your Data", "Your data is used solely to process transactions, connect buyers with sellers, coordinate deliveries, and improve the platform. We do not sell your personal information to third parties."],
             ["📍 Location Data", "Location is only accessed during checkout when you choose to share it. It is used to coordinate delivery and is shared only with the seller or rider fulfilling your order."],
             ["💳 Payment Information", "All payments are processed securely. Silk Road GH does not store your MTN MoMo PIN or full payment credentials."],
-            ["🤝 Data Sharing", "Your contact details are only shared with the relevant seller or rider after a confirmed payment. No data is shared with advertisers or unrelated third parties."],
             ["🗑️ Data Deletion", "You may request deletion of your account and associated data at any time by contacting us directly."],
             ["📞 Contact", `For any privacy concerns, reach us at ${siteSettings.contactPhone}.`],
           ].map(([title, text]) => (
@@ -214,7 +207,7 @@ function FooterModal({ type, onClose, siteSettings }) {
               <p style={{ margin: 0 }}>{text}</p>
             </div>
           ))}
-          <p style={{ fontSize: "12px", color: "#444" }}>Last updated: {new Date().getFullYear()}. Silk Road GH reserves the right to update this policy.</p>
+          <p style={{ fontSize: "12px", color: "#444" }}>Last updated: {new Date().getFullYear()}.</p>
         </div>
       )
     }
@@ -233,7 +226,7 @@ function FooterModal({ type, onClose, siteSettings }) {
   )
 }
 
-// ── Footer ────────────────────────────────────────────────────────────────────
+// ── Footer ─────────────────────────────────────────────────────────────────────
 function Footer({ onOpen, siteSettings }) {
   return (
     <footer style={{ background: "#080808", borderTop: "1px solid #141414", marginTop: "80px" }}>
@@ -249,9 +242,9 @@ function Footer({ onOpen, siteSettings }) {
           <div style={{ flex: 1, minWidth: "140px" }}>
             <div style={{ fontSize: "10px", color: "#333", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "18px" }}>Company</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <button onClick={() => onOpen("about")} style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit", transition: "color 0.2s" }}
+              <button onClick={() => onOpen("about")} style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit" }}
                 onMouseEnter={e => e.target.style.color = "#c8a97e"} onMouseLeave={e => e.target.style.color = "#555"}>About Silk Road</button>
-              <button onClick={() => onOpen("privacy")} style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit", transition: "color 0.2s" }}
+              <button onClick={() => onOpen("privacy")} style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit" }}
                 onMouseEnter={e => e.target.style.color = "#c8a97e"} onMouseLeave={e => e.target.style.color = "#555"}>Privacy Policy</button>
             </div>
           </div>
@@ -259,16 +252,14 @@ function Footer({ onOpen, siteSettings }) {
             <div style={{ fontSize: "10px", color: "#333", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "18px" }}>Contact</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <a href={`tel:+${siteSettings.contactWhatsApp}`} style={{ color: "#c8a97e", fontSize: "14px", textDecoration: "none", fontWeight: "600" }}>📞 {siteSettings.contactPhone}</a>
-              <a href={`https://wa.me/${siteSettings.contactWhatsApp}`} target="_blank" rel="noreferrer" style={{ color: "#555", fontSize: "14px", textDecoration: "none", transition: "color 0.2s" }}
+              <a href={`https://wa.me/${siteSettings.contactWhatsApp}`} target="_blank" rel="noreferrer" style={{ color: "#555", fontSize: "14px", textDecoration: "none" }}
                 onMouseEnter={e => e.target.style.color = "#c8a97e"} onMouseLeave={e => e.target.style.color = "#555"}>💬 WhatsApp</a>
             </div>
           </div>
           <div style={{ flex: 1, minWidth: "140px" }}>
             <div style={{ fontSize: "10px", color: "#333", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "18px" }}>Payments</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ background: "#ffd700", borderRadius: "8px", padding: "8px 14px", fontSize: "12px", fontWeight: "700", color: "#1a1a00", display: "inline-flex", alignItems: "center", gap: "6px", width: "fit-content" }}>📱 MTN MoMo</div>
-              <div style={{ fontSize: "11px", color: "#333" }}>Escrow protected</div>
-            </div>
+            <div style={{ background: "#ffd700", borderRadius: "8px", padding: "8px 14px", fontSize: "12px", fontWeight: "700", color: "#1a1a00", display: "inline-flex", alignItems: "center", gap: "6px" }}>📱 MTN MoMo</div>
+            <div style={{ fontSize: "11px", color: "#333", marginTop: "8px" }}>Escrow protected</div>
           </div>
         </div>
         <hr className="divider" />
@@ -281,7 +272,7 @@ function Footer({ onOpen, siteSettings }) {
   )
 }
 
-// ── Search Results ────────────────────────────────────────────────────────────
+// ── Search Results ─────────────────────────────────────────────────────────────
 function SearchResults({ query, onClose, onNavigate }) {
   const { detectedSection, keyword } = parseSearch(query)
   const [dbResults, setDbResults] = useState([])
@@ -289,8 +280,7 @@ function SearchResults({ query, onClose, onNavigate }) {
 
   useEffect(() => {
     setLoading(true)
-    const q = keyword || query
-    getListings({ search: q, limit: 20 })
+    getListings({ search: keyword || query, limit: 20 })
       .then(data => setDbResults(Array.isArray(data) ? data : []))
       .catch(() => setDbResults([]))
       .finally(() => setLoading(false))
@@ -303,9 +293,8 @@ function SearchResults({ query, onClose, onNavigate }) {
     return matchesSection && matchesKeyword
   })
 
-  const dbBuyResults = (detectedSection && detectedSection !== "buy") ? [] : dbResults.map(item => ({
-    id: item._id, imageId: item._id, title: item.title, category: item.category, section: "buy", image: item.image,
-  }))
+  const dbBuyResults = (detectedSection && detectedSection !== "buy") ? []
+    : dbResults.map(item => ({ id: item._id, imageId: item._id, title: item.title, category: item.category, section: "buy", image: item.image }))
 
   const results = [...dbBuyResults, ...staticResults]
   const grouped = {
@@ -318,22 +307,15 @@ function SearchResults({ query, onClose, onNavigate }) {
     <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "80px 20px 20px" }} onClick={onClose}>
       <div className="modal-content" style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "680px", maxHeight: "80vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#111", zIndex: 1 }}>
-          <div>
-            <span style={{ fontSize: "14px", color: "#555" }}>
-              {loading ? "Searching..." : `${results.length} results for`} <strong style={{ color: "#f0ede8" }}>"{query}"</strong>
-            </span>
-            {detectedSection && (
-              <span style={{ marginLeft: "10px", fontSize: "11px", fontWeight: "700", color: SECTION_COLOR[detectedSection], background: `${SECTION_COLOR[detectedSection]}22`, padding: "2px 10px", borderRadius: "20px" }}>
-                {SECTION_LABEL[detectedSection]}
-              </span>
-            )}
-          </div>
+          <span style={{ fontSize: "14px", color: "#555" }}>
+            {loading ? "Searching..." : `${results.length} results for`} <strong style={{ color: "#f0ede8" }}>"{query}"</strong>
+          </span>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "20px", cursor: "pointer" }}>✕</button>
         </div>
         {loading ? (
           <div className="empty-state"><div className="icon">⏳</div><div className="title">Searching...</div></div>
         ) : results.length === 0 ? (
-          <div className="empty-state"><div className="icon">🔍</div><div className="title">No results found</div><div className="sub">Try a different search term</div></div>
+          <div className="empty-state"><div className="icon">🔍</div><div className="title">No results found</div><div className="sub">Try a different term</div></div>
         ) : (
           <div style={{ padding: "16px" }}>
             {Object.entries(grouped).map(([section, items]) => items.length > 0 && (
@@ -350,10 +332,10 @@ function SearchResults({ query, onClose, onNavigate }) {
                       onMouseLeave={e => { e.currentTarget.style.borderColor = "#1a1a1a"; e.currentTarget.style.background = "#1a1a1a" }}>
                       <img src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "44px", height: "44px", borderRadius: "10px", objectFit: "cover", flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "2px" }}>{item.title}</div>
+                        <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8" }}>{item.title}</div>
                         <div style={{ fontSize: "11px", color: "#444" }}>{item.category}</div>
                       </div>
-                      <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}18`, padding: "3px 10px", borderRadius: "20px", flexShrink: 0 }}>
+                      <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}18`, padding: "3px 10px", borderRadius: "20px" }}>
                         {SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}
                       </span>
                     </div>
@@ -368,7 +350,7 @@ function SearchResults({ query, onClose, onNavigate }) {
   )
 }
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
+// ── Skeleton ───────────────────────────────────────────────────────────────────
 function ListingSkeleton() {
   return (
     <div style={{ background: "#111", borderRadius: "16px", overflow: "hidden", border: "1px solid #1a1a1a" }}>
@@ -377,14 +359,14 @@ function ListingSkeleton() {
         <div style={{ height: "10px", background: "#161616", borderRadius: "4px", width: "35%", animation: "shimmer 1.5s ease infinite" }} />
         <div style={{ height: "16px", background: "#161616", borderRadius: "4px", animation: "shimmer 1.5s ease infinite" }} />
         <div style={{ height: "10px", background: "#161616", borderRadius: "4px", width: "55%", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "22px", background: "#161616", borderRadius: "4px", width: "45%", animation: "shimmer 1.5s ease infinite", marginTop: "4px" }} />
-        <div style={{ height: "40px", background: "#161616", borderRadius: "10px", animation: "shimmer 1.5s ease infinite", marginTop: "4px" }} />
+        <div style={{ height: "22px", background: "#161616", borderRadius: "4px", width: "45%", animation: "shimmer 1.5s ease infinite" }} />
+        <div style={{ height: "40px", background: "#161616", borderRadius: "10px", animation: "shimmer 1.5s ease infinite" }} />
       </div>
     </div>
   )
 }
 
-// ── App ───────────────────────────────────────────────────────────────────────
+// ── App ────────────────────────────────────────────────────────────────────────
 function App() {
   const [rate, setRate] = useState(null)
   const [rateLoading, setRateLoading] = useState(true)
@@ -426,10 +408,10 @@ function App() {
   const displayListings = usingDb ? dbListings : ALL_LISTINGS.slice(0, visibleCount)
   const hasMore = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
 
-  // Fetch site settings including payment mode
+  // Fetch site settings
   useEffect(() => {
     fetch(`${API_URL}/settings`)
-      .then(res => res.json())
+      .then(r => r.json())
       .then(data => { if (data && !data.message) setSiteSettings(prev => ({ ...prev, ...data })) })
       .catch(() => {})
   }, [])
@@ -464,8 +446,7 @@ function App() {
       entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add("visible") }),
       { threshold: 0.08, rootMargin: "0px 0px -30px 0px" }
     )
-    const cards = document.querySelectorAll(".reveal")
-    cards.forEach(c => observer.observe(c))
+    document.querySelectorAll(".reveal").forEach(c => observer.observe(c))
     return () => observer.disconnect()
   }, [displayListings, activePage, listingsLoading])
 
@@ -511,7 +492,7 @@ function App() {
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
   }, [searchQuery])
 
-  // Close search on outside click
+  // Outside click closes search
   useEffect(() => {
     const handleClick = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) setShowDropdown(false) }
     document.addEventListener("mousedown", handleClick)
@@ -534,7 +515,7 @@ function App() {
     if (token && !user) {
       import("./api").then(({ getMe }) => {
         getMe().then(data => {
-          if (data && data._id) {
+          if (data?._id) {
             setUser({
               _id: data._id, name: data.name, email: data.email,
               university: data.university, phone: data.phone, role: data.role,
@@ -616,10 +597,13 @@ function App() {
               📦
             </button>
             {user ? (
-              <button onClick={() => setShowAccount(true)}
-                style={{ background: "linear-gradient(135deg,#c8a97e,#9a7040)", border: "none", width: "34px", height: "34px", borderRadius: "50%", fontWeight: "800", cursor: "pointer", fontSize: "14px", color: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {user.name.charAt(0).toUpperCase()}
-              </button>
+              <>
+                <NotificationBell user={user} onClick={() => setShowAccount(true)} />
+                <button onClick={() => setShowAccount(true)}
+                  style={{ background: "linear-gradient(135deg,#c8a97e,#9a7040)", border: "none", width: "34px", height: "34px", borderRadius: "50%", fontWeight: "800", cursor: "pointer", fontSize: "14px", color: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {user.name.charAt(0).toUpperCase()}
+                </button>
+              </>
             ) : (
               <button onClick={() => setShowAuth(true)}
                 style={{ background: "#c8a97e", border: "none", padding: "8px 16px", borderRadius: "9px", fontWeight: "700", cursor: "pointer", fontSize: "13px", color: "#000", whiteSpace: "nowrap" }}>
@@ -684,7 +668,7 @@ function App() {
                     </div>
                   ))}
                   <div onClick={() => { setShowDropdown(false); setShowFullResults(true) }}
-                    style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600", transition: "background 0.15s" }}
+                    style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600" }}
                     onMouseEnter={e => e.currentTarget.style.background = "#1e1e1e"}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                     See all results →
@@ -741,9 +725,7 @@ function App() {
                         </div>
                         <div style={{ padding: "16px" }}>
                           <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "6px" }}>{item.category}</div>
-                          <div onClick={() => setSelectedProduct(item)} style={{ fontSize: "15px", fontWeight: "700", marginBottom: "6px", color: "#f0ede8", cursor: "pointer", lineHeight: "1.3", letterSpacing: "-0.01em" }}>
-                            {item.title}
-                          </div>
+                          <div onClick={() => setSelectedProduct(item)} style={{ fontSize: "15px", fontWeight: "700", marginBottom: "6px", color: "#f0ede8", cursor: "pointer", lineHeight: "1.3", letterSpacing: "-0.01em" }}>{item.title}</div>
                           <div style={{ fontSize: "12px", color: "#444", marginBottom: "2px" }}>by <span style={{ color: "#666" }}>{sellerName}</span></div>
                           <div style={{ fontSize: "11px", color: "#333", marginBottom: "14px" }}>🎓 {university}</div>
                           <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: "14px" }}>
@@ -795,6 +777,7 @@ function App() {
         />
       )}
 
+      {/* Account is full-page — renders on top of everything */}
       {showAccount && user && (
         <Account
           user={user}
