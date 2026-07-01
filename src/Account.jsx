@@ -1,20 +1,44 @@
 import { useState, useEffect } from "react"
 import { updateProfile, changePassword, deleteAccount, getMyOrders, getSellingOrders, getListings, deleteListing } from "./api"
-import { getOrders, updateOrder } from "./OrderTracker"
+import { getOrders, updateOrder, getSellerNotifications, markAllNotificationsRead } from "./OrderTracker"
 
 const UNIS = ["KNUST", "UG Legon", "Ashesi", "UDS", "UCC", "GIJ", "UHAS", "Other"]
 
 const STATUS_STYLE = {
-  "Delivered":   { bg: "#064e3b22", color: "#6ee7b7", border: "#065f46" },
-  "Completed":   { bg: "#064e3b22", color: "#6ee7b7", border: "#065f46" },
-  "In Escrow":   { bg: "#1e3a5f22", color: "#93c5fd", border: "#1d4ed8" },
-  "Pending":     { bg: "#78350f22", color: "#fcd34d", border: "#92400e" },
-  "Refunded":    { bg: "#78350f22", color: "#fcd34d", border: "#92400e" },
-  "Cancelled":   { bg: "#7f1d1d22", color: "#fca5a5", border: "#7f1d1d" },
-  "Active":      { bg: "#1e3a5f22", color: "#93c5fd", border: "#1d4ed8" },
+  "Delivered":           { bg: "#064e3b22", color: "#6ee7b7", border: "#065f46" },
+  "Completed":           { bg: "#064e3b22", color: "#6ee7b7", border: "#065f46" },
+  "In Escrow":           { bg: "#1e3a5f22", color: "#93c5fd", border: "#1d4ed8" },
+  "Pending Confirmation":{ bg: "#78350f22", color: "#fcd34d", border: "#92400e" },
+  "Paid":                { bg: "#064e3b22", color: "#6ee7b7", border: "#065f46" },
+  "Pending":             { bg: "#78350f22", color: "#fcd34d", border: "#92400e" },
+  "Refunded":            { bg: "#78350f22", color: "#fcd34d", border: "#92400e" },
+  "Cancelled":           { bg: "#7f1d1d22", color: "#fca5a5", border: "#7f1d1d" },
+  "Active":              { bg: "#1e3a5f22", color: "#93c5fd", border: "#1d4ed8" },
+  "Flagged":             { bg: "#78350f22", color: "#fcd34d", border: "#92400e" },
 }
 
-// ── Active Rentals — Lender View ─────────────────────────────────────────────
+const statusStyle = (status) => STATUS_STYLE[status] || STATUS_STYLE["Active"]
+
+const inputStyle = (hasError) => ({
+  width: "100%", background: "#161616",
+  border: `1px solid ${hasError ? "#991b1b" : "#222"}`,
+  color: "#fff", padding: "12px 16px", borderRadius: "10px",
+  fontSize: "14px", outline: "none", boxSizing: "border-box", fontFamily: "inherit",
+})
+
+// ── Stat Card ──────────────────────────────────────────────────────────────────
+function StatCard({ icon, label, value, sub, accent }) {
+  return (
+    <div style={{ background: "#141414", border: "1px solid #1e1e1e", borderRadius: "16px", padding: "20px", flex: 1, minWidth: "160px" }}>
+      <div style={{ fontSize: "22px", marginBottom: "10px" }}>{icon}</div>
+      <div style={{ fontSize: "24px", fontWeight: "800", color: accent || "#f0ede8", letterSpacing: "-0.02em" }}>{value}</div>
+      <div style={{ fontSize: "12px", color: "#888", marginTop: "4px" }}>{label}</div>
+      {sub && <div style={{ fontSize: "11px", color: "#444", marginTop: "3px" }}>{sub}</div>}
+    </div>
+  )
+}
+
+// ── Active Rentals — Lender View ──────────────────────────────────────────────
 function ActiveRentals() {
   const [rentals, setRentals] = useState(() => {
     try {
@@ -30,13 +54,14 @@ function ActiveRentals() {
   }
 
   if (rentals.length === 0) return (
-    <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #1e1e1e", textAlign: "center", color: "#555", fontSize: "13px" }}>
+    <div style={{ background: "#141414", borderRadius: "14px", padding: "32px", border: "1px solid #1e1e1e", textAlign: "center", color: "#444", fontSize: "13px" }}>
+      <div style={{ fontSize: "30px", marginBottom: "10px" }}>📦</div>
       No active rentals right now.
     </div>
   )
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
       {rentals.map(rental => {
         const expanded = expandedId === rental.id
         const timeLeft = (rental.rentalTimerEnd || 0) - Date.now()
@@ -46,12 +71,12 @@ function ActiveRentals() {
         const isExpired = timeLeft <= 0
 
         return (
-          <div key={rental.id} style={{ background: "#1a1a1a", borderRadius: "12px", border: `1px solid ${isNearEnd ? "#92400e" : isExpired ? "#7f1d1d" : "#1e1e1e"}`, overflow: "hidden" }}>
-            <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}
+          <div key={rental.id} style={{ background: "#141414", borderRadius: "14px", border: `1px solid ${isNearEnd ? "#92400e" : isExpired ? "#7f1d1d" : "#1e1e1e"}`, overflow: "hidden" }}>
+            <div style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px", cursor: "pointer" }}
               onClick={() => setExpandedId(expanded ? null : rental.id)}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "2px" }}>{rental.item?.title || "Rental Item"}</div>
-                <div style={{ fontSize: "12px", color: "#666" }}>ID: <span style={{ color: "#c8a97e", fontFamily: "monospace" }}>{rental.id}</span></div>
+                <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "3px" }}>{rental.item?.title || "Rental Item"}</div>
+                <div style={{ fontSize: "12px", color: "#555" }}>ID: <span style={{ color: "#c8a97e", fontFamily: "monospace" }}>{rental.id}</span></div>
               </div>
               <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end" }}>
                 {isExpired
@@ -60,41 +85,31 @@ function ActiveRentals() {
                     ? <span style={{ fontSize: "11px", fontWeight: "700", background: "#78350f22", color: "#fcd34d", border: "1px solid #92400e", padding: "3px 10px", borderRadius: "20px" }}>⚠️ {hoursLeft}h left</span>
                     : <span style={{ fontSize: "11px", fontWeight: "700", background: "#064e3b22", color: "#6ee7b7", border: "1px solid #065f46", padding: "3px 10px", borderRadius: "20px" }}>{daysLeft}d {hoursLeft}h left</span>
                 }
-                <span style={{ fontSize: "11px", color: "#555" }}>{expanded ? "▲ Hide" : "▼ View"}</span>
+                <span style={{ fontSize: "11px", color: "#444" }}>{expanded ? "▲ Hide" : "▼ View"}</span>
               </div>
             </div>
             {expanded && (
-              <div style={{ padding: "0 16px 16px", borderTop: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{ paddingTop: "12px", background: "#111", borderRadius: "10px", padding: "14px", fontSize: "13px", display: "flex", flexDirection: "column", gap: "6px" }}>
+              <div style={{ padding: "0 18px 18px", borderTop: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ paddingTop: "14px", background: "#0d0d0d", borderRadius: "10px", padding: "14px", fontSize: "13px", display: "flex", flexDirection: "column", gap: "7px" }}>
                   <div>📅 Duration: <span style={{ color: "#c8a97e", fontWeight: "700" }}>{rental.days} day{rental.days > 1 ? "s" : ""}</span></div>
                   <div>💰 You receive: <span style={{ color: "#c8a97e", fontWeight: "700" }}>₵{rental.lenderGets || rental.rentalCost}</span></div>
                   {rental.depositAmount > 0 && <div>🔒 Deposit: <span style={{ color: "#fcd34d" }}>₵{rental.depositAmount}</span></div>}
                   {rental.renterConfirmed
-                    ? <div style={{ background: "#064e3b22", border: "1px solid #065f46", borderRadius: "8px", padding: "8px 12px", color: "#6ee7b7", fontSize: "12px" }}>✅ Renter confirmed return — please confirm on your end</div>
-                    : <div style={{ background: "#1e1e2e", border: "1px solid #2a2a40", borderRadius: "8px", padding: "8px 12px", color: "#666", fontSize: "12px" }}>⏳ Renter has not yet confirmed return</div>
+                    ? <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "8px", padding: "8px 12px", color: "#6ee7b7", fontSize: "12px" }}>✅ Renter confirmed return — please confirm on your end</div>
+                    : <div style={{ background: "#1a1a1a", border: "1px solid #222", borderRadius: "8px", padding: "8px 12px", color: "#555", fontSize: "12px" }}>⏳ Renter has not yet confirmed return</div>
                   }
                 </div>
-                {(isNearEnd || isExpired) && (
-                  <div style={{ background: "#78350f22", border: "1px solid #92400e", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#fcd34d" }}>
-                    {isExpired ? "⏰ Rental period ended. Please confirm whether the item was returned." : "⚠️ Less than 24 hours remaining."}
-                  </div>
-                )}
-                <div style={{ fontSize: "13px", color: "#888" }}>Was the item returned to you in good condition?</div>
+                <div style={{ fontSize: "13px", color: "#666" }}>Was the item returned in good condition?</div>
                 <div style={{ display: "flex", gap: "10px" }}>
                   <button onClick={() => handleLenderConfirm(rental.id, false)}
                     style={{ flex: 1, background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "12px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
                     ✅ No Damage
                   </button>
                   <button onClick={() => handleLenderConfirm(rental.id, true)}
-                    style={{ flex: 1, background: "#7f1d1d22", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "12px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
+                    style={{ flex: 1, background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "12px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
                     ⚠️ Damaged
                   </button>
                 </div>
-                {rental.depositAmount > 0 && (
-                  <div style={{ fontSize: "12px", color: "#555", textAlign: "center" }}>
-                    No damage → ₵{rental.depositAmount} refunded to renter. Damaged → deposit kept by you.
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -104,7 +119,7 @@ function ActiveRentals() {
   )
 }
 
-// ── Active Services — Provider View ──────────────────────────────────────────
+// ── Active Services — Provider View ───────────────────────────────────────────
 function ActiveServices() {
   const [services, setServices] = useState(() => {
     try {
@@ -120,41 +135,41 @@ function ActiveServices() {
   }
 
   if (services.length === 0) return (
-    <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "20px", border: "1px solid #1e1e1e", textAlign: "center", color: "#555", fontSize: "13px" }}>
+    <div style={{ background: "#141414", borderRadius: "14px", padding: "32px", border: "1px solid #1e1e1e", textAlign: "center", color: "#444", fontSize: "13px" }}>
+      <div style={{ fontSize: "30px", marginBottom: "10px" }}>🛠️</div>
       No active services right now.
     </div>
   )
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
       {services.map(service => {
         const expanded = expandedId === service.id
         return (
-          <div key={service.id} style={{ background: "#1a1a1a", borderRadius: "12px", border: "1px solid #1e1e1e", overflow: "hidden" }}>
-            <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}
+          <div key={service.id} style={{ background: "#141414", borderRadius: "14px", border: "1px solid #1e1e1e", overflow: "hidden" }}>
+            <div style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px", cursor: "pointer" }}
               onClick={() => setExpandedId(expanded ? null : service.id)}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "2px" }}>{service.service?.title || "Service"}</div>
-                <div style={{ fontSize: "12px", color: "#666" }}>ID: <span style={{ color: "#c8a97e", fontFamily: "monospace" }}>{service.id}</span></div>
+                <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "3px" }}>{service.service?.title || "Service"}</div>
+                <div style={{ fontSize: "12px", color: "#555" }}>ID: <span style={{ color: "#c8a97e", fontFamily: "monospace" }}>{service.id}</span></div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end" }}>
                 <span style={{ fontSize: "11px", fontWeight: "700", background: "#1e3a5f22", color: "#93c5fd", border: "1px solid #1d4ed8", padding: "3px 10px", borderRadius: "20px" }}>Active</span>
-                <span style={{ fontSize: "11px", color: "#555" }}>{expanded ? "▲ Hide" : "▼ View"}</span>
+                <span style={{ fontSize: "11px", color: "#444" }}>{expanded ? "▲ Hide" : "▼ View"}</span>
               </div>
             </div>
             {expanded && (
-              <div style={{ padding: "0 16px 16px", borderTop: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{ paddingTop: "12px", background: "#111", borderRadius: "10px", padding: "14px", fontSize: "13px", display: "flex", flexDirection: "column", gap: "6px" }}>
+              <div style={{ padding: "0 18px 18px", borderTop: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ paddingTop: "14px", background: "#0d0d0d", borderRadius: "10px", padding: "14px", fontSize: "13px", display: "flex", flexDirection: "column", gap: "7px" }}>
                   <div>💰 You receive: <span style={{ color: "#c8a97e", fontWeight: "700" }}>₵{service.providerGets}</span></div>
-                  <div>📋 Type: <span style={{ color: "#aaa" }}>{service.service?.liveSession ? "🔴 Live Session" : service.service?.delivery === "online" ? "🌐 Online" : "📍 In-Person"}</span></div>
-                  <div>📅 Booked: <span style={{ color: "#aaa" }}>{service.createdAt ? new Date(service.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "N/A"}</span></div>
+                  <div>📋 Type: <span style={{ color: "#888" }}>{service.service?.liveSession ? "🔴 Live Session" : service.service?.delivery === "online" ? "🌐 Online" : "📍 In-Person"}</span></div>
                   {service.buyerConfirmed
-                    ? <div style={{ background: "#064e3b22", border: "1px solid #065f46", borderRadius: "8px", padding: "8px 12px", color: "#6ee7b7", fontSize: "12px" }}>✅ Buyer confirmed — confirm on your end to release payment</div>
-                    : <div style={{ background: "#1e1e2e", border: "1px solid #2a2a40", borderRadius: "8px", padding: "8px 12px", color: "#666", fontSize: "12px" }}>⏳ Waiting for buyer to confirm completion</div>
+                    ? <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "8px", padding: "8px 12px", color: "#6ee7b7", fontSize: "12px" }}>✅ Buyer confirmed — please confirm to release payment</div>
+                    : <div style={{ background: "#1a1a1a", border: "1px solid #222", borderRadius: "8px", padding: "8px 12px", color: "#555", fontSize: "12px" }}>⏳ Waiting for buyer to confirm completion</div>
                   }
                 </div>
                 <button onClick={() => handleProviderConfirm(service.id)}
-                  style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "13px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
+                  style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "13px", borderRadius: "12px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
                   ✅ I've Completed This Service
                 </button>
               </div>
@@ -166,8 +181,91 @@ function ActiveServices() {
   )
 }
 
+// ── Notifications Tab Content ─────────────────────────────────────────────────
+function NotificationsTab({ user }) {
+  const [notifications, setNotifications] = useState([])
+  const [expandedId, setExpandedId] = useState(null)
+
+  useEffect(() => {
+    if (user?._id) {
+      setNotifications(getSellerNotifications(user._id))
+      markAllNotificationsRead(user._id)
+    }
+  }, [user?._id])
+
+  const formatTime = (ts) => {
+    const diff = Date.now() - ts
+    if (diff < 60000) return "Just now"
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+    return new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+  }
+
+  if (notifications.length === 0) return (
+    <div style={{ background: "#141414", borderRadius: "14px", padding: "48px 24px", border: "1px solid #1e1e1e", textAlign: "center", color: "#444" }}>
+      <div style={{ fontSize: "36px", marginBottom: "12px" }}>🔔</div>
+      <div style={{ fontSize: "15px", fontWeight: "600", color: "#666", marginBottom: "6px" }}>No notifications yet</div>
+      <div style={{ fontSize: "13px" }}>You'll see new orders for your listings here, in real time.</div>
+    </div>
+  )
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      {notifications.map(notif => {
+        const expanded = expandedId === notif.id
+        return (
+          <div key={notif.id} style={{ background: notif.status === "unread" ? "#161a1e" : "#141414", border: `1px solid ${notif.status === "unread" ? "#c8a97e33" : "#1e1e1e"}`, borderRadius: "14px", overflow: "hidden" }}>
+            <div style={{ padding: "16px 18px", cursor: "pointer", display: "flex", gap: "14px", alignItems: "flex-start" }}
+              onClick={() => setExpandedId(expanded ? null : notif.id)}>
+              <div style={{ width: "46px", height: "46px", borderRadius: "12px", background: "#1e1e1e", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {notif.itemImage ? <img src={notif.itemImage} alt={notif.itemTitle} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: "20px" }}>🛒</span>}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                  {notif.status === "unread" && <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#c8a97e", flexShrink: 0 }} />}
+                  <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>🛒 New order: {notif.itemTitle}</div>
+                </div>
+                <div style={{ fontSize: "12px", color: "#888", marginBottom: "3px" }}>
+                  <span style={{ color: "#c8a97e", fontWeight: "700" }}>₵{notif.amount?.toLocaleString()}</span> from {notif.buyerName}
+                </div>
+                <div style={{ fontSize: "11px", color: "#444" }}>{formatTime(notif.createdAt)} · {expanded ? "▲ Hide" : "▼ Details"}</div>
+              </div>
+            </div>
+            {expanded && (
+              <div style={{ borderTop: "1px solid #1e1e1e", padding: "16px 18px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ background: "#0d0d0d", borderRadius: "10px", padding: "16px", fontSize: "13px", display: "flex", flexDirection: "column", gap: "9px" }}>
+                  <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em" }}>ORDER DETAILS</div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#555" }}>Order ID</span><span style={{ color: "#c8a97e", fontFamily: "monospace", fontWeight: "700" }}>{notif.orderId}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#555" }}>Amount</span><span style={{ color: "#6ee7b7", fontWeight: "700" }}>₵{notif.amount?.toLocaleString()}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#555" }}>Payment</span><span style={{ color: "#888" }}>{notif.paymentMethod === "paystack" ? "⚡ Paystack" : "📱 Manual MoMo"}</span></div>
+                  {notif.paymentRef && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#555" }}>Ref</span><span style={{ color: "#444", fontSize: "11px", fontFamily: "monospace" }}>{notif.paymentRef}</span></div>}
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#555" }}>Delivery</span><span style={{ color: "#888" }}>{notif.deliveryMethod === "rider" ? "🛵 Rider Delivery" : "📍 Campus Pickup"}</span></div>
+                  {notif.location && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#555" }}>Location</span><span style={{ color: "#888", maxWidth: "200px", textAlign: "right" }}>{notif.location}</span></div>}
+                  {notif.landmark && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#555" }}>Landmark</span><span style={{ color: "#888", maxWidth: "200px", textAlign: "right" }}>{notif.landmark}</span></div>}
+                  {notif.promoCode && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#555" }}>Promo</span><span style={{ color: "#6ee7b7" }}>🎟️ {notif.promoCode} (-₵{notif.discount})</span></div>}
+                </div>
+                {notif.buyerContact && (
+                  <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "10px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "10px", color: "#6ee7b7", fontWeight: "700", letterSpacing: ".08em" }}>🔓 BUYER CONTACT</div>
+                    <div style={{ fontSize: "16px", fontWeight: "700", color: "#6ee7b7" }}>{notif.buyerContact}</div>
+                    <div style={{ fontSize: "11px", color: "#065f46" }}>Reach out to coordinate delivery or pickup</div>
+                  </div>
+                )}
+                <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "12px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
+                  ⚠️ Payment held in escrow. Released once the buyer confirms delivery.
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Main Account Component (full page) ────────────────────────────────────────
 export default function Account({ user, onSignOut, onClose, onUserUpdate }) {
-  const [tab, setTab] = useState("profile")
+  const [tab, setTab] = useState("overview")
   const [editForm, setEditForm] = useState({ name: user.name, university: user.university || "", phone: user.phone || "" })
   const [editErrors, setEditErrors] = useState({})
   const [saving, setSaving] = useState(false)
@@ -182,35 +280,29 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate }) {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState("")
 
-  // Live data
   const [orders, setOrders] = useState([])
   const [sellingOrders, setSellingOrders] = useState([])
   const [listings, setListings] = useState([])
   const [loadingOrders, setLoadingOrders] = useState(false)
   const [loadingListings, setLoadingListings] = useState(false)
-  const [notifications, setNotifications] = useState({
-    orderUpdates: true,
-    newMessages: true,
-    deliveryConfirmations: true,
-  })
+  const [notifCount, setNotifCount] = useState(0)
 
-  // Load orders when tab opens
   useEffect(() => {
-    if (tab === "orders") {
+    if (user?._id) setNotifCount(getSellerNotifications(user._id).filter(n => n.status === "unread").length)
+  }, [user?._id, tab])
+
+  useEffect(() => {
+    if (tab === "orders" || tab === "overview") {
       setLoadingOrders(true)
       Promise.all([getMyOrders(), getSellingOrders()])
-        .then(([my, selling]) => {
-          setOrders(Array.isArray(my) ? my : [])
-          setSellingOrders(Array.isArray(selling) ? selling : [])
-        })
+        .then(([my, selling]) => { setOrders(Array.isArray(my) ? my : []); setSellingOrders(Array.isArray(selling) ? selling : []) })
         .catch(() => {})
         .finally(() => setLoadingOrders(false))
     }
   }, [tab])
 
-  // Load listings when tab opens
   useEffect(() => {
-    if (tab === "listings") {
+    if (tab === "listings" || tab === "overview") {
       setLoadingListings(true)
       getListings()
         .then(data => setListings(Array.isArray(data) ? data : []))
@@ -229,8 +321,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate }) {
       const data = await updateProfile({ name: editForm.name, university: editForm.university, phone: editForm.phone })
       if (data.message) { setSaveError(data.message); setSaving(false); return }
       onUserUpdate({ ...user, name: data.name, university: data.university, phone: data.phone })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
+      setSaved(true); setTimeout(() => setSaved(false), 2500)
     } catch { setSaveError("Something went wrong. Please try again.") }
     setSaving(false)
   }
@@ -255,167 +346,220 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate }) {
     setDeleteLoading(true); setDeleteError("")
     try {
       const data = await deleteAccount()
-      if (data.message === "Account deleted successfully.") {
-        localStorage.removeItem("silkroad_token"); onSignOut()
-      } else { setDeleteError(data.message || "Something went wrong.") }
+      if (data.message === "Account deleted successfully.") { localStorage.removeItem("silkroad_token"); onSignOut() }
+      else { setDeleteError(data.message || "Something went wrong.") }
     } catch { setDeleteError("Something went wrong.") }
     setDeleteLoading(false)
   }
 
   const handleDeleteListing = async (id) => {
     if (!window.confirm("Remove this listing?")) return
-    try {
-      await deleteListing(id)
-      setListings(l => l.filter(x => x._id !== id))
-    } catch { alert("Could not remove listing. Try again.") }
+    try { await deleteListing(id); setListings(l => l.filter(x => x._id !== id)) }
+    catch { alert("Could not remove listing. Try again.") }
   }
 
-  const inputStyle = (hasError) => ({
-    width: "100%", background: "#1e1e1e",
-    border: `1px solid ${hasError ? "#991b1b" : "#333"}`,
-    color: "#fff", padding: "12px 16px", borderRadius: "10px",
-    fontSize: "14px", outline: "none", boxSizing: "border-box", fontFamily: "inherit",
-  })
+  const totalRevenue = sellingOrders.filter(o => o.status === "Completed" || o.status === "Paid").reduce((s, o) => s + (o.sellerAmount || 0), 0)
+  const pendingOrders = sellingOrders.filter(o => o.status === "In Escrow" || o.status === "Pending").length
+  const activeListingsCount = listings.filter(l => (l.status || "Active") === "Active").length
 
-  const TABS = [
-    { id: "profile", label: "👤 Profile" },
-    { id: "orders", label: "📦 Orders" },
-    { id: "listings", label: "🏷️ Listings" },
-    { id: "settings", label: "⚙️ Settings" },
+  const NAV_ITEMS = [
+    { id: "overview",      label: "Overview",           icon: "📊" },
+    { id: "notifications", label: "Notifications",      icon: "🔔", badge: notifCount },
+    { id: "orders",        label: "Orders & Sales",     icon: "📦" },
+    { id: "listings",      label: "My Listings",        icon: "🏷️" },
+    { id: "rentals",       label: "Active Rentals",     icon: "🔄" },
+    { id: "services",      label: "Active Services",    icon: "🛠️" },
+    { id: "profile",       label: "Profile",            icon: "👤" },
+    { id: "settings",      label: "Settings",           icon: "⚙️" },
   ]
 
-  const orderStatusStyle = (status) => STATUS_STYLE[status] || STATUS_STYLE["Pending"]
-
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
-      <div style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "560px", maxHeight: "90vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
+    <div style={{ position: "fixed", inset: 0, background: "#0a0a0a", zIndex: 500, display: "flex", overflow: "hidden" }}>
 
-        {/* Header */}
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#111", zIndex: 1 }}>
-          <span style={{ fontSize: "17px", fontWeight: "700" }}>My Account</span>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#666", fontSize: "22px", cursor: "pointer" }}>✕</button>
+      {/* ── Sidebar ── */}
+      <div style={{ width: "260px", flexShrink: 0, background: "#0d0d0d", borderRight: "1px solid #1a1a1a", display: "flex", flexDirection: "column", height: "100vh" }}>
+
+        <div style={{ padding: "20px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: "10px" }}>
+          <button onClick={onClose}
+            style={{ background: "transparent", border: "1px solid #222", color: "#888", width: "34px", height: "34px", borderRadius: "9px", cursor: "pointer", fontSize: "15px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, minHeight: "auto" }}>
+            ←
+          </button>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: "700", color: "#c8a97e" }}>Silk Road GH</div>
+            <div style={{ fontSize: "11px", color: "#444" }}>My Account</div>
+          </div>
         </div>
 
-        {/* User banner */}
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #1e1e1e", display: "flex", alignItems: "center", gap: "14px", background: "#1a1a1a" }}>
-          <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "linear-gradient(135deg,#c8a97e,#9a7040)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", fontWeight: "700", color: "#000", flexShrink: 0 }}>
+        <div style={{ padding: "20px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ width: "44px", height: "44px", borderRadius: "50%", background: "linear-gradient(135deg,#c8a97e,#9a7040)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", fontWeight: "800", color: "#000", flexShrink: 0 }}>
             {user.name.charAt(0).toUpperCase()}
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: "16px", fontWeight: "700", color: "#f0ede8" }}>{user.name}</div>
-            <div style={{ fontSize: "12px", color: "#666" }}>{user.email} · {user.university}</div>
-            <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>Member since {user.joined}</div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div>
+            <div style={{ fontSize: "11px", color: "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.university}</div>
           </div>
-          <button onClick={onSignOut}
-            style={{ background: "#7f1d1d22", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontSize: "12px", fontFamily: "inherit" }}>
-            Sign Out
-          </button>
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: "flex", borderBottom: "1px solid #1e1e1e", padding: "0 24px", overflowX: "auto" }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              style={{ background: "transparent", border: "none", color: tab === t.id ? "#c8a97e" : "#555", cursor: "pointer", fontSize: "13px", fontWeight: "600", padding: "14px 16px", borderBottom: `2px solid ${tab === t.id ? "#c8a97e" : "transparent"}`, fontFamily: "inherit", whiteSpace: "nowrap" }}>
-              {t.label}
+        <div style={{ flex: 1, overflowY: "auto", padding: "12px" }}>
+          {NAV_ITEMS.map(item => (
+            <button key={item.id} onClick={() => setTab(item.id)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: "12px",
+                background: tab === item.id ? "#c8a97e14" : "transparent",
+                border: tab === item.id ? "1px solid #c8a97e33" : "1px solid transparent",
+                color: tab === item.id ? "#c8a97e" : "#888",
+                padding: "12px 14px", borderRadius: "10px", cursor: "pointer",
+                fontSize: "13px", fontWeight: tab === item.id ? "700" : "500",
+                fontFamily: "inherit", marginBottom: "4px", textAlign: "left",
+              }}>
+              <span style={{ fontSize: "16px" }}>{item.icon}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.badge > 0 && (
+                <span style={{ background: "#c8a97e", color: "#000", fontSize: "10px", fontWeight: "800", borderRadius: "50%", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {item.badge > 9 ? "9+" : item.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
-        <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div style={{ padding: "16px", borderTop: "1px solid #1a1a1a" }}>
+          <button onClick={onSignOut}
+            style={{ width: "100%", background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "11px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
+            Sign Out
+          </button>
+        </div>
+      </div>
 
-          {/* ── PROFILE ── */}
-          {tab === "profile" && (
+      {/* ── Main Content ── */}
+      <div style={{ flex: 1, overflowY: "auto", height: "100vh" }}>
+        <div style={{ maxWidth: "900px", margin: "0 auto", padding: "40px 32px 80px" }}>
+
+          {/* ── OVERVIEW ── */}
+          {tab === "overview" && (
             <>
-              <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8" }}>Edit Profile</h3>
-              <div>
-                <div style={{ fontSize: "12px", color: "#888", fontWeight: "600", marginBottom: "6px" }}>FULL NAME</div>
-                <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} style={inputStyle(editErrors.name)} />
-                {editErrors.name && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {editErrors.name}</div>}
+              <h1 style={{ fontSize: "26px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>Welcome back, {user.name.split(" ")[0]} 👋</h1>
+              <p style={{ fontSize: "14px", color: "#555", marginBottom: "32px" }}>Here's what's happening with your account.</p>
+
+              <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "36px" }}>
+                <StatCard icon="💰" label="Total Earned" value={`₵${totalRevenue.toLocaleString()}`} sub="From completed sales" accent="#6ee7b7" />
+                <StatCard icon="🔔" label="New Notifications" value={notifCount} sub="Unread order alerts" accent={notifCount > 0 ? "#c8a97e" : undefined} />
+                <StatCard icon="📦" label="Pending Orders" value={pendingOrders} sub="Awaiting your action" />
+                <StatCard icon="🏷️" label="Active Listings" value={activeListingsCount} sub={`${listings.length} total`} />
               </div>
-              <div>
-                <div style={{ fontSize: "12px", color: "#888", fontWeight: "600", marginBottom: "6px" }}>EMAIL</div>
-                <input value={user.email} disabled style={{ ...inputStyle(false), background: "#141414", color: "#444", cursor: "not-allowed", border: "1px solid #222" }} />
-                <div style={{ fontSize: "11px", color: "#444", marginTop: "4px" }}>Email cannot be changed.</div>
-              </div>
-              <div>
-                <div style={{ fontSize: "12px", color: "#888", fontWeight: "600", marginBottom: "8px" }}>UNIVERSITY</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" }}>
-                  {UNIS.map(u => (
-                    <button key={u} onClick={() => setEditForm(f => ({ ...f, university: u }))}
-                      style={{ padding: "8px 4px", borderRadius: "8px", border: `1.5px solid ${editForm.university === u ? "#c8a97e" : "#2a2a2a"}`, background: editForm.university === u ? "#c8a97e22" : "#1a1a1a", color: editForm.university === u ? "#c8a97e" : "#888", cursor: "pointer", fontWeight: "600", fontSize: "11px", textAlign: "center", fontFamily: "inherit" }}>
-                      {u}
-                    </button>
+
+              {notifCount > 0 && (
+                <div onClick={() => setTab("notifications")}
+                  style={{ background: "#161a1e", border: "1px solid #c8a97e44", borderRadius: "14px", padding: "18px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", marginBottom: "28px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                    <span style={{ fontSize: "24px" }}>🔔</span>
+                    <div>
+                      <div style={{ fontSize: "14px", fontWeight: "700", color: "#c8a97e" }}>You have {notifCount} new order notification{notifCount > 1 ? "s" : ""}</div>
+                      <div style={{ fontSize: "12px", color: "#666" }}>Tap to view buyer details and contact info</div>
+                    </div>
+                  </div>
+                  <span style={{ color: "#c8a97e", fontSize: "18px" }}>→</span>
+                </div>
+              )}
+
+              <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8", marginBottom: "14px" }}>Recent Sales</h3>
+              {loadingOrders ? (
+                <div style={{ textAlign: "center", color: "#444", padding: "32px", fontSize: "13px" }}>⏳ Loading...</div>
+              ) : sellingOrders.length === 0 ? (
+                <div style={{ background: "#141414", borderRadius: "14px", padding: "32px", border: "1px solid #1e1e1e", textAlign: "center", color: "#444", fontSize: "13px" }}>
+                  No sales yet. Once someone buys from you, it'll show up here.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {sellingOrders.slice(0, 4).map(order => (
+                    <div key={order._id} style={{ background: "#141414", borderRadius: "14px", padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px", border: "1px solid #1e1e1e" }}>
+                      <div style={{ width: "44px", height: "44px", borderRadius: "10px", background: "#1e1e1e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0 }}>🏷️</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8" }}>{order.listing?.title || "Sale"}</div>
+                        <div style={{ fontSize: "12px", color: "#555" }}>{order.buyer?.name || "Buyer"} · ₵{order.sellerAmount}</div>
+                      </div>
+                      <span style={{ fontSize: "11px", fontWeight: "700", background: statusStyle(order.status).bg, color: statusStyle(order.status).color, border: `1px solid ${statusStyle(order.status).border}`, padding: "3px 10px", borderRadius: "20px" }}>{order.status}</span>
+                    </div>
                   ))}
                 </div>
-              </div>
-              <div>
-                <div style={{ fontSize: "12px", color: "#888", fontWeight: "600", marginBottom: "6px" }}>PHONE NUMBER</div>
-                <input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} style={inputStyle(editErrors.phone)} />
-                {editErrors.phone && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {editErrors.phone}</div>}
-              </div>
-              {saveError && (
-                <div style={{ background: "#7f1d1d22", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#fca5a5" }}>🚫 {saveError}</div>
               )}
-              <button onClick={handleSaveProfile}
-                style={{ background: "#c8a97e", border: "none", padding: "13px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px", fontFamily: "inherit" }}>
-                {saving ? "⏳ Saving..." : saved ? "✅ Profile Saved!" : "Save Changes"}
-              </button>
+            </>
+          )}
+
+          {/* ── NOTIFICATIONS ── */}
+          {tab === "notifications" && (
+            <>
+              <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>🔔 Notifications</h1>
+              <p style={{ fontSize: "14px", color: "#555", marginBottom: "28px" }}>Every order placed for your listings shows up here in real time.</p>
+              <NotificationsTab user={user} />
             </>
           )}
 
           {/* ── ORDERS ── */}
           {tab === "orders" && (
             <>
-              <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8" }}>My Orders</h3>
+              <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>📦 Orders & Sales</h1>
+              <p style={{ fontSize: "14px", color: "#555", marginBottom: "28px" }}>Your purchases and sales, all in one place.</p>
+
               {loadingOrders ? (
-                <div style={{ textAlign: "center", color: "#555", padding: "32px", fontSize: "13px" }}>⏳ Loading orders...</div>
+                <div style={{ textAlign: "center", color: "#444", padding: "60px", fontSize: "13px" }}>⏳ Loading orders...</div>
               ) : orders.length === 0 && sellingOrders.length === 0 ? (
-                <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "32px", textAlign: "center", border: "1px solid #1e1e1e", color: "#555", fontSize: "13px" }}>
-                  <div style={{ fontSize: "32px", marginBottom: "10px" }}>📦</div>
-                  No orders yet. Start shopping!
+                <div style={{ background: "#141414", borderRadius: "14px", padding: "48px 24px", border: "1px solid #1e1e1e", textAlign: "center", color: "#444" }}>
+                  <div style={{ fontSize: "36px", marginBottom: "12px" }}>📦</div>
+                  <div style={{ fontSize: "15px", fontWeight: "600", color: "#666" }}>No orders yet</div>
                 </div>
               ) : (
                 <>
-                  {orders.length > 0 && (
-                    <>
-                      <div style={{ fontSize: "12px", color: "#888", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em" }}>Purchases</div>
-                      {orders.map(order => (
-                        <div key={order._id} style={{ background: "#1a1a1a", borderRadius: "12px", padding: "14px", display: "flex", gap: "12px", alignItems: "center", border: "1px solid #1e1e1e" }}>
-                          <div style={{ width: "52px", height: "52px", borderRadius: "8px", background: "#2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", flexShrink: 0 }}>📦</div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "2px" }}>{order.listing?.title || "Order"}</div>
-                            <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>
-                              {new Date(order.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · <span style={{ color: "#c8a97e", fontWeight: "700" }}>₵{order.amount}</span>
-                            </div>
-                            <div style={{ fontSize: "10px", color: "#555", fontFamily: "monospace" }}>{order._id}</div>
-                          </div>
-                          <span style={{ fontSize: "11px", fontWeight: "700", background: orderStatusStyle(order.status).bg, color: orderStatusStyle(order.status).color, border: `1px solid ${orderStatusStyle(order.status).border}`, padding: "3px 10px", borderRadius: "20px", flexShrink: 0 }}>
-                            {order.status}
-                          </span>
-                        </div>
-                      ))}
-                    </>
-                  )}
                   {sellingOrders.length > 0 && (
-                    <>
-                      <div style={{ fontSize: "12px", color: "#888", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em", marginTop: "8px" }}>Sales</div>
-                      {sellingOrders.map(order => (
-                        <div key={order._id} style={{ background: "#1a1a1a", borderRadius: "12px", padding: "14px", display: "flex", gap: "12px", alignItems: "center", border: "1px solid #1e1e1e" }}>
-                          <div style={{ width: "52px", height: "52px", borderRadius: "8px", background: "#2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", flexShrink: 0 }}>🏷️</div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "2px" }}>{order.listing?.title || "Sale"}</div>
-                            <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>
-                              Buyer: {order.buyer?.name || "Unknown"} · <span style={{ color: "#c8a97e", fontWeight: "700" }}>₵{order.sellerAmount}</span>
+                    <div style={{ marginBottom: "32px" }}>
+                      <div style={{ fontSize: "11px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "14px" }}>My Sales ({sellingOrders.length})</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                        {sellingOrders.map(order => (
+                          <div key={order._id} style={{ background: "#141414", borderRadius: "14px", padding: "18px", display: "flex", gap: "14px", alignItems: "flex-start", border: "1px solid #1e1e1e" }}>
+                            <div style={{ width: "52px", height: "52px", borderRadius: "12px", background: "#1e1e1e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", flexShrink: 0 }}>🏷️</div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8", marginBottom: "4px" }}>{order.listing?.title || "Sale"}</div>
+                              <div style={{ fontSize: "13px", color: "#666", marginBottom: "10px" }}>Buyer: <span style={{ color: "#999" }}>{order.buyer?.name || "Unknown"}</span> · <span style={{ color: "#c8a97e", fontWeight: "700" }}>₵{order.sellerAmount}</span></div>
+                              {order.contactInfo && (
+                                <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "8px", padding: "10px 14px", marginBottom: "10px" }}>
+                                  <div style={{ fontSize: "10px", color: "#6ee7b7", fontWeight: "700", letterSpacing: ".06em", marginBottom: "3px" }}>🔓 BUYER CONTACT</div>
+                                  <div style={{ fontSize: "14px", fontWeight: "700", color: "#6ee7b7" }}>{order.contactInfo}</div>
+                                </div>
+                              )}
+                              <div style={{ fontSize: "12px", color: "#555", display: "flex", flexDirection: "column", gap: "3px" }}>
+                                {order.deliveryMethod && <div>🛵 {order.deliveryMethod === "rider" ? "Rider Delivery" : "Campus Pickup"}</div>}
+                                {order.location && <div>📍 {order.location}</div>}
+                                {order.landmark && <div>🗺️ {order.landmark}</div>}
+                                {order.promoCode && <div style={{ color: "#6ee7b7" }}>🎟️ {order.promoCode} (-₵{order.discount})</div>}
+                                {order.paystackRef && <div style={{ fontFamily: "monospace", fontSize: "11px", color: "#444" }}>Ref: {order.paystackRef}</div>}
+                              </div>
                             </div>
-                            <div style={{ fontSize: "10px", color: "#555", fontFamily: "monospace" }}>{order._id}</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-end", flexShrink: 0 }}>
+                              <span style={{ fontSize: "11px", fontWeight: "700", background: statusStyle(order.status).bg, color: statusStyle(order.status).color, border: `1px solid ${statusStyle(order.status).border}`, padding: "3px 10px", borderRadius: "20px" }}>{order.status}</span>
+                              <div style={{ fontSize: "10px", color: "#444", fontFamily: "monospace" }}>{order._id?.slice(-8)}</div>
+                            </div>
                           </div>
-                          <span style={{ fontSize: "11px", fontWeight: "700", background: orderStatusStyle(order.status).bg, color: orderStatusStyle(order.status).color, border: `1px solid ${orderStatusStyle(order.status).border}`, padding: "3px 10px", borderRadius: "20px", flexShrink: 0 }}>
-                            {order.status}
-                          </span>
-                        </div>
-                      ))}
-                    </>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {orders.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: "11px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "14px" }}>My Purchases ({orders.length})</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                        {orders.map(order => (
+                          <div key={order._id} style={{ background: "#141414", borderRadius: "14px", padding: "16px 18px", display: "flex", gap: "14px", alignItems: "center", border: "1px solid #1e1e1e" }}>
+                            <div style={{ width: "48px", height: "48px", borderRadius: "10px", background: "#1e1e1e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", flexShrink: 0 }}>📦</div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8" }}>{order.listing?.title || "Order"}</div>
+                              <div style={{ fontSize: "12px", color: "#555" }}>{new Date(order.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · <span style={{ color: "#c8a97e", fontWeight: "700" }}>₵{order.amount}</span></div>
+                            </div>
+                            <span style={{ fontSize: "11px", fontWeight: "700", background: statusStyle(order.status).bg, color: statusStyle(order.status).color, border: `1px solid ${statusStyle(order.status).border}`, padding: "3px 10px", borderRadius: "20px" }}>{order.status}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </>
               )}
@@ -425,57 +569,95 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate }) {
           {/* ── LISTINGS ── */}
           {tab === "listings" && (
             <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8" }}>My Listings</h3>
-              </div>
+              <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>🏷️ My Listings</h1>
+              <p style={{ fontSize: "14px", color: "#555", marginBottom: "28px" }}>Everything you currently have for sale, rent, or as a service.</p>
 
               {loadingListings ? (
-                <div style={{ textAlign: "center", color: "#555", padding: "32px", fontSize: "13px" }}>⏳ Loading listings...</div>
+                <div style={{ textAlign: "center", color: "#444", padding: "60px", fontSize: "13px" }}>⏳ Loading listings...</div>
               ) : listings.length === 0 ? (
-                <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "32px", textAlign: "center", border: "1px solid #1e1e1e", color: "#555", fontSize: "13px" }}>
-                  <div style={{ fontSize: "32px", marginBottom: "10px" }}>🏷️</div>
-                  No listings yet. Click + Sell to create one!
+                <div style={{ background: "#141414", borderRadius: "14px", padding: "48px 24px", border: "1px solid #1e1e1e", textAlign: "center", color: "#444" }}>
+                  <div style={{ fontSize: "36px", marginBottom: "12px" }}>🏷️</div>
+                  <div style={{ fontSize: "15px", fontWeight: "600", color: "#666" }}>No listings yet</div>
+                  <div style={{ fontSize: "13px", marginTop: "4px" }}>Click + Sell from the marketplace to create your first listing</div>
                 </div>
               ) : (
-                listings.map(listing => (
-                  <div key={listing._id} style={{ background: "#1a1a1a", borderRadius: "12px", padding: "14px", display: "flex", gap: "12px", alignItems: "center", border: "1px solid #1e1e1e" }}>
-                    {listing.image
-                      ? <img src={listing.image} alt={listing.title} style={{ width: "52px", height: "52px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }} />
-                      : <div style={{ width: "52px", height: "52px", borderRadius: "8px", background: "#2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", flexShrink: 0 }}>📦</div>
-                    }
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "2px" }}>{listing.title}</div>
-                      <div style={{ fontSize: "12px", color: "#666" }}>
-                        {listing.category} · <span style={{ color: "#c8a97e", fontWeight: "700" }}>
-                          {listing.type === "rent" ? `₵${listing.dailyRate}/day` : `₵${listing.price}`}
-                        </span>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {listings.map(listing => (
+                    <div key={listing._id} style={{ background: "#141414", borderRadius: "14px", padding: "16px 18px", display: "flex", gap: "14px", alignItems: "center", border: "1px solid #1e1e1e" }}>
+                      {listing.image
+                        ? <img src={listing.image} alt={listing.title} style={{ width: "56px", height: "56px", borderRadius: "12px", objectFit: "cover", flexShrink: 0 }} />
+                        : <div style={{ width: "56px", height: "56px", borderRadius: "12px", background: "#1e1e1e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", flexShrink: 0 }}>📦</div>
+                      }
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "3px" }}>{listing.title}</div>
+                        <div style={{ fontSize: "12px", color: "#555" }}>{listing.category} · <span style={{ color: "#c8a97e", fontWeight: "700" }}>{listing.type === "rent" ? `₵${listing.dailyRate}/day` : `₵${listing.price}`}</span></div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-end" }}>
+                        <span style={{ fontSize: "11px", fontWeight: "700", background: statusStyle(listing.status || "Active").bg, color: statusStyle(listing.status || "Active").color, border: `1px solid ${statusStyle(listing.status || "Active").border}`, padding: "3px 10px", borderRadius: "20px" }}>{listing.status || "Active"}</span>
+                        <button onClick={() => handleDeleteListing(listing._id)} style={{ background: "transparent", border: "none", color: "#fca5a5", cursor: "pointer", fontSize: "12px", fontFamily: "inherit", minHeight: "auto" }}>Remove</button>
                       </div>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-end" }}>
-                      <span style={{ fontSize: "11px", fontWeight: "700", background: STATUS_STYLE[listing.status]?.bg || STATUS_STYLE["Active"].bg, color: STATUS_STYLE[listing.status]?.color || STATUS_STYLE["Active"].color, border: `1px solid ${STATUS_STYLE[listing.status]?.border || STATUS_STYLE["Active"].border}`, padding: "3px 10px", borderRadius: "20px" }}>
-                        {listing.status || "Active"}
-                      </span>
-                      <button onClick={() => handleDeleteListing(listing._id)}
-                        style={{ background: "transparent", border: "none", color: "#fca5a5", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
+            </>
+          )}
 
-              {/* Active Rentals — Lender View */}
-              <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "16px", marginTop: "4px" }}>
-                <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8", marginBottom: "6px" }}>📦 Active Rentals</h3>
-                <p style={{ fontSize: "12px", color: "#555", marginBottom: "12px" }}>Items you've lent out that are currently active.</p>
-                <ActiveRentals />
-              </div>
+          {/* ── RENTALS ── */}
+          {tab === "rentals" && (
+            <>
+              <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>🔄 Active Rentals</h1>
+              <p style={{ fontSize: "14px", color: "#555", marginBottom: "28px" }}>Items you've lent out that are currently active.</p>
+              <ActiveRentals />
+            </>
+          )}
 
-              {/* Active Services — Provider View */}
-              <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "16px", marginTop: "4px" }}>
-                <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8", marginBottom: "6px" }}>🛠️ Active Services</h3>
-                <p style={{ fontSize: "12px", color: "#555", marginBottom: "12px" }}>Services you're currently providing.</p>
-                <ActiveServices />
+          {/* ── SERVICES ── */}
+          {tab === "services" && (
+            <>
+              <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>🛠️ Active Services</h1>
+              <p style={{ fontSize: "14px", color: "#555", marginBottom: "28px" }}>Services you're currently providing.</p>
+              <ActiveServices />
+            </>
+          )}
+
+          {/* ── PROFILE ── */}
+          {tab === "profile" && (
+            <>
+              <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>👤 Edit Profile</h1>
+              <p style={{ fontSize: "14px", color: "#555", marginBottom: "28px" }}>Keep your information up to date.</p>
+
+              <div style={{ maxWidth: "480px", display: "flex", flexDirection: "column", gap: "18px" }}>
+                <div>
+                  <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>FULL NAME</div>
+                  <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} style={inputStyle(editErrors.name)} />
+                  {editErrors.name && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {editErrors.name}</div>}
+                </div>
+                <div>
+                  <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>EMAIL</div>
+                  <input value={user.email} disabled style={{ ...inputStyle(false), background: "#0d0d0d", color: "#333", cursor: "not-allowed", border: "1px solid #1a1a1a" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "10px", textTransform: "uppercase", letterSpacing: ".06em" }}>UNIVERSITY</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+                    {UNIS.map(u => (
+                      <button key={u} onClick={() => setEditForm(f => ({ ...f, university: u }))}
+                        style={{ padding: "10px 4px", borderRadius: "9px", border: `1.5px solid ${editForm.university === u ? "#c8a97e" : "#1e1e1e"}`, background: editForm.university === u ? "#c8a97e18" : "#161616", color: editForm.university === u ? "#c8a97e" : "#666", cursor: "pointer", fontWeight: "600", fontSize: "11px", textAlign: "center", fontFamily: "inherit" }}>
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>PHONE NUMBER</div>
+                  <input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} style={inputStyle(editErrors.phone)} />
+                  {editErrors.phone && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {editErrors.phone}</div>}
+                </div>
+                {saveError && <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#fca5a5" }}>🚫 {saveError}</div>}
+                <button className="btn-gold" onClick={handleSaveProfile} disabled={saving}
+                  style={{ padding: "14px", borderRadius: "12px", fontSize: "15px", opacity: saving ? 0.7 : 1, cursor: saving ? "not-allowed" : "pointer" }}>
+                  {saving ? "⏳ Saving..." : saved ? "✅ Profile Saved!" : "Save Changes"}
+                </button>
               </div>
             </>
           )}
@@ -483,61 +665,29 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate }) {
           {/* ── SETTINGS ── */}
           {tab === "settings" && (
             <>
-              <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8" }}>Account Settings</h3>
+              <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>⚙️ Account Settings</h1>
+              <p style={{ fontSize: "14px", color: "#555", marginBottom: "28px" }}>Manage your password and account.</p>
 
-              {/* Change password */}
-              <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "18px", display: "flex", flexDirection: "column", gap: "12px", border: "1px solid #1e1e1e" }}>
-                <div style={{ fontSize: "13px", fontWeight: "700", color: "#f0ede8" }}>🔒 Change Password</div>
-                <input placeholder="New password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} style={inputStyle(false)} />
-                <input placeholder="Confirm new password" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} style={inputStyle(false)} />
-                {passwordError && <div style={{ fontSize: "12px", color: "#fca5a5" }}>⚠️ {passwordError}</div>}
-                <button onClick={handleSavePassword}
-                  style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "11px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-                  {passwordSaving ? "⏳ Updating..." : passwordSaved ? "✅ Password Updated!" : "Update Password"}
-                </button>
-              </div>
-
-              {/* Notifications — actually working toggles */}
-              <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "18px", border: "1px solid #1e1e1e" }}>
-                <div style={{ fontSize: "13px", fontWeight: "700", color: "#f0ede8", marginBottom: "12px" }}>🔔 Notifications</div>
-                {[
-                  { key: "orderUpdates", label: "Order updates via SMS" },
-                  { key: "newMessages", label: "New messages from sellers" },
-                  { key: "deliveryConfirmations", label: "Delivery confirmations" },
-                ].map((n, i, arr) => (
-                  <div key={n.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i < arr.length - 1 ? "1px solid #222" : "none" }}>
-                    <span style={{ fontSize: "13px", color: "#aaa" }}>{n.label}</span>
-                    <div onClick={() => setNotifications(prev => ({ ...prev, [n.key]: !prev[n.key] }))}
-                      style={{ width: "36px", height: "20px", background: notifications[n.key] ? "#c8a97e" : "#2a2a2a", borderRadius: "20px", position: "relative", cursor: "pointer", transition: "background .2s", flexShrink: 0 }}>
-                      <div style={{ position: "absolute", top: "3px", left: notifications[n.key] ? "18px" : "3px", width: "14px", height: "14px", background: "#fff", borderRadius: "50%", transition: "left .2s" }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Danger zone */}
-              <div style={{ background: "#7f1d1d22", borderRadius: "12px", padding: "18px", border: "1px solid #7f1d1d" }}>
-                <div style={{ fontSize: "13px", fontWeight: "700", color: "#fca5a5", marginBottom: "8px" }}>⚠️ Danger Zone</div>
-                <p style={{ fontSize: "13px", color: "#888", marginBottom: "12px" }}>
-                  Deleting your account is permanent. All your listings, orders and data will be removed.
-                </p>
-                {deleteConfirm && (
-                  <div style={{ background: "#7f1d1d", borderRadius: "8px", padding: "12px", marginBottom: "12px", fontSize: "13px", color: "#fca5a5" }}>
-                    ⚠️ Are you absolutely sure? This cannot be undone.
-                  </div>
-                )}
-                {deleteError && <div style={{ fontSize: "12px", color: "#fca5a5", marginBottom: "10px" }}>🚫 {deleteError}</div>}
-                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                  <button onClick={handleDeleteAccount}
-                    style={{ background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "10px 20px", borderRadius: "8px", cursor: "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit" }}>
-                    {deleteLoading ? "⏳ Deleting..." : deleteConfirm ? "⚠️ Yes, Delete My Account" : "Delete My Account"}
+              <div style={{ maxWidth: "480px", display: "flex", flexDirection: "column", gap: "24px" }}>
+                <div style={{ background: "#141414", borderRadius: "14px", padding: "22px", display: "flex", flexDirection: "column", gap: "14px", border: "1px solid #1e1e1e" }}>
+                  <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>🔒 Change Password</div>
+                  <input placeholder="New password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} style={inputStyle(false)} />
+                  <input placeholder="Confirm new password" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} style={inputStyle(false)} />
+                  {passwordError && <div style={{ fontSize: "12px", color: "#fca5a5" }}>⚠️ {passwordError}</div>}
+                  <button onClick={handleSavePassword} disabled={passwordSaving}
+                    style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", color: "#c8a97e", padding: "12px", borderRadius: "10px", cursor: passwordSaving ? "not-allowed" : "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit", opacity: passwordSaving ? 0.7 : 1 }}>
+                    {passwordSaving ? "⏳ Saving..." : passwordSaved ? "✅ Password Updated!" : "Update Password"}
                   </button>
-                  {deleteConfirm && (
-                    <button onClick={() => setDeleteConfirm(false)}
-                      style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "10px 20px", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
-                      Cancel
-                    </button>
-                  )}
+                </div>
+
+                <div style={{ background: "#7f1d1d10", borderRadius: "14px", padding: "22px", border: "1px solid #7f1d1d44", display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{ fontSize: "14px", fontWeight: "700", color: "#fca5a5" }}>⚠️ Danger Zone</div>
+                  <p style={{ fontSize: "12px", color: "#888", margin: 0, lineHeight: "1.6" }}>Deleting your account is permanent and removes all your listings, orders, and data.</p>
+                  {deleteError && <div style={{ fontSize: "12px", color: "#fca5a5" }}>⚠️ {deleteError}</div>}
+                  <button onClick={handleDeleteAccount} disabled={deleteLoading}
+                    style={{ background: deleteConfirm ? "#7f1d1d" : "#7f1d1d18", border: "1px solid #7f1d1d", color: deleteConfirm ? "#fff" : "#fca5a5", padding: "12px", borderRadius: "10px", cursor: deleteLoading ? "not-allowed" : "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit", opacity: deleteLoading ? 0.7 : 1 }}>
+                    {deleteLoading ? "⏳ Deleting..." : deleteConfirm ? "⚠️ Click Again to Confirm Delete" : "Delete Account"}
+                  </button>
                 </div>
               </div>
             </>
