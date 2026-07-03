@@ -40,31 +40,31 @@ const ALL_LISTINGS = [
 ]
 
 const RENTALS_SEARCH = [
-  { id: 101, title: "Canon EOS M50 Camera",          category: "Electronics", image: 21, section: "rent" },
-  { id: 102, title: "Projector – Epson X41",         category: "Electronics", image: 22, section: "rent" },
-  { id: 103, title: "Mountain Bike",                 category: "Sports",      image: 23, section: "rent" },
-  { id: 104, title: "MacBook Air M1",                category: "Electronics", image: 24, section: "rent" },
-  { id: 105, title: "Acoustic Guitar",               category: "Music",       image: 25, section: "rent" },
-  { id: 106, title: "Camping Tent (4-person)",       category: "Outdoors",    image: 26, section: "rent" },
-  { id: 107, title: "PS5 Console + 2 Controllers",   category: "Gaming",      image: 27, section: "rent" },
-  { id: 108, title: "Scientific Calculator (Casio)", category: "Academic",    image: 28, section: "rent" },
+  { id: 101, title: "Canon EOS M50 Camera",          category: "Electronics", imageId: 21, section: "rent" },
+  { id: 102, title: "Projector – Epson X41",         category: "Electronics", imageId: 22, section: "rent" },
+  { id: 103, title: "Mountain Bike",                 category: "Sports",      imageId: 23, section: "rent" },
+  { id: 104, title: "MacBook Air M1",                category: "Electronics", imageId: 24, section: "rent" },
+  { id: 105, title: "Acoustic Guitar",               category: "Music",       imageId: 25, section: "rent" },
+  { id: 106, title: "Camping Tent (4-person)",       category: "Outdoors",    imageId: 26, section: "rent" },
+  { id: 107, title: "PS5 Console + 2 Controllers",   category: "Gaming",      imageId: 27, section: "rent" },
+  { id: 108, title: "Scientific Calculator (Casio)", category: "Academic",    imageId: 28, section: "rent" },
 ]
 
 const SERVICES_SEARCH = [
-  { id: 201, title: "Mathematics Private Lessons",      category: "Lessons",       image: 31, section: "service" },
-  { id: 202, title: "Concert & Event Photography",      category: "Photography",   image: 32, section: "service" },
-  { id: 203, title: "Room & Hostel Cleaning",           category: "Cleaning",      image: 33, section: "service" },
-  { id: 204, title: "Python & Data Science Tutoring",   category: "Lessons",       image: 34, section: "service" },
-  { id: 205, title: "Graphic Design – Logo & Branding", category: "Design",        image: 35, section: "service" },
-  { id: 206, title: "DJ Services for Events",           category: "Entertainment", image: 36, section: "service" },
-  { id: 207, title: "French Language Lessons",          category: "Lessons",       image: 37, section: "service" },
-  { id: 208, title: "CV & Cover Letter Writing",        category: "Career",        image: 38, section: "service" },
+  { id: 201, title: "Mathematics Private Lessons",      category: "Lessons",       imageId: 31, section: "service" },
+  { id: 202, title: "Concert & Event Photography",      category: "Photography",   imageId: 32, section: "service" },
+  { id: 203, title: "Room & Hostel Cleaning",           category: "Cleaning",      imageId: 33, section: "service" },
+  { id: 204, title: "Python & Data Science Tutoring",   category: "Lessons",       imageId: 34, section: "service" },
+  { id: 205, title: "Graphic Design – Logo & Branding", category: "Design",        imageId: 35, section: "service" },
+  { id: 206, title: "DJ Services for Events",           category: "Entertainment", imageId: 36, section: "service" },
+  { id: 207, title: "French Language Lessons",          category: "Lessons",       imageId: 37, section: "service" },
+  { id: 208, title: "CV & Cover Letter Writing",        category: "Career",        imageId: 38, section: "service" },
 ]
 
 const ALL_ITEMS = [
   ...ALL_LISTINGS.map(i => ({ ...i, imageId: i.id })),
-  ...RENTALS_SEARCH.map(i => ({ ...i, imageId: i.image })),
-  ...SERVICES_SEARCH.map(i => ({ ...i, imageId: i.image })),
+  ...RENTALS_SEARCH,
+  ...SERVICES_SEARCH,
 ]
 
 const SECTION_LABEL = { buy: "🛒 Buy Products", rent: "📦 Rent Items", service: "🛠️ Request Service" }
@@ -108,7 +108,7 @@ const parseSearch = (query) => {
 }
 
 // ── Product Modal ──────────────────────────────────────────────────────────────
-function ProductModal({ item, onClose, onCart, toUSD }) {
+function ProductModal({ item, onClose, onCart, toGHS }) {
   if (!item) return null
   const isDbItem = !!item._id
   const sellerName = isDbItem ? item.seller?.name : item.seller
@@ -158,7 +158,6 @@ function ProductModal({ item, onClose, onCart, toUSD }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #1a1a1a", paddingTop: "18px" }}>
             <div>
               <div style={{ fontSize: "28px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.03em" }}>₵{(item.price || 0).toLocaleString()}</div>
-              <div style={{ fontSize: "12px", color: "#444" }}>${toUSD(item.price || 0)} USD</div>
             </div>
             <button className="btn-gold" onClick={() => { onCart(item); onClose() }} style={{ padding: "13px 28px", borderRadius: "12px", fontSize: "14px" }}>
               🛒 Add to Cart
@@ -389,6 +388,7 @@ function App() {
   const [trackedOrder, setTrackedOrder] = useState(null)
   const [authCallback, setAuthCallback] = useState(null)
   const [siteSettings, setSiteSettings] = useState(DEFAULT_SITE_SETTINGS)
+  const [notifTick, setNotifTick] = useState(0)
 
   const [dbListings, setDbListings] = useState([])
   const [listingsLoading, setListingsLoading] = useState(false)
@@ -396,9 +396,9 @@ function App() {
   const [hasMoreListings, setHasMoreListings] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-
   const [dbSearchResults, setDbSearchResults] = useState([])
   const [searchLoading, setSearchLoading] = useState(false)
+
   const searchDebounceRef = useRef(null)
   const bottomReachedTimerRef = useRef(null)
   const isAtBottomRef = useRef(false)
@@ -408,7 +408,7 @@ function App() {
   const displayListings = usingDb ? dbListings : ALL_LISTINGS.slice(0, visibleCount)
   const hasMore = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
 
-  // Fetch site settings
+  // ── Site settings ──────────────────────────────────────────────────────────
   useEffect(() => {
     fetch(`${API_URL}/settings`)
       .then(r => r.json())
@@ -416,6 +416,14 @@ function App() {
       .catch(() => {})
   }, [])
 
+  // ── Live notifications across tabs ─────────────────────────────────────────
+  useEffect(() => {
+    const handler = () => setNotifTick(n => n + 1)
+    window.addEventListener("silkroad_new_notification", handler)
+    return () => window.removeEventListener("silkroad_new_notification", handler)
+  }, [])
+
+  // ── Fetch listings ─────────────────────────────────────────────────────────
   const fetchListings = async (page = 1, reset = false) => {
     if (page === 1) setListingsLoading(true)
     else setLoadingMore(true)
@@ -440,7 +448,7 @@ function App() {
     setVisibleCount(PAGE_SIZE)
   }, [activePage])
 
-  // Scroll reveal
+  // ── Scroll reveal ──────────────────────────────────────────────────────────
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add("visible") }),
@@ -450,7 +458,7 @@ function App() {
     return () => observer.disconnect()
   }, [displayListings, activePage, listingsLoading])
 
-  // Infinite scroll
+  // ── Infinite scroll ────────────────────────────────────────────────────────
   useEffect(() => {
     const handleScroll = () => {
       const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 10
@@ -476,7 +484,7 @@ function App() {
     return () => { window.removeEventListener("scroll", handleScroll); if (bottomReachedTimerRef.current) clearTimeout(bottomReachedTimerRef.current) }
   }, [hasMore, loadingMore, activePage, usingDb, listingsPage])
 
-  // Debounced search
+  // ── Debounced search ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!searchQuery.trim()) { setDbSearchResults([]); return }
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
@@ -492,24 +500,23 @@ function App() {
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
   }, [searchQuery])
 
-  // Outside click closes search
+  // ── Close search on outside click ─────────────────────────────────────────
   useEffect(() => {
-    const handleClick = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) setShowDropdown(false) }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
+    const handler = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) setShowDropdown(false) }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
   }, [])
 
-  // Ctrl+Shift+A admin shortcut
+  // ── Admin shortcuts ────────────────────────────────────────────────────────
   useEffect(() => {
-    const handleKeyDown = (e) => { if (e.ctrlKey && e.shiftKey && e.key === "A") setShowAdmin(true) }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
+    const handler = (e) => { if (e.ctrlKey && e.shiftKey && e.key === "A") setShowAdmin(true) }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
   }, [])
 
-  // /admin route
   useEffect(() => { if (window.location.pathname === "/admin") setShowAdmin(true) }, [])
 
-  // Restore session
+  // ── Restore session ────────────────────────────────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem("silkroad_token")
     if (token && !user) {
@@ -527,18 +534,21 @@ function App() {
     }
   }, [])
 
+  // ── Exchange rate — fetch USD/GHS then display as $1 = ₵X ─────────────────
   const fetchRate = async () => {
     setRateLoading(true)
     try {
-      const res = await axios.get("https://open.er-api.com/v6/latest/GHS")
-      setRate(res.data.rates.USD)
+      const res = await axios.get("https://open.er-api.com/v6/latest/USD")
+      setRate(res.data.rates.GHS)
     } catch {}
     setRateLoading(false)
   }
 
   useEffect(() => { fetchRate() }, [])
 
-  const toUSD = (ghs) => rate ? (ghs * rate).toFixed(2) : "..."
+  // rate is now GHS per 1 USD — display directly as "$1 = ₵X"
+  const rateDisplay = rate ? `$1 = ₵${rate.toFixed(2)}` : "..."
+
   const getItemId = (item) => item._id || item.id
 
   const addToCart = (item) => {
@@ -553,8 +563,8 @@ function App() {
 
   const updateQty = (id, delta) => setCart(prev => prev.map(i => getItemId(i) === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i))
   const removeItem = (id) => setCart(prev => prev.filter(i => getItemId(i) !== id))
-  const cartTotal = cart.reduce((sum, i) => sum + (i.price || i.dailyRate || 0) * i.qty, 0)
-  const cartCount = cart.reduce((sum, i) => sum + i.qty, 0)
+  const cartTotal  = cart.reduce((sum, i) => sum + (i.price || i.dailyRate || 0) * i.qty, 0)
+  const cartCount  = cart.reduce((sum, i) => sum + i.qty, 0)
 
   const handleSearchKey = (e) => { if (e.key === "Enter" && searchQuery.trim()) { setShowDropdown(false); setShowFullResults(true) } }
 
@@ -583,7 +593,7 @@ function App() {
           </h1>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <button onClick={() => setShowSell(true)}
-              style={{ background: "#1a1a1a", border: "1px solid #252525", color: "#c8a97e", padding: "8px 14px", borderRadius: "9px", fontWeight: "700", cursor: "pointer", fontSize: "13px", whiteSpace: "nowrap" }}>
+              style={{ background: "#1a1a1a", border: "1px solid #252525", color: "#c8a97e", padding: "8px 14px", borderRadius: "9px", fontWeight: "700", cursor: "pointer", fontSize: "13px", whiteSpace: "nowrap", fontFamily: "inherit" }}>
               + Sell
             </button>
             {user?.isRider && (
@@ -606,7 +616,7 @@ function App() {
               </>
             ) : (
               <button onClick={() => setShowAuth(true)}
-                style={{ background: "#c8a97e", border: "none", padding: "8px 16px", borderRadius: "9px", fontWeight: "700", cursor: "pointer", fontSize: "13px", color: "#000", whiteSpace: "nowrap" }}>
+                style={{ background: "#c8a97e", border: "none", padding: "8px 16px", borderRadius: "9px", fontWeight: "700", cursor: "pointer", fontSize: "13px", color: "#000", whiteSpace: "nowrap", fontFamily: "inherit" }}>
                 Sign In
               </button>
             )}
@@ -668,7 +678,7 @@ function App() {
                     </div>
                   ))}
                   <div onClick={() => { setShowDropdown(false); setShowFullResults(true) }}
-                    style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600" }}
+                    style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600", transition: "background 0.15s" }}
                     onMouseEnter={e => e.currentTarget.style.background = "#1e1e1e"}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                     See all results →
@@ -700,9 +710,9 @@ function App() {
               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "16px" }}>
                 <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: rate ? "#6ee7b7" : "#555", animation: rate ? "pulse 2s infinite" : "none" }} />
                 <span style={{ fontSize: "12px", color: "#444" }}>
-                  {rateLoading ? "Fetching live rate..." : `₵1 = $${rate?.toFixed(4)} USD`}
+                  {rateLoading ? "Fetching live rate..." : rateDisplay}
                 </span>
-                <button onClick={fetchRate} style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "13px", padding: "2px 6px", minHeight: "auto", borderRadius: "6px" }}>↻</button>
+                <button onClick={fetchRate} style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "13px", padding: "2px 6px", minHeight: "auto", borderRadius: "6px", fontFamily: "inherit" }}>↻</button>
               </div>
             </div>
 
@@ -731,7 +741,6 @@ function App() {
                           <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: "14px" }}>
                             <div>
                               <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.02em", lineHeight: 1 }}>₵{itemPrice.toLocaleString()}</div>
-                              <div style={{ fontSize: "11px", color: "#333", marginTop: "3px" }}>${toUSD(itemPrice)} USD</div>
                             </div>
                             {item.condition && item.condition !== "N/A" && (
                               <span style={{ fontSize: "10px", fontWeight: "600", color: "#444", background: "#161616", border: "1px solid #1e1e1e", padding: "3px 10px", borderRadius: "20px" }}>{item.condition}</span>
@@ -752,8 +761,8 @@ function App() {
           </div>
         )}
 
-        {activePage === "rent"    && <RentItems rate={rate} />}
-        {activePage === "service" && <RequestService rate={rate} />}
+        {activePage === "rent"    && <RentItems rate={rate} siteSettings={siteSettings} />}
+        {activePage === "service" && <RequestService rate={rate} siteSettings={siteSettings} />}
         {activePage === "rider"   && <BecomeRider />}
       </div>
 
@@ -767,7 +776,7 @@ function App() {
       )}
 
       {selectedProduct && (
-        <ProductModal item={selectedProduct} onClose={() => setSelectedProduct(null)} onCart={addToCart} toUSD={toUSD} />
+        <ProductModal item={selectedProduct} onClose={() => setSelectedProduct(null)} onCart={addToCart} />
       )}
 
       {showAuth && (
@@ -777,10 +786,10 @@ function App() {
         />
       )}
 
-      {/* Account is full-page — renders on top of everything */}
       {showAccount && user && (
         <Account
           user={user}
+          notifTick={notifTick}
           onSignOut={() => { setUser(null); setShowAccount(false); localStorage.removeItem("silkroad_token") }}
           onClose={() => setShowAccount(false)}
           onUserUpdate={(updatedUser) => setUser(updatedUser)}
@@ -837,15 +846,12 @@ function App() {
                     <img src={itemImage} alt={item.title} style={{ width: "58px", height: "58px", objectFit: "cover", borderRadius: "10px" }} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px", color: "#f0ede8", lineHeight: "1.3" }}>{item.title}</div>
-                      <div style={{ fontSize: "14px", color: "#c8a97e", fontWeight: "700" }}>
-                        ₵{(itemPrice * item.qty).toLocaleString()}
-                        <span style={{ color: "#333", fontWeight: "400", fontSize: "12px" }}> (${toUSD(itemPrice * item.qty)})</span>
-                      </div>
+                      <div style={{ fontSize: "14px", color: "#c8a97e", fontWeight: "700" }}>₵{(itemPrice * item.qty).toLocaleString()}</div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
                         <button onClick={() => updateQty(itemId, -1)} style={{ width: "28px", height: "28px", background: "#1a1a1a", border: "1px solid #222", color: "#fff", borderRadius: "7px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", minHeight: "auto" }}>−</button>
                         <span style={{ fontSize: "13px", fontWeight: "600", minWidth: "20px", textAlign: "center" }}>{item.qty}</span>
                         <button onClick={() => updateQty(itemId, 1)} style={{ width: "28px", height: "28px", background: "#1a1a1a", border: "1px solid #222", color: "#fff", borderRadius: "7px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", minHeight: "auto" }}>+</button>
-                        <button onClick={() => removeItem(itemId)} style={{ marginLeft: "6px", background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "12px", minHeight: "auto" }}>Remove</button>
+                        <button onClick={() => removeItem(itemId)} style={{ marginLeft: "6px", background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "12px", minHeight: "auto", fontFamily: "inherit" }}>Remove</button>
                       </div>
                     </div>
                   </div>
@@ -856,10 +862,7 @@ function App() {
               <div style={{ padding: "20px", borderTop: "1px solid #1a1a1a" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px", alignItems: "baseline" }}>
                   <span style={{ color: "#555", fontSize: "14px" }}>Total</span>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.02em" }}>₵{cartTotal.toLocaleString()}</div>
-                    <div style={{ fontSize: "12px", color: "#333" }}>${toUSD(cartTotal)} USD</div>
-                  </div>
+                  <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.02em" }}>₵{cartTotal.toLocaleString()}</div>
                 </div>
                 <button className="btn-gold" onClick={() => { setCartOpen(false); setCheckoutOpen(true) }}
                   style={{ width: "100%", padding: "14px", borderRadius: "12px", fontSize: "14px" }}>
