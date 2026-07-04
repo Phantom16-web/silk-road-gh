@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react"
 
-const STORAGE_KEY = "silkroad_orders"
+const STORAGE_KEY      = "silkroad_orders"
 const NOTIFICATIONS_KEY = "silkroad_seller_notifications"
+const EVENT_KEY        = "silkroad_last_event"
 
 // ── Core order storage ─────────────────────────────────────────────────────────
 export function saveOrder(order) {
@@ -52,10 +53,10 @@ function notifySeller(order) {
     if (!sellerId) return
 
     const notification = {
-      id: `NOTIF-${Date.now()}`,
+      id: `NOTIF-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       type: "new_order",
       orderId: order.id,
-      sellerId,
+      sellerId: String(sellerId),
       itemTitle: firstItem.title,
       itemImage: firstItem.image || null,
       amount: order.total,
@@ -77,7 +78,22 @@ function notifySeller(order) {
     notifications.unshift(notification)
     if (notifications.length > 50) notifications.splice(50)
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications))
-    window.dispatchEvent(new CustomEvent("silkroad_new_notification", { detail: notification }))
+
+    // ── KEY FIX: write a cross-tab broadcast event to localStorage ──
+    // The browser fires the 'storage' event in ALL OTHER open tabs
+    // when any localStorage key changes. This is how Tab B (seller)
+    // learns about an order placed in Tab A (buyer).
+    localStorage.setItem(EVENT_KEY, JSON.stringify({
+      type: "new_notification",
+      sellerId: String(sellerId),
+      notificationId: notification.id,
+      ts: Date.now(),
+    }))
+
+    // Also fire in the SAME tab (same-tab doesn't get the storage event)
+    window.dispatchEvent(new CustomEvent("silkroad_new_notification", {
+      detail: notification
+    }))
   } catch {}
 }
 
@@ -85,7 +101,7 @@ export function getSellerNotifications(sellerId) {
   try {
     const all = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || "[]")
     return sellerId
-      ? all.filter(n => n.sellerId === sellerId || n.sellerId === String(sellerId))
+      ? all.filter(n => n.sellerId === String(sellerId))
       : all
   } catch { return [] }
 }
@@ -102,8 +118,7 @@ export function markAllNotificationsRead(sellerId) {
   try {
     const all = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || "[]")
     const updated = all.map(n =>
-      (n.sellerId === sellerId || n.sellerId === String(sellerId))
-        ? { ...n, status: "read" } : n
+      n.sellerId === String(sellerId) ? { ...n, status: "read" } : n
     )
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated))
   } catch {}
@@ -112,33 +127,25 @@ export function markAllNotificationsRead(sellerId) {
 export function getUnreadCount(sellerId) {
   try {
     const all = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || "[]")
-    return all.filter(n =>
-      (n.sellerId === sellerId || n.sellerId === String(sellerId)) && n.status === "unread"
-    ).length
+    return all.filter(n => n.sellerId === String(sellerId) && n.status === "unread").length
   } catch { return 0 }
 }
 
 // ── Order ID Banner ────────────────────────────────────────────────────────────
 export function OrderIdBanner({ orderId }) {
   const [copied, setCopied] = useState(false)
-
   const handleCopy = () => {
     navigator.clipboard.writeText(orderId).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
   }
-
   return (
-    <div style={{
-      background: "#1a1a1a", border: "1px solid #c8a97e44",
-      borderRadius: "12px", padding: "14px 16px",
-      display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
-    }}>
+    <div style={{ background: "#1a1a1a", border: "1px solid #c8a97e44", borderRadius: "12px", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
       <div>
         <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", letterSpacing: ".1em", marginBottom: "4px" }}>YOUR ORDER ID</div>
         <div style={{ fontSize: "18px", fontWeight: "800", color: "#f0ede8", fontFamily: "monospace", letterSpacing: ".06em" }}>{orderId}</div>
-        <div style={{ fontSize: "11px", color: "#555", marginTop: "4px" }}>Save this to track or reopen your order anytime</div>
+        <div style={{ fontSize: "11px", color: "#555", marginTop: "4px" }}>Save this — paste it in any tab to track your order</div>
       </div>
       <button onClick={handleCopy}
         style={{ background: copied ? "#064e3b" : "#161616", border: `1px solid ${copied ? "#065f46" : "#2a2a2a"}`, color: copied ? "#6ee7b7" : "#c8a97e", padding: "9px 16px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit", whiteSpace: "nowrap", transition: "all 0.2s" }}>
@@ -148,19 +155,47 @@ export function OrderIdBanner({ orderId }) {
   )
 }
 
-// ── Notification Bell (goes in navbar) ────────────────────────────────────────
+// ── Notification Bell ──────────────────────────────────────────────────────────
+// Listens to BOTH same-tab custom events AND cross-tab storage events
 export function NotificationBell({ user, onClick }) {
   const [unread, setUnread] = useState(0)
 
   useEffect(() => {
     if (!user?._id) return
-    setUnread(getUnreadCount(user._id))
 
-    const handleNew = () => setUnread(getUnreadCount(user._id))
-    window.addEventListener("silkroad_new_notification", handleNew)
-    const interval = setInterval(() => setUnread(getUnreadCount(user._id)), 10000)
+    const refresh = () => setUnread(getUnreadCount(user._id))
+
+    // Initial count
+    refresh()
+
+    // Same-tab: buyer and seller in same tab
+    window.addEventListener("silkroad_new_notification", refresh)
+
+    // Cross-tab: buyer in Tab A, seller in Tab B
+    // The 'storage' event fires in all tabs EXCEPT the one that wrote
+    const handleStorage = (e) => {
+      if (e.key === EVENT_KEY && e.newValue) {
+        try {
+          const event = JSON.parse(e.newValue)
+          if (event.type === "new_notification" && event.sellerId === String(user._id)) {
+            refresh()
+          }
+        } catch {}
+      }
+      // Also re-read if orders change (for order tracker cross-tab)
+      if (e.key === STORAGE_KEY) {
+        refresh()
+      }
+    }
+
+    window.addEventListener("storage", handleStorage)
+
+    // Fallback poll every 5s (catches edge cases)
+    const interval = setInterval(refresh, 5000)
+
     return () => {
-      window.removeEventListener("silkroad_new_notification", handleNew)
+      window.removeEventListener("silkroad_new_notification", refresh)
+      window.removeEventListener("storage", handleStorage)
       clearInterval(interval)
     }
   }, [user?._id])
@@ -169,7 +204,7 @@ export function NotificationBell({ user, onClick }) {
 
   return (
     <button onClick={onClick}
-      style={{ position: "relative", background: unread > 0 ? "#c8a97e14" : "transparent", border: `1px solid ${unread > 0 ? "#c8a97e44" : "#222"}`, color: unread > 0 ? "#c8a97e" : "#888", padding: "7px 10px", borderRadius: "9px", cursor: "pointer", fontSize: "16px" }}
+      style={{ position: "relative", background: unread > 0 ? "#c8a97e14" : "transparent", border: `1px solid ${unread > 0 ? "#c8a97e44" : "#222"}`, color: unread > 0 ? "#c8a97e" : "#888", padding: "7px 10px", borderRadius: "9px", cursor: "pointer", fontSize: "16px", transition: "all 0.2s" }}
       title="Seller Notifications">
       🔔
       {unread > 0 && (
@@ -181,11 +216,24 @@ export function NotificationBell({ user, onClick }) {
   )
 }
 
-// ── Order Tracker Modal (buyer) ────────────────────────────────────────────────
+// ── Order Tracker Modal ────────────────────────────────────────────────────────
+// Works across ALL tabs because it reads from localStorage, not component state
 export default function OrderTracker({ onClose, onOpenOrder }) {
   const [idInput, setIdInput] = useState("")
   const [found, setFound] = useState(null)
   const [error, setError] = useState("")
+
+  // Cross-tab: if an order is updated in another tab, re-read
+  useEffect(() => {
+    const handleStorage = (e) => {
+      if (e.key === STORAGE_KEY && found) {
+        const order = getOrder(found.id)
+        if (order) setFound(order)
+      }
+    }
+    window.addEventListener("storage", handleStorage)
+    return () => window.removeEventListener("storage", handleStorage)
+  }, [found])
 
   const handleSearch = () => {
     setError("")
@@ -222,7 +270,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
 
         <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
           <p style={{ fontSize: "13px", color: "#555", lineHeight: "1.6" }}>
-            Enter your Order ID to check status, view details, or reopen an active order.
+            Enter your Order ID from any device or tab — orders are stored in your browser.
           </p>
 
           <div style={{ display: "flex", gap: "8px" }}>
@@ -266,7 +314,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                   {found.cart?.length > 0 && (
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "#555" }}>Items</span>
-                      <span style={{ color: "#888", textAlign: "right", maxWidth: "200px" }}>{found.cart.map(i => i.title).join(", ")}</span>
+                      <span style={{ color: "#888", textAlign: "right", maxWidth: "220px" }}>{found.cart.map(i => i.title).join(", ")}</span>
                     </div>
                   )}
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -299,19 +347,13 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                   )}
 
                   {found.delivered === true && (
-                    <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "8px", padding: "8px 12px", color: "#6ee7b7", fontSize: "12px" }}>
-                      ✅ Delivery confirmed — order complete
-                    </div>
+                    <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "8px", padding: "8px 12px", color: "#6ee7b7", fontSize: "12px" }}>✅ Delivery confirmed — order complete</div>
                   )}
                   {found.delivered === false && (
-                    <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "8px", padding: "8px 12px", color: "#fca5a5", fontSize: "12px" }}>
-                      ❌ Order cancelled — refund in progress
-                    </div>
+                    <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "8px", padding: "8px 12px", color: "#fca5a5", fontSize: "12px" }}>❌ Order cancelled — refund in progress</div>
                   )}
                   {found.delivered === null && found.status === "Pending Confirmation" && (
-                    <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "8px", padding: "8px 12px", color: "#fcd34d", fontSize: "12px" }}>
-                      ⏳ Payment submitted — awaiting confirmation
-                    </div>
+                    <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "8px", padding: "8px 12px", color: "#fcd34d", fontSize: "12px" }}>⏳ Payment submitted — awaiting confirmation</div>
                   )}
                 </div>
               </div>
@@ -326,8 +368,8 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
           )}
 
           <div style={{ background: "#161616", borderRadius: "12px", padding: "14px", fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
-            <div style={{ fontWeight: "600", color: "#555", marginBottom: "4px" }}>Where's my Order ID?</div>
-            Shown after checkout (e.g. SR-AB3DEF). Orders stay active for 48 hours after delivery confirmation.
+            <div style={{ fontWeight: "600", color: "#555", marginBottom: "4px" }}>Works across tabs</div>
+            Your Order ID (e.g. SR-AB3DEF) is stored in this browser. Enter it in any tab on this device to track your order.
           </div>
         </div>
       </div>
