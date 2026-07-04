@@ -5,20 +5,20 @@ import { saveOrder, generateOrderId, updateOrder, OrderIdBanner } from "./OrderT
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 
 const STATIC_SERVICES = [
-  { id: 201, title: "Mathematics Private Lessons",    price: 120, category: "Lessons",       provider: "James O.",  university: "KNUST",    rating: 4.9, reviews: 48, image: `https://picsum.photos/seed/31/300/200`, delivery: "online",    liveSession: true,  badge: "Top Rated", desc: "Covers calculus, algebra, statistics. Flexible schedule. All levels welcome." },
-  { id: 202, title: "Concert & Event Photography",    price: 800, category: "Photography",   provider: "Nour H.",   university: "UG Legon", rating: 4.8, reviews: 23, image: `https://picsum.photos/seed/32/300/200`, delivery: "in-person", liveSession: false, badge: null,        desc: "Full event coverage, edited photos delivered within 48hrs.", contact: { method: "WhatsApp", detail: "+233 24 567 8901", note: "Message with event date and location." } },
-  { id: 203, title: "Room & Hostel Cleaning",         price: 80,  category: "Cleaning",      provider: "Ama S.",    university: "UG Legon", rating: 4.7, reviews: 61, image: `https://picsum.photos/seed/33/300/200`, delivery: "in-person", liveSession: false, badge: "Popular",   desc: "Deep cleaning, laundry, ironing. Available weekends.", contact: { method: "Phone", detail: "+233 50 123 4567", note: "Call between 8am–6pm." } },
-  { id: 204, title: "Python & Data Science Tutoring", price: 150, category: "Lessons",       provider: "Kofi T.",   university: "Ashesi",   rating: 5.0, reviews: 34, image: `https://picsum.photos/seed/34/300/200`, delivery: "online",    liveSession: true,  badge: "Top Rated", desc: "NumPy, Pandas, ML basics. Live coding via video call." },
-  { id: 205, title: "Graphic Design – Logo & Branding",price: 300,category: "Design",        provider: "Fiona L.",  university: "UCC",      rating: 4.9, reviews: 19, image: `https://picsum.photos/seed/35/300/200`, delivery: "online",    liveSession: false, badge: null,        desc: "Logo, brand kit, social media templates. 3 revision rounds.", contact: { method: "Instagram", detail: "@fiona.designs", note: "DM me with your brief." } },
-  { id: 206, title: "DJ Services for Events",         price: 600, category: "Entertainment", provider: "Elias T.",  university: "UDS",      rating: 4.6, reviews: 12, image: `https://picsum.photos/seed/36/300/200`, delivery: "in-person", liveSession: false, badge: null,        desc: "Afrobeats, hiphop, dancehall. Campus events & parties.", contact: { method: "WhatsApp", detail: "+233 27 890 1234", note: "Send event date, venue and crowd size." } },
-  { id: 207, title: "French Language Lessons",        price: 100, category: "Lessons",       provider: "Leila N.",  university: "GIJ",      rating: 4.8, reviews: 27, image: `https://picsum.photos/seed/37/300/200`, delivery: "online",    liveSession: true,  badge: "Popular",   desc: "Beginner to intermediate. Conversational focus." },
-  { id: 208, title: "CV & Cover Letter Writing",      price: 120, category: "Career",        provider: "Sara B.",   university: "UDS",      rating: 4.7, reviews: 44, image: `https://picsum.photos/seed/38/300/200`, delivery: "online",    liveSession: false, badge: null,        desc: "ATS-optimized CVs. LinkedIn profile included. 24hr turnaround.", contact: { method: "Email", detail: "sara.b@gmail.com", note: "Email your current CV and target role." } },
+  { id: 201, title: "Mathematics Private Lessons",      price: 120, category: "Lessons",       provider: "James O.",  university: "KNUST",    rating: 4.9, reviews: 48, image: `https://picsum.photos/seed/31/300/200`, delivery: "online",    liveSession: true,  badge: "Top Rated", desc: "Covers calculus, algebra, statistics. Flexible schedule. All levels welcome." },
+  { id: 202, title: "Concert & Event Photography",      price: 800, category: "Photography",   provider: "Nour H.",   university: "UG Legon", rating: 4.8, reviews: 23, image: `https://picsum.photos/seed/32/300/200`, delivery: "in-person", liveSession: false, badge: null,        desc: "Full event coverage, edited photos delivered within 48hrs.", contact: { method: "WhatsApp", detail: "+233 24 567 8901", note: "Message me with your event date and location." } },
+  { id: 203, title: "Room & Hostel Cleaning",           price: 80,  category: "Cleaning",      provider: "Ama S.",    university: "UG Legon", rating: 4.7, reviews: 61, image: `https://picsum.photos/seed/33/300/200`, delivery: "in-person", liveSession: false, badge: "Popular",   desc: "Deep cleaning, laundry, ironing. Available weekends.", contact: { method: "Phone", detail: "+233 50 123 4567", note: "Call between 8am and 6pm." } },
+  { id: 204, title: "Python & Data Science Tutoring",   price: 150, category: "Lessons",       provider: "Kofi T.",   university: "Ashesi",   rating: 5.0, reviews: 34, image: `https://picsum.photos/seed/34/300/200`, delivery: "online",    liveSession: true,  badge: "Top Rated", desc: "NumPy, Pandas, ML basics. Live coding sessions via video call." },
+  { id: 205, title: "Graphic Design – Logo & Branding", price: 300, category: "Design",        provider: "Fiona L.",  university: "UCC",      rating: 4.9, reviews: 19, image: `https://picsum.photos/seed/35/300/200`, delivery: "online",    liveSession: false, badge: null,        desc: "Logo, brand kit, social media templates. 3 revision rounds.", contact: { method: "Instagram", detail: "@fiona.designs", note: "DM me with your brief." } },
+  { id: 206, title: "DJ Services for Events",           price: 600, category: "Entertainment", provider: "Elias T.",  university: "UDS",      rating: 4.6, reviews: 12, image: `https://picsum.photos/seed/36/300/200`, delivery: "in-person", liveSession: false, badge: null,        desc: "Afrobeats, hiphop, dancehall. Campus events & parties.", contact: { method: "WhatsApp", detail: "+233 27 890 1234", note: "Send event date, venue and crowd size." } },
+  { id: 207, title: "French Language Lessons",          price: 100, category: "Lessons",       provider: "Leila N.",  university: "GIJ",      rating: 4.8, reviews: 27, image: `https://picsum.photos/seed/37/300/200`, delivery: "online",    liveSession: true,  badge: "Popular",   desc: "Beginner to intermediate. Conversational focus." },
+  { id: 208, title: "CV & Cover Letter Writing",        price: 120, category: "Career",        provider: "Sara B.",   university: "UDS",      rating: 4.7, reviews: 44, image: `https://picsum.photos/seed/38/300/200`, delivery: "online",    liveSession: false, badge: null,        desc: "ATS-optimized CVs. LinkedIn profile included. 24hr turnaround.", contact: { method: "Email", detail: "sara.b@gmail.com", note: "Email your current CV and target role." } },
 ]
 
-const CATEGORIES   = ["All", "Lessons", "Photography", "Cleaning", "Design", "Entertainment", "Career"]
-const DATE_OPTIONS = ["Today", "Tomorrow", "In 2 days", "In 3 days", "In 4 days", "In 5 days", "In 6 days", "In 7 days"]
-const TIME_OPTIONS = ["6:00 AM","7:00 AM","8:00 AM","9:00 AM","10:00 AM","11:00 AM","12:00 PM","1:00 PM","2:00 PM","3:00 PM","4:00 PM","5:00 PM","6:00 PM","7:00 PM","8:00 PM","9:00 PM","10:00 PM"]
-const REPORT_REASONS = ["Service not delivered","Provider was rude or threatening","Fake listing","Service not as described","No-show","Other"]
+const CATEGORIES    = ["All", "Lessons", "Photography", "Cleaning", "Design", "Entertainment", "Career"]
+const DATE_OPTIONS  = ["Today", "Tomorrow", "In 2 days", "In 3 days", "In 4 days", "In 5 days", "In 6 days", "In 7 days"]
+const TIME_OPTIONS  = ["6:00 AM","7:00 AM","8:00 AM","9:00 AM","10:00 AM","11:00 AM","12:00 PM","1:00 PM","2:00 PM","3:00 PM","4:00 PM","5:00 PM","6:00 PM","7:00 PM","8:00 PM","9:00 PM","10:00 PM"]
+const REPORT_REASONS = ["Service not delivered", "Provider was rude or threatening", "Fake listing", "Service not as described", "No-show", "Other"]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const getProviderName = (s) => s._id ? s.seller?.name : s.provider
@@ -82,8 +82,8 @@ function RatingAndReport({ orderId, providerName, onDone }) {
   if (reportSubmitted) return (
     <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "14px" }}>
       <div style={{ fontSize: "48px" }}>📋</div>
-      <div style={{ fontSize: "18px", fontWeight: "700" }}>Report Submitted</div>
-      <button onClick={onDone} style={{ background: "#c8a97e", border: "none", padding: "13px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px", fontFamily: "inherit" }}>Done</button>
+      <div style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>Report Submitted</div>
+      <button className="btn-gold" onClick={onDone} style={{ padding: "13px", borderRadius: "10px", fontSize: "15px" }}>Done</button>
     </div>
   )
 
@@ -91,15 +91,12 @@ function RatingAndReport({ orderId, providerName, onDone }) {
     <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
       {!showReport ? (
         <>
-          <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "18px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div style={{ background: "#161616", borderRadius: "14px", padding: "20px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "14px" }}>
             <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>⭐ Rate {providerName}</div>
             {!rated ? (
               <>
                 <StarRating value={rating} onChange={setRating} />
-                <button onClick={handleRate} disabled={!rating}
-                  style={{ background: rating > 0 ? "#c8a97e" : "#1e1e1e", border: "none", color: rating > 0 ? "#000" : "#555", padding: "11px", borderRadius: "8px", fontWeight: "700", cursor: rating > 0 ? "pointer" : "not-allowed", fontSize: "14px", fontFamily: "inherit" }}>
-                  Submit Rating
-                </button>
+                <button className="btn-gold" onClick={handleRate} disabled={!rating} style={{ padding: "12px", borderRadius: "10px", fontSize: "14px", opacity: rating > 0 ? 1 : 0.4, cursor: rating > 0 ? "pointer" : "not-allowed" }}>Submit Rating</button>
               </>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -109,22 +106,22 @@ function RatingAndReport({ orderId, providerName, onDone }) {
             )}
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
-            <button onClick={onDone} style={{ flex: 2, background: "#c8a97e", border: "none", padding: "12px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>Back to Marketplace</button>
-            <button onClick={() => setShowReport(true)} style={{ flex: 1, background: "#7f1d1d22", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "12px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>🚩 Report</button>
+            <button className="btn-gold" onClick={onDone} style={{ flex: 2, padding: "13px", borderRadius: "10px", fontSize: "14px" }}>Back to Marketplace</button>
+            <button onClick={() => setShowReport(true)} style={{ flex: 1, background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "13px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit" }}>🚩 Report</button>
           </div>
         </>
       ) : (
-        <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "18px", border: "1px solid #7f1d1d", display: "flex", flexDirection: "column", gap: "12px" }}>
+        <div style={{ background: "#161616", borderRadius: "14px", padding: "20px", border: "1px solid #7f1d1d", display: "flex", flexDirection: "column", gap: "12px" }}>
           <div style={{ fontSize: "14px", fontWeight: "700", color: "#fca5a5" }}>🚩 Report {providerName}</div>
           {REPORT_REASONS.map(r => (
             <div key={r} onClick={() => setReportReason(r)}
-              style={{ padding: "10px 14px", borderRadius: "8px", background: reportReason === r ? "#7f1d1d" : "#111", border: `1px solid ${reportReason === r ? "#991b1b" : "#2a2a2a"}`, cursor: "pointer", fontSize: "13px", color: reportReason === r ? "#fca5a5" : "#888" }}>
+              style={{ padding: "11px 14px", borderRadius: "10px", background: reportReason === r ? "#7f1d1d" : "#111", border: `1px solid ${reportReason === r ? "#991b1b" : "#222"}`, cursor: "pointer", fontSize: "13px", color: reportReason === r ? "#fca5a5" : "#666" }}>
               {r}
             </div>
           ))}
           <div style={{ display: "flex", gap: "10px" }}>
-            <button onClick={() => setShowReport(false)} style={{ flex: 1, background: "#1e1e1e", border: "1px solid #333", color: "#aaa", padding: "11px", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontFamily: "inherit" }}>Cancel</button>
-            <button onClick={handleReport} style={{ flex: 2, background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "11px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>Submit Report</button>
+            <button className="btn-ghost" onClick={() => setShowReport(false)} style={{ flex: 1, padding: "12px", borderRadius: "10px" }}>Cancel</button>
+            <button onClick={handleReport} style={{ flex: 2, background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "12px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "14px", fontFamily: "inherit" }}>Submit Report</button>
           </div>
         </div>
       )}
@@ -140,16 +137,17 @@ function JitsiSession({ roomId, displayName, onEnd }) {
   const handleJoin = () => {
     setJoined(true)
     setTimeout(() => {
-      if (!window.JitsiMeetExternalAPI) { alert("Jitsi failed to load."); return }
+      if (!window.JitsiMeetExternalAPI) { alert("Jitsi failed to load. Check your connection."); return }
       const jitsiApi = new window.JitsiMeetExternalAPI("meet.jit.si", {
         roomName: `silkroadgh-${roomId}`,
         width: "100%", height: 420,
         parentNode: document.getElementById(`jitsi-${roomId}`),
         userInfo: { displayName },
-        configOverwrite: { prejoinPageEnabled: false, startWithAudioMuted: false, startWithVideoMuted: false },
-        interfaceConfigOverwrite: { TOOLBAR_BUTTONS: ["microphone","camera","desktop","chat","hangup"], SHOW_JITSI_WATERMARK: false },
+        configOverwrite: { prejoinPageEnabled: false, startWithAudioMuted: false, startWithVideoMuted: false, disableDeepLinking: true },
+        interfaceConfigOverwrite: { TOOLBAR_BUTTONS: ["microphone", "camera", "desktop", "chat", "raisehand", "tileview", "hangup"], SHOW_JITSI_WATERMARK: false, MOBILE_APP_PROMO: false },
       })
       jitsiApi.addEventListener("videoConferenceLeft", () => onEnd())
+      jitsiApi.addEventListener("readyToClose", () => onEnd())
       setApi(jitsiApi)
     }, 300)
   }
@@ -159,24 +157,25 @@ function JitsiSession({ roomId, displayName, onEnd }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       {!joined ? (
-        <div style={{ background: "#0a0a1a", border: "1px solid #1d4ed8", borderRadius: "12px", padding: "28px 24px", textAlign: "center", display: "flex", flexDirection: "column", gap: "14px" }}>
+        <div style={{ background: "#0a0a1a", border: "1px solid #1d4ed8", borderRadius: "16px", padding: "32px 26px", textAlign: "center", display: "flex", flexDirection: "column", gap: "16px" }}>
           <div style={{ fontSize: "52px" }}>🎥</div>
           <div style={{ fontSize: "18px", fontWeight: "700", color: "#93c5fd" }}>Live Session Ready</div>
-          <div style={{ background: "#78350f22", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d" }}>
+          <div style={{ fontSize: "13px", color: "#555" }}>Room: <span style={{ color: "#c8a97e", fontFamily: "monospace" }}>silkroadgh-{roomId}</span></div>
+          <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "12px", padding: "12px 16px", fontSize: "12px", color: "#fcd34d" }}>
             ⚠️ Once you join, payment becomes non-refundable.
           </div>
-          <button onClick={handleJoin} style={{ background: "#1d4ed8", border: "none", padding: "14px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px", color: "#fff", fontFamily: "inherit" }}>
+          <button onClick={handleJoin} style={{ background: "#1d4ed8", border: "none", padding: "15px", borderRadius: "12px", fontWeight: "700", cursor: "pointer", fontSize: "15px", color: "#fff", fontFamily: "inherit" }}>
             🎥 Join Live Session Now
           </button>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <div style={{ background: "#e11d4822", border: "1px solid #e11d48", borderRadius: "8px", padding: "8px 14px", display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "8px", height: "8px", background: "#e11d48", borderRadius: "50%" }} />
+          <div style={{ background: "#e11d4818", border: "1px solid #e11d48", borderRadius: "10px", padding: "10px 16px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ width: "8px", height: "8px", background: "#e11d48", borderRadius: "50%", animation: "pulse 1.5s infinite" }} />
             <span style={{ fontSize: "13px", color: "#fca5a5", fontWeight: "600" }}>LIVE — Session in progress</span>
           </div>
-          <div id={`jitsi-${roomId}`} style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid #1d4ed8", minHeight: "420px", background: "#000" }} />
-          <button onClick={handleEnd} style={{ background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "13px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>🔴 End Session</button>
+          <div id={`jitsi-${roomId}`} style={{ borderRadius: "14px", overflow: "hidden", border: "1px solid #1d4ed8", minHeight: "420px", background: "#000" }} />
+          <button onClick={handleEnd} style={{ background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "14px", borderRadius: "12px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>🔴 End Session</button>
         </div>
       )}
     </div>
@@ -184,7 +183,7 @@ function JitsiSession({ roomId, displayName, onEnd }) {
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
-export default function RequestService({ rate }) {
+export default function RequestService({ rate, siteSettings }) {
   const [activeCategory, setActiveCategory] = useState("All")
   const [detailService, setDetailService] = useState(null)
   const [selected, setSelected] = useState(null)
@@ -193,7 +192,6 @@ export default function RequestService({ rate }) {
   const [payLoading, setPayLoading] = useState(false)
   const [orderId] = useState(() => generateOrderId())
   const [cancelled, setCancelled] = useState(false)
-  const [buyerConfirmed, setBuyerConfirmed] = useState(false)
   const [showRating, setShowRating] = useState(false)
   const [sessionEnded, setSessionEnded] = useState(false)
   const [scheduledDate, setScheduledDate] = useState("")
@@ -210,49 +208,51 @@ export default function RequestService({ rate }) {
       .catch(() => {}).finally(() => setLoadingListings(false))
   }, [])
 
-  const services = dbServices.length > 0 ? dbServices : STATIC_SERVICES
-
+  const services     = dbServices.length > 0 ? dbServices : STATIC_SERVICES
+  const toUSD        = (ghs) => rate ? (ghs / rate).toFixed(2) : "..."
   const platformFee  = selected ? Math.round((selected.price || 0) * 0.08) : 0
   const providerGets = selected ? (selected.price || 0) - platformFee : 0
 
+  const filtered = services.filter(s => activeCategory === "All" || s.category === activeCategory)
+
   const openService = (service) => {
     setSelected(service); setStep(1); setContactInfo(""); setPayLoading(false)
-    setCancelled(false); setBuyerConfirmed(false); setShowRating(false)
-    setSessionEnded(false); setScheduledDate(""); setScheduledTime("")
-    setScheduleConfirmed(false); setInSession(false)
+    setCancelled(false); setShowRating(false); setSessionEnded(false)
+    setScheduledDate(""); setScheduledTime(""); setScheduleConfirmed(false); setInSession(false)
   }
   const reset = () => { setSelected(null); setStep(0) }
 
   const handlePay = async () => {
     if (!contactInfo.trim()) { alert("Please enter your contact info."); return }
     setPayLoading(true)
-    await new Promise(r => setTimeout(r, 2000))
+    await new Promise(r => setTimeout(r, 1500))
     setPayLoading(false)
 
     const order = {
-      id: orderId,
-      type: "service",
-      cart: [{ ...(selected), title: selected.title, price: selected.price || 0, qty: 1, seller: selected.seller || { _id: null, name: getProviderName(selected) }, image: getImg(selected) }],
+      id: orderId, type: "service",
+      cart: [{
+        ...selected,
+        title: selected.title,
+        price: selected.price || 0,
+        qty: 1,
+        seller: selected.seller || { _id: null, name: getProviderName(selected) },
+        image: getImg(selected),
+      }],
       service: selected,
       amount: selected.price || 0,
       total: selected.price || 0,
       subtotal: selected.price || 0,
-      platformFee,
-      providerGets,
-      contactInfo,
+      platformFee, providerGets, contactInfo,
       deliveryMethod: "pickup",
       paymentMethod: "manual_momo",
       paymentRef: `SVC-${orderId}`,
       status: "Pending Confirmation",
-      buyerConfirmed: false,
-      providerConfirmed: false,
-      cancelled: false,
-      delivered: null,
+      buyerConfirmed: false, providerConfirmed: false,
+      cancelled: false, delivered: null,
       createdAt: Date.now(),
       expiresAt: Date.now() + 48 * 60 * 60 * 1000,
     }
 
-    // Persist to backend if logged in
     try {
       const token = localStorage.getItem("silkroad_token")
       if (token && selected._id) {
@@ -271,23 +271,35 @@ export default function RequestService({ rate }) {
       }
     } catch {}
 
-    // saveOrder triggers notifySeller automatically
     saveOrder(order)
     setStep(3)
   }
 
-  const handleConfirmService = () => { setBuyerConfirmed(true); setShowRating(true) }
+  const handleConfirmService = () => { setShowRating(true) }
   const handleSessionEnd     = () => { setInSession(false); setSessionEnded(true); setShowRating(true) }
 
-  const filtered = services.filter(s => activeCategory === "All" || s.category === activeCategory)
+  const inp = {
+    width: "100%", background: "#161616", border: "1px solid #1e1e1e", color: "#fff",
+    padding: "12px 16px", borderRadius: "10px", fontSize: "14px", outline: "none",
+    boxSizing: "border-box", fontFamily: "inherit",
+  }
+
+  const sel = {
+    background: "#161616", border: "1px solid #222", color: "#fff", padding: "10px",
+    borderRadius: "10px", fontSize: "13px", outline: "none", fontFamily: "inherit",
+  }
 
   return (
-    <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "32px 18px 24px" }}>
+    <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "36px 18px 24px" }}>
+
+      {/* ── BROWSE ── */}
       {step === 0 && (
         <>
-          <div style={{ marginBottom: "28px" }}>
-            <h2 style={{ fontSize: "clamp(22px, 4vw, 32px)", fontWeight: "800", color: "#f0ede8", letterSpacing: "-0.02em", marginBottom: "8px" }}>Request a Service</h2>
-            <p style={{ color: "#555", fontSize: "14px" }}>Book skilled students for lessons, events, cleaning and more.</p>
+          <div style={{ marginBottom: "32px" }}>
+            <h1 style={{ fontSize: "clamp(26px, 5vw, 40px)", fontWeight: "800", color: "#f0ede8", letterSpacing: "-0.03em", lineHeight: "1.1", marginBottom: "10px" }}>
+              Request a Service 🛠️
+            </h1>
+            <p style={{ color: "#444", fontSize: "14px", maxWidth: "380px", lineHeight: "1.7" }}>Book skilled students for lessons, events, cleaning and more.</p>
           </div>
 
           <div style={{ display: "flex", gap: "8px", marginBottom: "28px", flexWrap: "wrap" }}>
@@ -297,86 +309,124 @@ export default function RequestService({ rate }) {
           </div>
 
           {loadingListings ? (
-            <div style={{ textAlign: "center", color: "#555", padding: "60px", fontSize: "13px" }}>⏳ Loading services...</div>
+            <div className="empty-state"><div className="icon">⏳</div><div className="title">Loading services...</div></div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "20px" }}>
-              {filtered.map((service, index) => (
-                <div key={service._id || service.id} className="listing-card reveal" style={{ animationDelay: `${(index % 8) * 55}ms` }}>
-                  <div style={{ overflow: "hidden", position: "relative" }}>
-                    <img src={getImg(service)} alt={service.title} onClick={() => setDetailService(service)}
-                      style={{ width: "100%", height: "200px", objectFit: "cover", cursor: "pointer" }} />
-                    {service.badge && (
-                      <span style={{ position: "absolute", top: "10px", left: "10px", background: "#064e3b", color: "#6ee7b7", fontSize: "10px", fontWeight: "700", padding: "3px 8px", borderRadius: "20px", border: "1px solid #065f46", pointerEvents: "none" }}>
-                        ⭐ {service.badge}
-                      </span>
-                    )}
-                    <div style={{ position: "absolute", top: "10px", right: "10px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end", pointerEvents: "none" }}>
-                      <span style={{ background: getDelivery(service) === "online" ? "#1e3a5f" : "#2a1a3f", color: getDelivery(service) === "online" ? "#93c5fd" : "#c4b5fd", fontSize: "10px", fontWeight: "700", padding: "3px 8px", borderRadius: "20px" }}>
-                        {getDelivery(service) === "online" ? "🌐 Online" : "📍 In-Person"}
-                      </span>
-                      {getLiveSession(service) && (
-                        <span style={{ background: "#e11d4822", border: "1px solid #e11d48", color: "#fca5a5", fontSize: "10px", fontWeight: "700", padding: "3px 8px", borderRadius: "20px" }}>🔴 Live</span>
-                      )}
-                    </div>
-                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "60px", background: "linear-gradient(to top, #111, transparent)", pointerEvents: "none" }} />
-                  </div>
-                  <div style={{ padding: "16px" }}>
-                    <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "6px" }}>{service.category}</div>
-                    <div onClick={() => setDetailService(service)} style={{ fontSize: "15px", fontWeight: "700", marginBottom: "6px", color: "#f0ede8", cursor: "pointer", lineHeight: "1.3", letterSpacing: "-0.01em" }}>{service.title}</div>
-                    <div style={{ fontSize: "12px", color: "#444", marginBottom: "2px" }}>by <span style={{ color: "#666" }}>{getProviderName(service)}</span></div>
-                    <div style={{ fontSize: "11px", color: "#333", marginBottom: "14px" }}>🎓 {getUniversity(service)}</div>
-                    {service.rating > 0 && <div style={{ fontSize: "13px", color: "#c8a97e", marginBottom: "10px" }}>{"★".repeat(Math.round(service.rating))} {service.rating}</div>}
-                    <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.02em", lineHeight: 1, marginBottom: "14px" }}>₵{(service.price || 0).toLocaleString()}</div>
-                    <button className="btn-gold" onClick={() => openService(service)} style={{ width: "100%", padding: "11px", borderRadius: "10px", fontSize: "13px" }}>
-                      Book Now
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+              {filtered.map((service, index) => {
+                const delivery     = getDelivery(service)
+                const liveSession  = getLiveSession(service)
+                const providerName = getProviderName(service)
+                const university   = getUniversity(service)
 
-          {/* Detail modal */}
-          {detailService && (
-            <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={() => setDetailService(null)}>
-              <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
-                <div style={{ position: "relative" }}>
-                  <img src={getImg(detailService)} alt={detailService.title} style={{ width: "100%", height: "260px", objectFit: "cover", borderRadius: "20px 20px 0 0", display: "block" }} />
-                  <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 50%, #111)", pointerEvents: "none", borderRadius: "20px 20px 0 0" }} />
-                  <button onClick={() => setDetailService(null)} style={{ position: "absolute", top: "14px", right: "14px", background: "#000000aa", border: "none", color: "#fff", fontSize: "18px", cursor: "pointer", width: "34px", height: "34px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-                </div>
-                <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <div>
-                    <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "8px" }}>{detailService.category}</div>
-                    <h2 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>{detailService.title}</h2>
-                    <div style={{ fontSize: "13px", color: "#555" }}>by <span style={{ color: "#888", fontWeight: "600" }}>{getProviderName(detailService)}</span> · 🎓 {getUniversity(detailService)}</div>
+                return (
+                  <div key={service._id || service.id} className="listing-card" style={{ animationDelay: `${(index % 8) * 55}ms` }}>
+                    <div style={{ position: "relative", overflow: "hidden" }}>
+                      <img src={getImg(service)} alt={service.title} onClick={() => setDetailService(service)}
+                        style={{ width: "100%", height: "200px", objectFit: "cover", cursor: "pointer", display: "block" }} />
+                      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "70px", background: "linear-gradient(to top, #111 0%, transparent 100%)", pointerEvents: "none" }} />
+                      {service.badge && (
+                        <span style={{ position: "absolute", top: "10px", left: "10px", background: "#064e3bcc", color: "#6ee7b7", fontSize: "10px", fontWeight: "700", padding: "4px 10px", borderRadius: "20px", border: "1px solid #065f46", pointerEvents: "none", backdropFilter: "blur(4px)" }}>
+                          ⭐ {service.badge}
+                        </span>
+                      )}
+                      <div style={{ position: "absolute", top: "10px", right: "10px", display: "flex", flexDirection: "column", gap: "5px", alignItems: "flex-end", pointerEvents: "none" }}>
+                        <span style={{ background: delivery === "online" ? "#1e3a5fcc" : "#2a1a3fcc", color: delivery === "online" ? "#93c5fd" : "#c4b5fd", fontSize: "10px", fontWeight: "700", padding: "4px 10px", borderRadius: "20px", backdropFilter: "blur(4px)" }}>
+                          {delivery === "online" ? "🌐 Online" : "📍 In-Person"}
+                        </span>
+                        {liveSession && (
+                          <span style={{ background: "#e11d4822", border: "1px solid #e11d48", color: "#fca5a5", fontSize: "10px", fontWeight: "700", padding: "4px 10px", borderRadius: "20px", backdropFilter: "blur(4px)" }}>
+                            🔴 Live
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ padding: "16px" }}>
+                      <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "6px" }}>{service.category}</div>
+                      <div onClick={() => setDetailService(service)} style={{ fontSize: "15px", fontWeight: "700", marginBottom: "6px", color: "#f0ede8", cursor: "pointer", lineHeight: "1.3", letterSpacing: "-0.01em" }}>{service.title}</div>
+                      <div style={{ fontSize: "12px", color: "#444", marginBottom: "2px" }}>by <span style={{ color: "#666" }}>{providerName}</span></div>
+                      <div style={{ fontSize: "11px", color: "#333", marginBottom: "14px" }}>🎓 {university}</div>
+                      {service.rating > 0 && <div style={{ fontSize: "12px", color: "#888", marginBottom: "10px" }}>{"★".repeat(Math.round(service.rating))} {service.rating} ({service.reviews || 0})</div>}
+                      <div style={{ fontSize: "20px", fontWeight: "800", color: "#c8a97e", marginBottom: "14px", letterSpacing: "-0.02em" }}>
+                        ₵{(service.price || 0).toLocaleString()}
+                        <span style={{ fontSize: "12px", color: "#333", fontWeight: "400" }}> (${toUSD(service.price || 0)})</span>
+                      </div>
+                      <button className="btn-gold" onClick={() => openService(service)} style={{ width: "100%", padding: "11px", borderRadius: "10px", fontSize: "13px" }}>
+                        Book Now
+                      </button>
+                    </div>
                   </div>
-                  {detailService.rating > 0 && <div style={{ fontSize: "13px", color: "#c8a97e" }}>{"★".repeat(Math.round(detailService.rating))} {detailService.rating} ({detailService.reviews || 0} reviews)</div>}
-                  <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "16px" }}>
-                    <p style={{ fontSize: "14px", color: "#888", lineHeight: "1.7", margin: 0 }}>{detailService.desc}</p>
-                  </div>
-                  <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "16px", fontSize: "13px", color: "#888", display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <div>🌐 Delivery: <span style={{ color: "#c8a97e" }}>{getDelivery(detailService) === "online" ? "Online" : "In-Person"}</span></div>
-                    {getLiveSession(detailService) && <div>🔴 <span style={{ color: "#fca5a5" }}>Live video session via Jitsi</span></div>}
-                    <div>🔒 Payment held in escrow until you confirm completion</div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #1a1a1a", paddingTop: "18px" }}>
-                    <div style={{ fontSize: "28px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.03em" }}>₵{(detailService.price || 0).toLocaleString()}</div>
-                    <button className="btn-gold" onClick={() => { openService(detailService); setDetailService(null) }} style={{ padding: "13px 28px", borderRadius: "12px", fontSize: "14px" }}>
-                      Book Now →
-                    </button>
-                  </div>
-                </div>
-              </div>
+                )
+              })}
             </div>
           )}
         </>
+      )}
+
+      {/* ── DETAIL MODAL ── */}
+      {detailService && step === 0 && (
+        <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={() => setDetailService(null)}>
+          <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
+            <div style={{ position: "relative" }}>
+              <img src={getImg(detailService)} alt={detailService.title} style={{ width: "100%", height: "260px", objectFit: "cover", borderRadius: "20px 20px 0 0", display: "block" }} />
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 50%, #111)", borderRadius: "20px 20px 0 0", pointerEvents: "none" }} />
+              <button onClick={() => setDetailService(null)} style={{ position: "absolute", top: "14px", right: "14px", background: "#000000aa", border: "none", color: "#fff", fontSize: "18px", cursor: "pointer", width: "34px", height: "34px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(8px)" }}>✕</button>
+              <div style={{ position: "absolute", top: "14px", left: "14px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                {detailService.badge && <span style={{ background: "#064e3bdd", color: "#6ee7b7", fontSize: "10px", fontWeight: "700", padding: "4px 10px", borderRadius: "20px", border: "1px solid #065f46", backdropFilter: "blur(4px)" }}>⭐ {detailService.badge}</span>}
+                {getLiveSession(detailService) && <span style={{ background: "#e11d4822", border: "1px solid #e11d48", color: "#fca5a5", fontSize: "10px", fontWeight: "700", padding: "4px 10px", borderRadius: "20px", backdropFilter: "blur(4px)" }}>🔴 Live Session</span>}
+              </div>
+            </div>
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div>
+                <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "8px" }}>{detailService.category}</div>
+                <h2 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>{detailService.title}</h2>
+                <div style={{ fontSize: "13px", color: "#555" }}>by <span style={{ color: "#888", fontWeight: "600" }}>{getProviderName(detailService)}</span></div>
+                <div style={{ fontSize: "12px", color: "#444", marginTop: "3px" }}>🎓 {getUniversity(detailService)}</div>
+              </div>
+              {detailService.rating > 0 && (
+                <div style={{ fontSize: "13px", color: "#c8a97e" }}>{"★".repeat(Math.round(detailService.rating))}{"☆".repeat(5 - Math.round(detailService.rating))} <span style={{ color: "#555" }}>{detailService.rating} ({detailService.reviews || 0} reviews)</span></div>
+              )}
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <span style={{ background: getDelivery(detailService) === "online" ? "#1e3a5f" : "#2a1a3f", color: getDelivery(detailService) === "online" ? "#93c5fd" : "#c4b5fd", fontSize: "11px", fontWeight: "700", padding: "4px 12px", borderRadius: "20px" }}>
+                  {getDelivery(detailService) === "online" ? "🌐 Online" : "📍 In-Person"}
+                </span>
+              </div>
+              <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "16px" }}>
+                <p style={{ fontSize: "14px", color: "#888", lineHeight: "1.7", margin: 0 }}>{detailService.desc}</p>
+              </div>
+              <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", gap: "9px" }}>
+                <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em" }}>What to expect</div>
+                {getLiveSession(detailService) ? (
+                  <>
+                    <div style={{ fontSize: "13px", color: "#888" }}>🎥 Provider schedules a live Jitsi video session after payment.</div>
+                    <div style={{ fontSize: "13px", color: "#888" }}>📅 Cancel before session starts for a full refund.</div>
+                    <div style={{ fontSize: "13px", color: "#888" }}>🔒 Once session starts, payment is non-refundable.</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: "13px", color: "#888" }}>📞 Provider's contact details revealed after payment.</div>
+                    <div style={{ fontSize: "13px", color: "#888" }}>🔒 Payment held in escrow until you confirm completion.</div>
+                  </>
+                )}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #1a1a1a", paddingTop: "18px" }}>
+                <div>
+                  <div style={{ fontSize: "28px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.03em" }}>₵{(detailService.price || 0).toLocaleString()}</div>
+                  <div style={{ fontSize: "12px", color: "#444" }}>${toUSD(detailService.price || 0)} USD</div>
+                </div>
+                <button className="btn-gold" onClick={() => { openService(detailService); setDetailService(null) }} style={{ padding: "13px 28px", borderRadius: "12px", fontSize: "14px" }}>
+                  Book Now →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── BOOKING FLOW ── */}
       {step > 0 && selected && (
         <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
           <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "520px", maxHeight: "90vh", overflowY: "auto", border: "1px solid #1e1e1e" }}>
+
             <div style={{ padding: "20px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: "18px", fontWeight: "700" }}>
                 {step === 1 ? "Book Service" : step === 2 ? "💳 Payment" : showRating ? "🎉 Complete" : inSession ? "🔴 Live Session" : "✅ Booking Confirmed"}
@@ -386,10 +436,10 @@ export default function RequestService({ rate }) {
 
             <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
 
-              {/* STEP 1 — Review */}
+              {/* STEP 1 */}
               {step === 1 && (
                 <>
-                  <img src={getImg(selected)} alt={selected.title} style={{ width: "100%", height: "180px", objectFit: "cover", borderRadius: "12px" }} />
+                  <img src={getImg(selected)} alt={selected.title} style={{ width: "100%", height: "180px", objectFit: "cover", borderRadius: "14px" }} />
                   <div>
                     <h3 style={{ fontSize: "20px", fontWeight: "800", marginBottom: "4px", letterSpacing: "-0.02em" }}>{selected.title}</h3>
                     <div style={{ fontSize: "13px", color: "#555" }}>by {getProviderName(selected)} · 🎓 {getUniversity(selected)}</div>
@@ -399,10 +449,10 @@ export default function RequestService({ rate }) {
                       {getDelivery(selected) === "online" ? "🌐 Online" : "📍 In-Person"}
                     </span>
                     {getLiveSession(selected) && (
-                      <span style={{ background: "#e11d4822", border: "1px solid #e11d48", color: "#fca5a5", fontSize: "11px", fontWeight: "700", padding: "4px 12px", borderRadius: "20px" }}>🔴 Live Session via Jitsi</span>
+                      <span style={{ background: "#e11d4818", border: "1px solid #e11d48", color: "#fca5a5", fontSize: "11px", fontWeight: "700", padding: "4px 12px", borderRadius: "20px" }}>🔴 Live Session via Jitsi</span>
                     )}
                   </div>
-                  <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.6" }}>{selected.desc}</p>
+                  <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.7" }}>{selected.desc}</p>
                   <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}>
                       <span>Service fee</span><span>₵{selected.price || 0}</span>
@@ -411,32 +461,29 @@ export default function RequestService({ rate }) {
                       <span>Platform fee (8%)</span><span>₵{platformFee}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "19px", fontWeight: "800", color: "#c8a97e", borderTop: "1px solid #222", paddingTop: "10px", letterSpacing: "-0.02em" }}>
-                      <span>Total</span><span>₵{selected.price || 0}</span>
+                      <span>Total</span><span>₵{selected.price || 0} (${toUSD(selected.price || 0)})</span>
                     </div>
-                    <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#6ee7b7" }}>
+                    <div style={{ fontSize: "12px", color: "#6ee7b7", background: "#064e3b18", borderRadius: "10px", padding: "10px 14px" }}>
                       🔒 {getLiveSession(selected) ? "Cancel before session starts for a full refund." : "Cancel before provider contacts you for a full refund."}
                     </div>
                   </div>
-
                   <div>
-                    <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR CONTACT (for the provider)</div>
-                    <input placeholder="e.g. 0241234567 or @yourinstagram"
-                      value={contactInfo} onChange={e => setContactInfo(e.target.value)}
-                      style={{ width: "100%", background: "#161616", border: "1px solid #1e1e1e", color: "#fff", padding: "12px 16px", borderRadius: "10px", fontSize: "14px", outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+                    <div style={{ fontSize: "11px", color: "#444", fontWeight: "700", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".08em" }}>YOUR CONTACT (for the provider)</div>
+                    <input placeholder="e.g. 0241234567 or @yourinstagram" value={contactInfo} onChange={e => setContactInfo(e.target.value)} style={inp} />
                   </div>
-
                   <button className="btn-gold" onClick={() => setStep(2)} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>
                     Continue to Payment →
                   </button>
                 </>
               )}
 
-              {/* STEP 2 — Payment */}
+              {/* STEP 2 */}
               {step === 2 && (
                 <>
-                  <div style={{ background: "#ffd700", borderRadius: "16px", padding: "22px", textAlign: "center" }}>
+                  <div style={{ background: "#ffd700", borderRadius: "14px", padding: "20px", textAlign: "center" }}>
                     <div style={{ fontSize: "13px", fontWeight: "600", color: "#554400", marginBottom: "6px" }}>SEND THIS EXACT AMOUNT</div>
                     <div style={{ fontSize: "36px", fontWeight: "800", color: "#1a1a00", letterSpacing: "-0.02em" }}>₵{selected.price || 0}</div>
+                    <div style={{ fontSize: "13px", color: "#554400", marginTop: "4px" }}>${toUSD(selected.price || 0)} USD</div>
                   </div>
                   <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", fontSize: "13px", color: "#888", display: "flex", flexDirection: "column", gap: "8px" }}>
                     <div>🛠️ Service: <span style={{ color: "#c8a97e", fontWeight: "700" }}>{selected.title}</span></div>
@@ -464,22 +511,34 @@ export default function RequestService({ rate }) {
               {step === 3 && !cancelled && !showRating && !inSession && (
                 <>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: "56px", marginBottom: "8px" }}>✅</div>
+                    <div style={{ fontSize: "56px", marginBottom: "10px" }}>✅</div>
                     <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", marginBottom: "8px" }}>Payment Submitted!</h3>
                     <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.7" }}>
                       {getLiveSession(selected)
-                        ? `${getProviderName(selected)} will schedule your session. You'll see the time below once confirmed.`
+                        ? `${getProviderName(selected)} will schedule your session. Time will appear below once confirmed.`
                         : `${getProviderName(selected)}'s contact details are now visible below.`}
                     </p>
                   </div>
+
                   <OrderIdBanner orderId={orderId} />
 
-                  {/* Non-live: show contact */}
+                  {/* Non-live: contact revealed */}
                   {!getLiveSession(selected) && getContact(selected) && (
-                    <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                      <div style={{ fontSize: "10px", color: "#6ee7b7", fontWeight: "700", letterSpacing: ".08em" }}>🔓 PROVIDER CONTACT DETAILS</div>
-                      <div style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8" }}>{getContact(selected).method}: <span style={{ color: "#c8a97e" }}>{getContact(selected).detail}</span></div>
-                      {getContact(selected).note && <div style={{ fontSize: "13px", color: "#888" }}>📝 {getContact(selected).note}</div>}
+                    <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                      <div style={{ fontSize: "11px", color: "#6ee7b7", fontWeight: "700", letterSpacing: ".08em" }}>🔓 PROVIDER CONTACT DETAILS</div>
+                      <div>
+                        <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "3px" }}>METHOD</div>
+                        <div style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8" }}>{getContact(selected).method}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "3px" }}>CONTACT</div>
+                        <div style={{ fontSize: "15px", fontWeight: "700", color: "#c8a97e" }}>{getContact(selected).detail}</div>
+                      </div>
+                      {getContact(selected).note && (
+                        <div style={{ background: "#111", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#888", lineHeight: "1.6" }}>
+                          📝 {getContact(selected).note}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -489,35 +548,36 @@ export default function RequestService({ rate }) {
                       {!scheduleConfirmed ? (
                         <>
                           <div style={{ fontSize: "13px", fontWeight: "700", color: "#93c5fd" }}>⏳ Awaiting Session Schedule</div>
-                          <p style={{ fontSize: "13px", color: "#888", margin: 0 }}>{getProviderName(selected)} is picking a time slot.</p>
-                          <div style={{ background: "#0d0d0d", borderRadius: "10px", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                            <div style={{ fontSize: "11px", color: "#555", fontWeight: "600" }}>🛠️ PROVIDER: Schedule this session</div>
+                          <p style={{ fontSize: "13px", color: "#666", margin: 0, lineHeight: "1.6" }}>
+                            {getProviderName(selected)} is picking a time slot.
+                          </p>
+                          <div style={{ background: "#111", border: "1px dashed #2a2a2a", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                            <div style={{ fontSize: "11px", color: "#444", fontWeight: "600" }}>🛠️ PROVIDER: Schedule this session</div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                              <select value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}
-                                style={{ background: "#1e1e1e", border: "1px solid #333", color: "#fff", padding: "9px", borderRadius: "8px", fontSize: "13px", outline: "none" }}>
+                              <select value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} style={sel}>
                                 <option value="">Pick date</option>
                                 {DATE_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
                               </select>
-                              <select value={scheduledTime} onChange={e => setScheduledTime(e.target.value)}
-                                style={{ background: "#1e1e1e", border: "1px solid #333", color: "#fff", padding: "9px", borderRadius: "8px", fontSize: "13px", outline: "none" }}>
+                              <select value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} style={sel}>
                                 <option value="">Pick time</option>
                                 {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                               </select>
                             </div>
                             <button onClick={() => { if (scheduledDate && scheduledTime) setScheduleConfirmed(true) }}
-                              style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "10px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
+                              style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "11px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
                               ✅ Confirm & Notify Buyer
                             </button>
                           </div>
                         </>
                       ) : (
                         <>
-                          <div style={{ background: "#c8a97e18", border: "1px solid #c8a97e44", borderRadius: "10px", padding: "14px" }}>
-                            <div style={{ fontSize: "12px", color: "#c8a97e", marginBottom: "4px" }}>📅 SESSION SCHEDULED</div>
-                            <div style={{ fontSize: "18px", fontWeight: "700", color: "#c8a97e" }}>{scheduledDate} at {scheduledTime}</div>
+                          <div style={{ fontSize: "13px", fontWeight: "700", color: "#6ee7b7" }}>📅 Session Scheduled!</div>
+                          <div style={{ background: "#c8a97e18", border: "1px solid #c8a97e33", borderRadius: "12px", padding: "16px" }}>
+                            <div style={{ fontSize: "12px", color: "#666", marginBottom: "5px" }}>YOUR SESSION TIME</div>
+                            <div style={{ fontSize: "18px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.01em" }}>{scheduledDate} at {scheduledTime}</div>
                           </div>
                           <button onClick={() => setInSession(true)}
-                            style={{ background: "#1d4ed8", border: "none", padding: "13px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px", color: "#fff", fontFamily: "inherit" }}>
+                            style={{ background: "#1d4ed8", border: "none", padding: "14px", borderRadius: "12px", fontWeight: "700", cursor: "pointer", fontSize: "15px", color: "#fff", fontFamily: "inherit" }}>
                             🎥 Join Live Session
                           </button>
                         </>
@@ -528,15 +588,16 @@ export default function RequestService({ rate }) {
                   <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "12px", padding: "12px 14px", fontSize: "12px", color: "#fcd34d" }}>
                     ⚠️ Payment released to {getProviderName(selected)} only after you confirm service is complete.
                   </div>
+
                   <div style={{ display: "flex", gap: "10px" }}>
                     {!getLiveSession(selected) && (
                       <button onClick={handleConfirmService}
-                        style={{ flex: 1, background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "12px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
+                        style={{ flex: 1, background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "13px", borderRadius: "12px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
                         ✅ Confirm Completed
                       </button>
                     )}
                     <button onClick={() => setCancelled(true)}
-                      style={{ flex: 1, background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "12px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
+                      style={{ flex: 1, background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "13px", borderRadius: "12px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
                       ❌ Cancel & Refund
                     </button>
                   </div>
@@ -545,7 +606,7 @@ export default function RequestService({ rate }) {
 
               {/* CANCELLED */}
               {step === 3 && cancelled && (
-                <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "18px" }}>
                   <div style={{ fontSize: "56px" }}>💸</div>
                   <h3 style={{ fontSize: "22px", fontWeight: "700", color: "#fca5a5" }}>Booking Cancelled</h3>
                   <p style={{ color: "#888", fontSize: "14px" }}>Your full refund of ₵{selected.price || 0} will be processed within 24 hours.</p>
@@ -556,11 +617,14 @@ export default function RequestService({ rate }) {
               {/* LIVE SESSION */}
               {step === 3 && inSession && !sessionEnded && (
                 <>
-                  <div style={{ background: "#e11d4822", border: "1px solid #e11d48", borderRadius: "8px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div style={{ width: "8px", height: "8px", background: "#e11d48", borderRadius: "50%" }} />
+                  <div style={{ background: "#e11d4818", border: "1px solid #e11d48", borderRadius: "10px", padding: "10px 16px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{ width: "8px", height: "8px", background: "#e11d48", borderRadius: "50%", animation: "pulse 1.5s infinite" }} />
                     <span style={{ fontSize: "13px", color: "#fca5a5", fontWeight: "600" }}>LIVE — {selected.title} with {getProviderName(selected)}</span>
                   </div>
                   <JitsiSession roomId={orderId} displayName="Buyer" onEnd={handleSessionEnd} />
+                  <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "12px", padding: "12px 14px", fontSize: "12px", color: "#fcd34d" }}>
+                    ⚠️ Session in progress. Payment of ₵{selected.price || 0} is non-refundable.
+                  </div>
                 </>
               )}
 
@@ -568,7 +632,7 @@ export default function RequestService({ rate }) {
               {step === 3 && showRating && (
                 <>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: "56px", marginBottom: "8px" }}>🎉</div>
+                    <div style={{ fontSize: "56px", marginBottom: "10px" }}>🎉</div>
                     <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#6ee7b7", marginBottom: "8px" }}>
                       {getLiveSession(selected) ? "Session Complete!" : "Service Complete!"}
                     </h3>
