@@ -1,8 +1,45 @@
 import { useState, useEffect } from "react"
+import { io } from "socket.io-client"
 
-const STORAGE_KEY      = "silkroad_orders"
+const STORAGE_KEY       = "silkroad_orders"
 const NOTIFICATIONS_KEY = "silkroad_seller_notifications"
-const EVENT_KEY        = "silkroad_last_event"
+const EVENT_KEY         = "silkroad_last_event"
+
+const SOCKET_URL = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace("/api", "")
+  : "http://localhost:5000"
+
+// ── Singleton socket — shared across the whole app ────────────────────────────
+// We create it once and reuse it. If the server is asleep (Render free tier),
+// it will reconnect automatically when the server wakes.
+let socket = null
+
+export function getSocket() {
+  if (!socket) {
+    socket = io(SOCKET_URL, {
+      autoConnect: false,
+      reconnection: true,
+      reconnectionDelay: 2000,
+      reconnectionAttempts: Infinity,
+      transports: ["websocket", "polling"],
+    })
+  }
+  return socket
+}
+
+// Call this after a user logs in — connects the socket and registers the seller
+export function connectSellerSocket(sellerId) {
+  const s = getSocket()
+  if (!s.connected) s.connect()
+  s.emit("register_seller", String(sellerId))
+}
+
+// Call this on sign out
+export function disconnectSocket() {
+  if (socket && socket.connected) {
+    socket.disconnect()
+  }
+}
 
 // ── Core order storage ─────────────────────────────────────────────────────────
 export function saveOrder(order) {
@@ -10,7 +47,7 @@ export function saveOrder(order) {
     const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
     existing[order.id] = order
     localStorage.setItem(STORAGE_KEY, JSON.stringify(existing))
-    if (order.cart && order.cart.length > 0) notifySeller(order)
+    if (order.cart && order.cart.length > 0) notifySellerLocal(order)
   } catch {}
 }
 
@@ -43,8 +80,8 @@ export function generateOrderId() {
   return id
 }
 
-// ── Seller notification system ─────────────────────────────────────────────────
-function notifySeller(order) {
+// ── Local notification system (same-device / same-browser fallback) ────────────
+function notifySellerLocal(order) {
   try {
     const notifications = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || "[]")
     const firstItem = order.cart?.[0]
@@ -53,36 +90,33 @@ function notifySeller(order) {
     if (!sellerId) return
 
     const notification = {
-      id: `NOTIF-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      type: "new_order",
-      orderId: order.id,
-      sellerId: String(sellerId),
-      itemTitle: firstItem.title,
-      itemImage: firstItem.image || null,
-      amount: order.total,
-      buyerContact: order.contactInfo,
-      buyerName: order.payerName || "A buyer",
+      id:             `NOTIF-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      type:           "new_order",
+      orderId:        order.id,
+      sellerId:       String(sellerId),
+      itemTitle:      firstItem.title,
+      itemImage:      firstItem.image || null,
+      amount:         order.total,
+      buyerContact:   order.contactInfo,
+      buyerName:      order.payerName || "A buyer",
       deliveryMethod: order.deliveryMethod,
-      location: order.location
+      location:       order.location
         ? `${order.location.lat}, ${order.location.lng}`
         : order.manualLocation,
-      landmark: order.landmark,
-      promoCode: order.promoCode || null,
-      discount: order.discount || 0,
-      paymentRef: order.paymentRef,
-      paymentMethod: order.paymentMethod,
-      status: "unread",
-      createdAt: Date.now(),
+      landmark:       order.landmark,
+      promoCode:      order.promoCode || null,
+      discount:       order.discount || 0,
+      paymentRef:     order.paymentRef,
+      paymentMethod:  order.paymentMethod,
+      status:         "unread",
+      createdAt:      Date.now(),
     }
 
     notifications.unshift(notification)
     if (notifications.length > 50) notifications.splice(50)
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications))
 
-    // ── KEY FIX: write a cross-tab broadcast event to localStorage ──
-    // The browser fires the 'storage' event in ALL OTHER open tabs
-    // when any localStorage key changes. This is how Tab B (seller)
-    // learns about an order placed in Tab A (buyer).
+    // Cross-tab broadcast (same browser, different tabs)
     localStorage.setItem(EVENT_KEY, JSON.stringify({
       type: "new_notification",
       sellerId: String(sellerId),
@@ -90,7 +124,32 @@ function notifySeller(order) {
       ts: Date.now(),
     }))
 
-    // Also fire in the SAME tab (same-tab doesn't get the storage event)
+    // Same-tab broadcast
+    window.dispatchEvent(new CustomEvent("silkroad_new_notification", {
+      detail: notification
+    }))
+  } catch {}
+}
+
+// Receive a notification pushed from backend via socket and store it locally
+export function storeSocketNotification(notification) {
+  try {
+    const notifications = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || "[]")
+    // Avoid duplicates
+    if (notifications.find(n => n.id === notification.id)) return
+    notifications.unshift({ ...notification, status: "unread" })
+    if (notifications.length > 50) notifications.splice(50)
+    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications))
+
+    // Broadcast cross-tab
+    localStorage.setItem(EVENT_KEY, JSON.stringify({
+      type: "new_notification",
+      sellerId: String(notification.sellerId),
+      notificationId: notification.id,
+      ts: Date.now(),
+    }))
+
+    // Same tab
     window.dispatchEvent(new CustomEvent("silkroad_new_notification", {
       detail: notification
     }))
@@ -145,7 +204,7 @@ export function OrderIdBanner({ orderId }) {
       <div>
         <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", letterSpacing: ".1em", marginBottom: "4px" }}>YOUR ORDER ID</div>
         <div style={{ fontSize: "18px", fontWeight: "800", color: "#f0ede8", fontFamily: "monospace", letterSpacing: ".06em" }}>{orderId}</div>
-        <div style={{ fontSize: "11px", color: "#555", marginTop: "4px" }}>Save this — paste it in any tab to track your order</div>
+        <div style={{ fontSize: "11px", color: "#555", marginTop: "4px" }}>Works on any device — paste it to track your order</div>
       </div>
       <button onClick={handleCopy}
         style={{ background: copied ? "#064e3b" : "#161616", border: `1px solid ${copied ? "#065f46" : "#2a2a2a"}`, color: copied ? "#6ee7b7" : "#c8a97e", padding: "9px 16px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit", whiteSpace: "nowrap", transition: "all 0.2s" }}>
@@ -156,7 +215,11 @@ export function OrderIdBanner({ orderId }) {
 }
 
 // ── Notification Bell ──────────────────────────────────────────────────────────
-// Listens to BOTH same-tab custom events AND cross-tab storage events
+// Listens to:
+//   1. Socket.io   — real-time push from server (works cross-device)
+//   2. Custom event — same-tab fallback
+//   3. storage event — same-browser cross-tab fallback
+//   4. Polling      — 10s safety net
 export function NotificationBell({ user, onClick }) {
   const [unread, setUnread] = useState(0)
 
@@ -164,36 +227,32 @@ export function NotificationBell({ user, onClick }) {
     if (!user?._id) return
 
     const refresh = () => setUnread(getUnreadCount(user._id))
-
-    // Initial count
     refresh()
 
-    // Same-tab: buyer and seller in same tab
-    window.addEventListener("silkroad_new_notification", refresh)
-
-    // Cross-tab: buyer in Tab A, seller in Tab B
-    // The 'storage' event fires in all tabs EXCEPT the one that wrote
-    const handleStorage = (e) => {
-      if (e.key === EVENT_KEY && e.newValue) {
-        try {
-          const event = JSON.parse(e.newValue)
-          if (event.type === "new_notification" && event.sellerId === String(user._id)) {
-            refresh()
-          }
-        } catch {}
-      }
-      // Also re-read if orders change (for order tracker cross-tab)
-      if (e.key === STORAGE_KEY) {
+    // 1. Socket.io cross-device
+    const s = getSocket()
+    const handleSocketNotif = (notification) => {
+      if (String(notification.sellerId) === String(user._id)) {
+        storeSocketNotification(notification)
         refresh()
       }
     }
+    s.on("new_order_notification", handleSocketNotif)
 
+    // 2. Same-tab custom event
+    window.addEventListener("silkroad_new_notification", refresh)
+
+    // 3. Cross-tab storage event
+    const handleStorage = (e) => {
+      if (e.key === EVENT_KEY || e.key === STORAGE_KEY) refresh()
+    }
     window.addEventListener("storage", handleStorage)
 
-    // Fallback poll every 5s (catches edge cases)
-    const interval = setInterval(refresh, 5000)
+    // 4. Polling fallback
+    const interval = setInterval(refresh, 10000)
 
     return () => {
+      s.off("new_order_notification", handleSocketNotif)
       window.removeEventListener("silkroad_new_notification", refresh)
       window.removeEventListener("storage", handleStorage)
       clearInterval(interval)
@@ -217,13 +276,11 @@ export function NotificationBell({ user, onClick }) {
 }
 
 // ── Order Tracker Modal ────────────────────────────────────────────────────────
-// Works across ALL tabs because it reads from localStorage, not component state
 export default function OrderTracker({ onClose, onOpenOrder }) {
   const [idInput, setIdInput] = useState("")
   const [found, setFound] = useState(null)
   const [error, setError] = useState("")
 
-  // Cross-tab: if an order is updated in another tab, re-read
   useEffect(() => {
     const handleStorage = (e) => {
       if (e.key === STORAGE_KEY && found) {
@@ -241,9 +298,6 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
     if (!trimmed) { setError("Please enter your Order ID."); return }
     const order = getOrder(trimmed)
     if (!order) { setError("Order not found. Check your ID and try again."); return }
-    if (order.expiresAt && order.expiresAt < Date.now() && order.delivered !== null) {
-      setError("This order has expired and been archived."); return
-    }
     setFound(order)
   }
 
@@ -252,7 +306,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
     return new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
   }
 
-  const getStatusColor = (status) => {
+  const statusColor = (status) => {
     if (status === "Pending Confirmation") return { color: "#fcd34d", bg: "#78350f18", border: "#92400e" }
     if (status === "Paid" || status === "Completed") return { color: "#6ee7b7", bg: "#064e3b18", border: "#065f46" }
     if (status === "Cancelled") return { color: "#fca5a5", bg: "#7f1d1d18", border: "#7f1d1d" }
@@ -270,7 +324,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
 
         <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
           <p style={{ fontSize: "13px", color: "#555", lineHeight: "1.6" }}>
-            Enter your Order ID from any device or tab — orders are stored in your browser.
+            Enter your Order ID — works on any device, any browser.
           </p>
 
           <div style={{ display: "flex", gap: "8px" }}>
@@ -302,7 +356,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                     <div style={{ fontSize: "18px", fontWeight: "800", color: "#c8a97e", fontFamily: "monospace" }}>{found.id}</div>
                   </div>
                   {found.status && (
-                    <span style={{ fontSize: "11px", fontWeight: "700", background: getStatusColor(found.status).bg, color: getStatusColor(found.status).color, border: `1px solid ${getStatusColor(found.status).border}`, padding: "4px 12px", borderRadius: "20px" }}>
+                    <span style={{ fontSize: "11px", fontWeight: "700", background: statusColor(found.status).bg, color: statusColor(found.status).color, border: `1px solid ${statusColor(found.status).border}`, padding: "4px 12px", borderRadius: "20px" }}>
                       {found.status}
                     </span>
                   )}
@@ -333,27 +387,20 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                       <span style={{ color: "#888" }}>{found.deliveryMethod === "rider" ? "🛵 Rider" : "📍 Pickup"}</span>
                     </div>
                   )}
-                  {found.promoCode && (
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#555" }}>Promo</span>
-                      <span style={{ color: "#6ee7b7" }}>🎟️ {found.promoCode}</span>
-                    </div>
-                  )}
                   {found.createdAt && (
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "#555" }}>Placed</span>
                       <span style={{ color: "#888" }}>{formatDate(found.createdAt)}</span>
                     </div>
                   )}
-
                   {found.delivered === true && (
                     <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "8px", padding: "8px 12px", color: "#6ee7b7", fontSize: "12px" }}>✅ Delivery confirmed — order complete</div>
                   )}
                   {found.delivered === false && (
                     <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "8px", padding: "8px 12px", color: "#fca5a5", fontSize: "12px" }}>❌ Order cancelled — refund in progress</div>
                   )}
-                  {found.delivered === null && found.status === "Pending Confirmation" && (
-                    <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "8px", padding: "8px 12px", color: "#fcd34d", fontSize: "12px" }}>⏳ Payment submitted — awaiting confirmation</div>
+                  {found.delivered === null && (
+                    <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "8px", padding: "8px 12px", color: "#fcd34d", fontSize: "12px" }}>⏳ In progress — awaiting confirmation</div>
                   )}
                 </div>
               </div>
@@ -368,8 +415,8 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
           )}
 
           <div style={{ background: "#161616", borderRadius: "12px", padding: "14px", fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
-            <div style={{ fontWeight: "600", color: "#555", marginBottom: "4px" }}>Works across tabs</div>
-            Your Order ID (e.g. SR-AB3DEF) is stored in this browser. Enter it in any tab on this device to track your order.
+            <div style={{ fontWeight: "600", color: "#555", marginBottom: "4px" }}>Order IDs work on any device</div>
+            Your Order ID (e.g. SR-AB3DEF) is shown after checkout. Enter it here on any phone or computer to reopen or track your order.
           </div>
         </div>
       </div>
