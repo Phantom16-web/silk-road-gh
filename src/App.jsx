@@ -8,9 +8,11 @@ import Auth from "./Auth"
 import Account from "./Account"
 import SellListing from "./SellListing"
 import AdminPanel from "./AdminPanel"
-import OrderTracker, { NotificationBell } from "./OrderTracker"
+import OrderTracker, { NotificationBell, connectSellerSocket, disconnectSocket } from "./OrderTracker"
 import RiderDashboard from "./RiderDashboard"
 import { getListings } from "./api"
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 
 const ALL_LISTINGS = [
   { id: 1,  title: "Calculus Textbook",       price: 380,  category: "Books",       seller: "Ahmad K.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "8th edition, some highlights but all pages intact. Perfect for MTH 151.",                       delivery: ["Pickup", "Rider"],            section: "buy" },
@@ -41,13 +43,13 @@ const ALL_LISTINGS = [
 
 const RENTALS_SEARCH = [
   { id: 101, title: "Canon EOS M50 Camera",          category: "Electronics", imageId: 21, section: "rent" },
-  { id: 102, title: "Projector – Epson X41",         category: "Electronics", imageId: 22, section: "rent" },
-  { id: 103, title: "Mountain Bike",                 category: "Sports",      imageId: 23, section: "rent" },
-  { id: 104, title: "MacBook Air M1",                category: "Electronics", imageId: 24, section: "rent" },
-  { id: 105, title: "Acoustic Guitar",               category: "Music",       imageId: 25, section: "rent" },
-  { id: 106, title: "Camping Tent (4-person)",       category: "Outdoors",    imageId: 26, section: "rent" },
+  { id: 102, title: "Projector – Epson X41",          category: "Electronics", imageId: 22, section: "rent" },
+  { id: 103, title: "Mountain Bike",                  category: "Sports",      imageId: 23, section: "rent" },
+  { id: 104, title: "MacBook Air M1",                 category: "Electronics", imageId: 24, section: "rent" },
+  { id: 105, title: "Acoustic Guitar",                category: "Music",       imageId: 25, section: "rent" },
+  { id: 106, title: "Camping Tent (4-person)",        category: "Outdoors",    imageId: 26, section: "rent" },
   { id: 107, title: "PS5 Console + 2 Controllers",   category: "Gaming",      imageId: 27, section: "rent" },
-  { id: 108, title: "Scientific Calculator (Casio)", category: "Academic",    imageId: 28, section: "rent" },
+  { id: 108, title: "Scientific Calculator (Casio)",  category: "Academic",    imageId: 28, section: "rent" },
 ]
 
 const SERVICES_SEARCH = [
@@ -67,8 +69,8 @@ const ALL_ITEMS = [
   ...SERVICES_SEARCH,
 ]
 
-const SECTION_LABEL = { buy: "🛒 Buy Products", rent: "📦 Rent Items", service: "🛠️ Request Service" }
-const SECTION_COLOR = { buy: "#c8a97e", rent: "#93c5fd", service: "#6ee7b7" }
+const SECTION_LABEL = { buy: "🛒 Buy",     rent: "📦 Rent",    service: "🛠️ Service" }
+const SECTION_COLOR = { buy: "#c8a97e",   rent: "#93c5fd",   service: "#6ee7b7" }
 const PAGE_SIZE = 16
 
 const SECTION_KEYWORDS = {
@@ -76,8 +78,6 @@ const SECTION_KEYWORDS = {
   rent:    ["rent", "rental", "rentals", "borrow", "lease", "hire"],
   service: ["service", "services", "request", "booking", "book"],
 }
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 
 const DEFAULT_SITE_SETTINGS = {
   contactPhone:    "054 388 3608",
@@ -108,13 +108,14 @@ const parseSearch = (query) => {
 }
 
 // ── Product Modal ──────────────────────────────────────────────────────────────
-function ProductModal({ item, onClose, onCart, toGHS }) {
+function ProductModal({ item, onClose, onCart, rate }) {
   if (!item) return null
-  const isDbItem = !!item._id
-  const sellerName = isDbItem ? item.seller?.name : item.seller
-  const university = isDbItem ? item.seller?.university : item.university
-  const itemImage = item.image || `https://picsum.photos/seed/${item.id}/600/350`
-  const delivery = item.delivery || []
+  const isDb = !!item._id
+  const sellerName = isDb ? item.seller?.name : item.seller
+  const university = isDb ? item.seller?.university : item.university
+  const itemImage  = item.image || `https://picsum.photos/seed/${item.id}/600/350`
+  const delivery   = item.delivery || []
+  const toUSD = (ghs) => rate ? (ghs / rate).toFixed(2) : "..."
 
   return (
     <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
@@ -122,42 +123,35 @@ function ProductModal({ item, onClose, onCart, toGHS }) {
         <div style={{ position: "relative" }}>
           <img src={itemImage} alt={item.title} style={{ width: "100%", height: "260px", objectFit: "cover", borderRadius: "20px 20px 0 0", display: "block" }} />
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 50%, #111)", borderRadius: "20px 20px 0 0", pointerEvents: "none" }} />
-          <button onClick={onClose} style={{ position: "absolute", top: "14px", right: "14px", background: "#000000aa", border: "none", color: "#fff", fontSize: "18px", cursor: "pointer", width: "34px", height: "34px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(8px)" }}>✕</button>
+          <button onClick={onClose} style={{ position: "absolute", top: "14px", right: "14px", background: "#000000aa", border: "none", color: "#fff", fontSize: "18px", cursor: "pointer", width: "34px", height: "34px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
         <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
             <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "8px" }}>{item.category}</div>
             <h2 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>{item.title}</h2>
-            <div style={{ fontSize: "13px", color: "#555" }}>Listed by <span style={{ color: "#888", fontWeight: "600" }}>{sellerName}</span></div>
+            <div style={{ fontSize: "13px", color: "#555" }}>by <span style={{ color: "#888", fontWeight: "600" }}>{sellerName}</span></div>
             {university && <div style={{ fontSize: "12px", color: "#444", marginTop: "3px" }}>🎓 {university}</div>}
           </div>
           <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-            {item.rating > 0 && (
-              <div style={{ fontSize: "13px", color: "#c8a97e" }}>{"★".repeat(Math.round(item.rating))}{"☆".repeat(5 - Math.round(item.rating))} <span style={{ color: "#555", fontSize: "12px" }}>{item.rating}</span></div>
-            )}
-            {item.condition && item.condition !== "N/A" && (
-              <span style={{ fontSize: "11px", color: "#666", background: "#1a1a1a", border: "1px solid #222", padding: "3px 10px", borderRadius: "20px", fontWeight: "600" }}>{item.condition}</span>
-            )}
+            {item.rating > 0 && <div style={{ fontSize: "13px", color: "#c8a97e" }}>{"★".repeat(Math.round(item.rating))}{"☆".repeat(5 - Math.round(item.rating))} <span style={{ color: "#555", fontSize: "12px" }}>{item.rating}</span></div>}
+            {item.condition && item.condition !== "N/A" && <span style={{ fontSize: "11px", color: "#666", background: "#1a1a1a", border: "1px solid #222", padding: "3px 10px", borderRadius: "20px", fontWeight: "600" }}>{item.condition}</span>}
           </div>
           <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "16px" }}>
-            <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "8px" }}>About this item</div>
             <p style={{ fontSize: "14px", color: "#888", lineHeight: "1.7", margin: 0 }}>{item.desc}</p>
           </div>
           {delivery.length > 0 && (
-            <div>
-              <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "10px" }}>Delivery Options</div>
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                {delivery.map(d => (
-                  <span key={d} style={{ fontSize: "12px", background: "#1a1a1a", border: "1px solid #222", color: "#888", padding: "5px 14px", borderRadius: "20px", fontWeight: "600" }}>
-                    {d === "Pickup" ? "📍 Campus Pickup" : d === "Rider" ? "🛵 Rider Delivery" : "📦 Shipping"}
-                  </span>
-                ))}
-              </div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {delivery.map(d => (
+                <span key={d} style={{ fontSize: "11px", background: "#1a1a1a", border: "1px solid #222", color: "#888", padding: "4px 12px", borderRadius: "20px", fontWeight: "600" }}>
+                  {d === "Pickup" ? "📍 Campus Pickup" : d === "Rider" ? "🛵 Rider Delivery" : "📦 Shipping"}
+                </span>
+              ))}
             </div>
           )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #1a1a1a", paddingTop: "18px" }}>
             <div>
               <div style={{ fontSize: "28px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.03em" }}>₵{(item.price || 0).toLocaleString()}</div>
+              <div style={{ fontSize: "12px", color: "#444" }}>${toUSD(item.price || 0)} USD</div>
             </div>
             <button className="btn-gold" onClick={() => { onCart(item); onClose() }} style={{ padding: "13px 28px", borderRadius: "12px", fontSize: "14px" }}>
               🛒 Add to Cart
@@ -185,7 +179,6 @@ function FooterModal({ type, onClose, siteSettings }) {
               <div key={v} style={{ fontSize: "13px", color: "#666" }}>{v}</div>
             ))}
           </div>
-          <p style={{ fontSize: "13px", color: "#555" }}>Silk Road GH is proudly built for Ghanaian university students.</p>
         </div>
       )
     },
@@ -206,7 +199,6 @@ function FooterModal({ type, onClose, siteSettings }) {
               <p style={{ margin: 0 }}>{text}</p>
             </div>
           ))}
-          <p style={{ fontSize: "12px", color: "#444" }}>Last updated: {new Date().getFullYear()}.</p>
         </div>
       )
     }
@@ -241,18 +233,25 @@ function Footer({ onOpen, siteSettings }) {
           <div style={{ flex: 1, minWidth: "140px" }}>
             <div style={{ fontSize: "10px", color: "#333", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "18px" }}>Company</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <button onClick={() => onOpen("about")} style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit" }}
-                onMouseEnter={e => e.target.style.color = "#c8a97e"} onMouseLeave={e => e.target.style.color = "#555"}>About Silk Road</button>
-              <button onClick={() => onOpen("privacy")} style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit" }}
-                onMouseEnter={e => e.target.style.color = "#c8a97e"} onMouseLeave={e => e.target.style.color = "#555"}>Privacy Policy</button>
+              {[["About Silk Road", "about"], ["Privacy Policy", "privacy"]].map(([label, key]) => (
+                <button key={key} onClick={() => onOpen(key)}
+                  style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit", transition: "color 0.2s" }}
+                  onMouseEnter={e => e.target.style.color = "#c8a97e"}
+                  onMouseLeave={e => e.target.style.color = "#555"}>
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
           <div style={{ flex: 1, minWidth: "140px" }}>
             <div style={{ fontSize: "10px", color: "#333", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "18px" }}>Contact</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <a href={`tel:+${siteSettings.contactWhatsApp}`} style={{ color: "#c8a97e", fontSize: "14px", textDecoration: "none", fontWeight: "600" }}>📞 {siteSettings.contactPhone}</a>
-              <a href={`https://wa.me/${siteSettings.contactWhatsApp}`} target="_blank" rel="noreferrer" style={{ color: "#555", fontSize: "14px", textDecoration: "none" }}
-                onMouseEnter={e => e.target.style.color = "#c8a97e"} onMouseLeave={e => e.target.style.color = "#555"}>💬 WhatsApp</a>
+              <a href={`https://wa.me/${siteSettings.contactWhatsApp}`} target="_blank" rel="noreferrer" style={{ color: "#555", fontSize: "14px", textDecoration: "none", transition: "color 0.2s" }}
+                onMouseEnter={e => e.target.style.color = "#c8a97e"}
+                onMouseLeave={e => e.target.style.color = "#555"}>
+                💬 WhatsApp
+              </a>
             </div>
           </div>
           <div style={{ flex: 1, minWidth: "140px" }}>
@@ -261,7 +260,7 @@ function Footer({ onOpen, siteSettings }) {
             <div style={{ fontSize: "11px", color: "#333", marginTop: "8px" }}>Escrow protected</div>
           </div>
         </div>
-        <hr className="divider" />
+        <hr style={{ border: "none", borderTop: "1px solid #141414" }} />
         <div style={{ paddingTop: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
           <div style={{ fontSize: "12px", color: "#333" }}>© {new Date().getFullYear()} Silk Road GH. All rights reserved.</div>
           <div style={{ fontSize: "12px", color: "#333" }}>Built for Ghanaian students 🇬🇭</div>
@@ -296,11 +295,7 @@ function SearchResults({ query, onClose, onNavigate }) {
     : dbResults.map(item => ({ id: item._id, imageId: item._id, title: item.title, category: item.category, section: "buy", image: item.image }))
 
   const results = [...dbBuyResults, ...staticResults]
-  const grouped = {
-    buy:     results.filter(r => r.section === "buy"),
-    rent:    results.filter(r => r.section === "rent"),
-    service: results.filter(r => r.section === "service"),
-  }
+  const grouped = { buy: results.filter(r => r.section === "buy"), rent: results.filter(r => r.section === "rent"), service: results.filter(r => r.section === "service") }
 
   return (
     <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "80px 20px 20px" }} onClick={onClose}>
@@ -335,7 +330,7 @@ function SearchResults({ query, onClose, onNavigate }) {
                         <div style={{ fontSize: "11px", color: "#444" }}>{item.category}</div>
                       </div>
                       <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}18`, padding: "3px 10px", borderRadius: "20px" }}>
-                        {SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}
+                        {SECTION_LABEL[item.section]}
                       </span>
                     </div>
                   ))}
@@ -355,11 +350,9 @@ function ListingSkeleton() {
     <div style={{ background: "#111", borderRadius: "16px", overflow: "hidden", border: "1px solid #1a1a1a" }}>
       <div style={{ width: "100%", height: "200px", background: "#161616", animation: "shimmer 1.5s ease infinite" }} />
       <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
-        <div style={{ height: "10px", background: "#161616", borderRadius: "4px", width: "35%", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "16px", background: "#161616", borderRadius: "4px", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "10px", background: "#161616", borderRadius: "4px", width: "55%", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "22px", background: "#161616", borderRadius: "4px", width: "45%", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "40px", background: "#161616", borderRadius: "10px", animation: "shimmer 1.5s ease infinite" }} />
+        {[["35%"], ["100%"], ["55%"], ["45%"], ["100%"]].map(([w], i) => (
+          <div key={i} style={{ height: i === 4 ? "40px" : i === 3 ? "22px" : "10px", background: "#161616", borderRadius: "4px", width: w, animation: "shimmer 1.5s ease infinite" }} />
+        ))}
       </div>
     </div>
   )
@@ -367,48 +360,48 @@ function ListingSkeleton() {
 
 // ── App ────────────────────────────────────────────────────────────────────────
 function App() {
-  const [rate, setRate] = useState(null)
-  const [rateLoading, setRateLoading] = useState(true)
-  const [cart, setCart] = useState([])
-  const [cartOpen, setCartOpen] = useState(false)
-  const [checkoutOpen, setCheckoutOpen] = useState(false)
-  const [activePage, setActivePage] = useState("buy")
+  const [rate, setRate]                   = useState(null)
+  const [rateLoading, setRateLoading]     = useState(true)
+  const [cart, setCart]                   = useState([])
+  const [cartOpen, setCartOpen]           = useState(false)
+  const [checkoutOpen, setCheckoutOpen]   = useState(false)
+  const [activePage, setActivePage]       = useState("buy")
   const [selectedProduct, setSelectedProduct] = useState(null)
-  const [footerModal, setFooterModal] = useState(null)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [showDropdown, setShowDropdown] = useState(false)
+  const [footerModal, setFooterModal]     = useState(null)
+  const [searchQuery, setSearchQuery]     = useState("")
+  const [showDropdown, setShowDropdown]   = useState(false)
   const [showFullResults, setShowFullResults] = useState(false)
-  const [user, setUser] = useState(null)
-  const [showAuth, setShowAuth] = useState(false)
-  const [showAccount, setShowAccount] = useState(false)
-  const [showSell, setShowSell] = useState(false)
-  const [showAdmin, setShowAdmin] = useState(false)
-  const [showTracker, setShowTracker] = useState(false)
+  const [user, setUser]                   = useState(null)
+  const [showAuth, setShowAuth]           = useState(false)
+  const [showAccount, setShowAccount]     = useState(false)
+  const [showSell, setShowSell]           = useState(false)
+  const [showAdmin, setShowAdmin]         = useState(false)
+  const [showTracker, setShowTracker]     = useState(false)
   const [showRiderDashboard, setShowRiderDashboard] = useState(false)
-  const [trackedOrder, setTrackedOrder] = useState(null)
-  const [authCallback, setAuthCallback] = useState(null)
-  const [siteSettings, setSiteSettings] = useState(DEFAULT_SITE_SETTINGS)
-  const [notifTick, setNotifTick] = useState(0)
+  const [trackedOrder, setTrackedOrder]   = useState(null)
+  const [authCallback, setAuthCallback]   = useState(null)
+  const [siteSettings, setSiteSettings]   = useState(DEFAULT_SITE_SETTINGS)
+  const [notifTick, setNotifTick]         = useState(0)
 
-  const [dbListings, setDbListings] = useState([])
+  const [dbListings, setDbListings]           = useState([])
   const [listingsLoading, setListingsLoading] = useState(false)
-  const [listingsPage, setListingsPage] = useState(1)
+  const [listingsPage, setListingsPage]       = useState(1)
   const [hasMoreListings, setHasMoreListings] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [loadingMore, setLoadingMore]         = useState(false)
+  const [visibleCount, setVisibleCount]       = useState(PAGE_SIZE)
   const [dbSearchResults, setDbSearchResults] = useState([])
-  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchLoading, setSearchLoading]     = useState(false)
 
-  const searchDebounceRef = useRef(null)
+  const searchDebounceRef     = useRef(null)
   const bottomReachedTimerRef = useRef(null)
-  const isAtBottomRef = useRef(false)
-  const searchRef = useRef(null)
+  const isAtBottomRef         = useRef(false)
+  const searchRef             = useRef(null)
 
-  const usingDb = dbListings.length > 0
+  const usingDb        = dbListings.length > 0
   const displayListings = usingDb ? dbListings : ALL_LISTINGS.slice(0, visibleCount)
-  const hasMore = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
+  const hasMore        = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
 
-  // ── Site settings ──────────────────────────────────────────────────────────
+  // ── Site settings ────────────────────────────────────────────────────────────
   useEffect(() => {
     fetch(`${API_URL}/settings`)
       .then(r => r.json())
@@ -416,14 +409,14 @@ function App() {
       .catch(() => {})
   }, [])
 
-  // ── Live notifications across tabs ─────────────────────────────────────────
+  // ── Live notifications — same-tab custom event ────────────────────────────
   useEffect(() => {
     const handler = () => setNotifTick(n => n + 1)
     window.addEventListener("silkroad_new_notification", handler)
     return () => window.removeEventListener("silkroad_new_notification", handler)
   }, [])
 
-  // ── Fetch listings ─────────────────────────────────────────────────────────
+  // ── Fetch listings ───────────────────────────────────────────────────────────
   const fetchListings = async (page = 1, reset = false) => {
     if (page === 1) setListingsLoading(true)
     else setLoadingMore(true)
@@ -448,7 +441,7 @@ function App() {
     setVisibleCount(PAGE_SIZE)
   }, [activePage])
 
-  // ── Scroll reveal ──────────────────────────────────────────────────────────
+  // ── Scroll reveal ────────────────────────────────────────────────────────────
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add("visible") }),
@@ -458,7 +451,7 @@ function App() {
     return () => observer.disconnect()
   }, [displayListings, activePage, listingsLoading])
 
-  // ── Infinite scroll ────────────────────────────────────────────────────────
+  // ── Infinite scroll ──────────────────────────────────────────────────────────
   useEffect(() => {
     const handleScroll = () => {
       const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 10
@@ -484,7 +477,7 @@ function App() {
     return () => { window.removeEventListener("scroll", handleScroll); if (bottomReachedTimerRef.current) clearTimeout(bottomReachedTimerRef.current) }
   }, [hasMore, loadingMore, activePage, usingDb, listingsPage])
 
-  // ── Debounced search ───────────────────────────────────────────────────────
+  // ── Debounced search ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!searchQuery.trim()) { setDbSearchResults([]); return }
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
@@ -500,14 +493,14 @@ function App() {
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
   }, [searchQuery])
 
-  // ── Close search on outside click ─────────────────────────────────────────
+  // ── Close search on outside click ────────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) setShowDropdown(false) }
     document.addEventListener("mousedown", handler)
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
-  // ── Admin shortcuts ────────────────────────────────────────────────────────
+  // ── Admin shortcuts ──────────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => { if (e.ctrlKey && e.shiftKey && e.key === "A") setShowAdmin(true) }
     window.addEventListener("keydown", handler)
@@ -516,25 +509,28 @@ function App() {
 
   useEffect(() => { if (window.location.pathname === "/admin") setShowAdmin(true) }, [])
 
-  // ── Restore session ────────────────────────────────────────────────────────
+  // ── Session restore — reconnects socket so seller gets live notifications ────
   useEffect(() => {
     const token = localStorage.getItem("silkroad_token")
     if (token && !user) {
       import("./api").then(({ getMe }) => {
         getMe().then(data => {
           if (data?._id) {
-            setUser({
+            const userData = {
               _id: data._id, name: data.name, email: data.email,
               university: data.university, phone: data.phone, role: data.role,
               joined: new Date(data.createdAt || Date.now()).toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
-            })
+            }
+            setUser(userData)
+            // Reconnect socket after page refresh so seller keeps receiving notifications
+            connectSellerSocket(userData._id)
           }
         }).catch(() => {})
       })
     }
   }, [])
 
-  // ── Exchange rate — fetch USD/GHS then display as $1 = ₵X ─────────────────
+  // ── Exchange rate — fetch USD base, display as $1 = ₵X ──────────────────────
   const fetchRate = async () => {
     setRateLoading(true)
     try {
@@ -546,12 +542,12 @@ function App() {
 
   useEffect(() => { fetchRate() }, [])
 
-  // rate is now GHS per 1 USD — display directly as "$1 = ₵X"
+  // rate = GHS per 1 USD → display as "$1 = ₵X"
   const rateDisplay = rate ? `$1 = ₵${rate.toFixed(2)}` : "..."
+  const toUSD = (ghs) => rate ? (ghs / rate).toFixed(2) : "..."
 
-  const getItemId = (item) => item._id || item.id
-
-  const addToCart = (item) => {
+  const getItemId  = (item) => item._id || item.id
+  const addToCart  = (item) => {
     setCart(prev => {
       const id = getItemId(item)
       const exists = prev.find(i => getItemId(i) === id)
@@ -560,8 +556,7 @@ function App() {
     })
     setCartOpen(true)
   }
-
-  const updateQty = (id, delta) => setCart(prev => prev.map(i => getItemId(i) === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i))
+  const updateQty  = (id, delta) => setCart(prev => prev.map(i => getItemId(i) === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i))
   const removeItem = (id) => setCart(prev => prev.filter(i => getItemId(i) !== id))
   const cartTotal  = cart.reduce((sum, i) => sum + (i.price || i.dailyRate || 0) * i.qty, 0)
   const cartCount  = cart.reduce((sum, i) => sum + i.qty, 0)
@@ -608,7 +603,8 @@ function App() {
             </button>
             {user ? (
               <>
-                <NotificationBell user={user} onClick={() => setShowAccount(true)} />
+                {/* NotificationBell handles cross-device socket + cross-tab storage events */}
+                <NotificationBell user={user} onClick={() => setShowAccount(true)} notifTick={notifTick} />
                 <button onClick={() => setShowAccount(true)}
                   style={{ background: "linear-gradient(135deg,#c8a97e,#9a7040)", border: "none", width: "34px", height: "34px", borderRadius: "50%", fontWeight: "800", cursor: "pointer", fontSize: "14px", color: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {user.name.charAt(0).toUpperCase()}
@@ -623,7 +619,9 @@ function App() {
             <button onClick={() => setCartOpen(true)}
               style={{ position: "relative", background: "transparent", border: "none", color: "#fff", fontSize: "22px", cursor: "pointer", padding: "4px" }}>
               🛒
-              {cartCount > 0 && <span className="badge">{cartCount}</span>}
+              {cartCount > 0 && (
+                <span className="badge">{cartCount}</span>
+              )}
             </button>
           </div>
         </div>
@@ -673,12 +671,12 @@ function App() {
                         <div style={{ fontSize: "11px", color: "#444" }}>{item.category}</div>
                       </div>
                       <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}18`, padding: "2px 8px", borderRadius: "20px", flexShrink: 0 }}>
-                        {SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}
+                        {SECTION_LABEL[item.section]}
                       </span>
                     </div>
                   ))}
                   <div onClick={() => { setShowDropdown(false); setShowFullResults(true) }}
-                    style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600", transition: "background 0.15s" }}
+                    style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600" }}
                     onMouseEnter={e => e.currentTarget.style.background = "#1e1e1e"}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                     See all results →
@@ -720,12 +718,12 @@ function App() {
               {listingsLoading
                 ? Array.from({ length: PAGE_SIZE }).map((_, i) => <ListingSkeleton key={i} />)
                 : displayListings.map((item, index) => {
-                    const itemId = getItemId(item)
-                    const isDbItem = !!item._id
-                    const sellerName = isDbItem ? item.seller?.name : item.seller
-                    const university = isDbItem ? item.seller?.university : item.university
-                    const itemPrice = item.price || item.dailyRate || 0
-                    const itemImage = item.image || `https://picsum.photos/seed/${item.id}/300/200`
+                    const itemId      = getItemId(item)
+                    const isDb        = !!item._id
+                    const sellerName  = isDb ? item.seller?.name : item.seller
+                    const university  = isDb ? item.seller?.university : item.university
+                    const itemPrice   = item.price || item.dailyRate || 0
+                    const itemImage   = item.image || `https://picsum.photos/seed/${item.id}/300/200`
                     return (
                       <div key={itemId} className="listing-card reveal" style={{ animationDelay: `${(index % 8) * 55}ms` }}>
                         <div style={{ overflow: "hidden", position: "relative" }}>
@@ -738,13 +736,10 @@ function App() {
                           <div onClick={() => setSelectedProduct(item)} style={{ fontSize: "15px", fontWeight: "700", marginBottom: "6px", color: "#f0ede8", cursor: "pointer", lineHeight: "1.3", letterSpacing: "-0.01em" }}>{item.title}</div>
                           <div style={{ fontSize: "12px", color: "#444", marginBottom: "2px" }}>by <span style={{ color: "#666" }}>{sellerName}</span></div>
                           <div style={{ fontSize: "11px", color: "#333", marginBottom: "14px" }}>🎓 {university}</div>
-                          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: "14px" }}>
-                            <div>
-                              <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.02em", lineHeight: 1 }}>₵{itemPrice.toLocaleString()}</div>
-                            </div>
-                            {item.condition && item.condition !== "N/A" && (
-                              <span style={{ fontSize: "10px", fontWeight: "600", color: "#444", background: "#161616", border: "1px solid #1e1e1e", padding: "3px 10px", borderRadius: "20px" }}>{item.condition}</span>
-                            )}
+                          {item.rating > 0 && <div style={{ fontSize: "12px", color: "#888", marginBottom: "10px" }}>{"★".repeat(Math.round(item.rating))} {item.rating}</div>}
+                          <div style={{ fontSize: "20px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.02em", lineHeight: 1, marginBottom: "14px" }}>
+                            ₵{itemPrice.toLocaleString()}
+                            <span style={{ fontSize: "12px", color: "#333", fontWeight: "400" }}> (${toUSD(itemPrice)})</span>
                           </div>
                           <button className="btn-gold" onClick={() => addToCart(item)} style={{ width: "100%", padding: "11px", borderRadius: "10px", fontSize: "13px" }}>
                             Add to Cart
@@ -776,12 +771,18 @@ function App() {
       )}
 
       {selectedProduct && (
-        <ProductModal item={selectedProduct} onClose={() => setSelectedProduct(null)} onCart={addToCart} />
+        <ProductModal item={selectedProduct} onClose={() => setSelectedProduct(null)} onCart={addToCart} rate={rate} />
       )}
 
       {showAuth && (
         <Auth
-          onAuth={(userData) => { setUser(userData); setShowAuth(false); if (authCallback) { authCallback(); setAuthCallback(null) } }}
+          onAuth={(userData) => {
+            setUser(userData)
+            setShowAuth(false)
+            // Connect socket so seller receives live notifications on this device
+            connectSellerSocket(userData._id)
+            if (authCallback) { authCallback(); setAuthCallback(null) }
+          }}
           onClose={() => { setShowAuth(false); setAuthCallback(null) }}
         />
       )}
@@ -790,7 +791,13 @@ function App() {
         <Account
           user={user}
           notifTick={notifTick}
-          onSignOut={() => { setUser(null); setShowAccount(false); localStorage.removeItem("silkroad_token") }}
+          onSignOut={() => {
+            setUser(null)
+            setShowAccount(false)
+            localStorage.removeItem("silkroad_token")
+            // Disconnect socket on sign out
+            disconnectSocket()
+          }}
           onClose={() => setShowAccount(false)}
           onUserUpdate={(updatedUser) => setUser(updatedUser)}
         />
@@ -838,7 +845,7 @@ function App() {
                   <div className="sub">Add items to get started</div>
                 </div>
               ) : cart.map(item => {
-                const itemId = getItemId(item)
+                const itemId    = getItemId(item)
                 const itemPrice = item.price || item.dailyRate || 0
                 const itemImage = item.image || `https://picsum.photos/seed/${item.id}/300/200`
                 return (
@@ -846,7 +853,10 @@ function App() {
                     <img src={itemImage} alt={item.title} style={{ width: "58px", height: "58px", objectFit: "cover", borderRadius: "10px" }} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px", color: "#f0ede8", lineHeight: "1.3" }}>{item.title}</div>
-                      <div style={{ fontSize: "14px", color: "#c8a97e", fontWeight: "700" }}>₵{(itemPrice * item.qty).toLocaleString()}</div>
+                      <div style={{ fontSize: "14px", color: "#c8a97e", fontWeight: "700" }}>
+                        ₵{(itemPrice * item.qty).toLocaleString()}
+                        <span style={{ fontSize: "11px", color: "#444", fontWeight: "400" }}> (${toUSD(itemPrice * item.qty)})</span>
+                      </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
                         <button onClick={() => updateQty(itemId, -1)} style={{ width: "28px", height: "28px", background: "#1a1a1a", border: "1px solid #222", color: "#fff", borderRadius: "7px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", minHeight: "auto" }}>−</button>
                         <span style={{ fontSize: "13px", fontWeight: "600", minWidth: "20px", textAlign: "center" }}>{item.qty}</span>
@@ -862,7 +872,10 @@ function App() {
               <div style={{ padding: "20px", borderTop: "1px solid #1a1a1a" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px", alignItems: "baseline" }}>
                   <span style={{ color: "#555", fontSize: "14px" }}>Total</span>
-                  <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.02em" }}>₵{cartTotal.toLocaleString()}</div>
+                  <div>
+                    <span style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.02em" }}>₵{cartTotal.toLocaleString()}</span>
+                    <span style={{ fontSize: "12px", color: "#444" }}> (${toUSD(cartTotal)})</span>
+                  </div>
                 </div>
                 <button className="btn-gold" onClick={() => { setCartOpen(false); setCheckoutOpen(true) }}
                   style={{ width: "100%", padding: "14px", borderRadius: "12px", fontSize: "14px" }}>
