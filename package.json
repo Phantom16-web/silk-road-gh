@@ -10,11 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@paystack/inline-js": "^2.22.8",
-    "axios": "^1.15.2",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
-  },
+  "axios": "^1.6.0",
+  "react": "^18.2.0",
+  "react-dom": "^18.2.0",
+  "socket.io-client": "^4.7.5"
+},
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/react": "^19.2.14",
