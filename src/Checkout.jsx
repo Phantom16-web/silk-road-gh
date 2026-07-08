@@ -5,43 +5,45 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 const STEPS   = ["Location", "Confirm Order", "Payment", "Track"]
 
 export default function Checkout({ cart, rate, onClose, initialOrder, siteSettings }) {
-  const [step, setStep]                   = useState(initialOrder ? 3 : 0)
-  const [location, setLocation]           = useState(initialOrder?.location || null)
-  const [locLoading, setLocLoading]       = useState(false)
-  const [locBlocked, setLocBlocked]       = useState(false)
-  const [locError, setLocError]           = useState(null)
+  const [step, setStep]                     = useState(initialOrder ? 3 : 0)
+  const [location, setLocation]             = useState(initialOrder?.location || null)
+  const [locLoading, setLocLoading]         = useState(false)
+  const [locBlocked, setLocBlocked]         = useState(false)
+  const [locError, setLocError]             = useState(null)
   const [manualLocation, setManualLocation] = useState(initialOrder?.manualLocation || "")
-  const [landmark, setLandmark]           = useState(initialOrder?.landmark || "")
-  const [extraInfo, setExtraInfo]         = useState(initialOrder?.extraInfo || "")
-  const [contactInfo, setContactInfo]     = useState(initialOrder?.contactInfo || "")
-  const [payerName, setPayerName]         = useState(initialOrder?.payerName || "")
-  const [payerPhone, setPayerPhone]       = useState(initialOrder?.payerPhone || "")
-  const [delivered, setDelivered]         = useState(initialOrder?.delivered ?? null)
-  const [paymentRef, setPaymentRef]       = useState(initialOrder?.paymentRef || null)
-  const [orderId]                         = useState(initialOrder?.id || generateOrderId())
-  const [saving, setSaving]               = useState(false)
+  const [landmark, setLandmark]             = useState(initialOrder?.landmark || "")
+  const [extraInfo, setExtraInfo]           = useState(initialOrder?.extraInfo || "")
+  const [contactInfo, setContactInfo]       = useState(initialOrder?.contactInfo || "")
+  const [payerName, setPayerName]           = useState(initialOrder?.payerName || "")
+  const [payerPhone, setPayerPhone]         = useState(initialOrder?.payerPhone || "")
+  const [delivered, setDelivered]           = useState(initialOrder?.delivered ?? null)
+  const [paymentRef, setPaymentRef]         = useState(initialOrder?.paymentRef || null)
+  const [orderId]                           = useState(initialOrder?.id || generateOrderId())
+  const [saving, setSaving]                 = useState(false)
   const [deliveryMethod, setDeliveryMethod] = useState(initialOrder?.deliveryMethod || "pickup")
-  const [promoCode, setPromoCode]         = useState("")
-  const [promoApplied, setPromoApplied]   = useState(null)
-  const [promoError, setPromoError]       = useState("")
-  const [promoLoading, setPromoLoading]   = useState(false)
+  const [promoCode, setPromoCode]           = useState("")
+  const [promoApplied, setPromoApplied]     = useState(null)
+  const [promoError, setPromoError]         = useState("")
+  const [promoLoading, setPromoLoading]     = useState(false)
 
   const deliveryFee  = deliveryMethod === "rider" ? (siteSettings?.deliveryFee || 10) : 0
   const subtotal     = initialOrder?.subtotal || cart.reduce((s, i) => s + (i.price || i.dailyRate || 0) * i.qty, 0)
-  const discount     = promoApplied?.type === "percentage" ? Math.round(subtotal * promoApplied.value / 100)
-                     : promoApplied?.type === "fixed"      ? promoApplied.value
-                     : promoApplied?.type === "free_delivery" ? deliveryFee : 0
+  const discount     = promoApplied?.type === "percentage"    ? Math.round(subtotal * promoApplied.value / 100)
+                     : promoApplied?.type === "fixed"         ? promoApplied.value
+                     : promoApplied?.type === "free_delivery" ? deliveryFee
+                     : 0
   const total        = Math.max(0, subtotal + deliveryFee - discount)
   const platformFee  = Math.round(subtotal * 0.08)
   const toUSD        = (ghs) => rate ? (ghs / rate).toFixed(2) : "..."
-
-  const momoNumber   = "0543883608"
 
   const detectLocation = () => {
     setLocLoading(true); setLocError(null); setLocBlocked(false)
     if (!navigator.geolocation) { setLocLoading(false); setLocError("unsupported"); return }
     navigator.geolocation.getCurrentPosition(
-      pos => { setLocation({ lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6) }); setLocBlocked(false); setLocError(null); setLocLoading(false) },
+      pos => {
+        setLocation({ lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6) })
+        setLocBlocked(false); setLocError(null); setLocLoading(false)
+      },
       err => {
         setLocLoading(false)
         if (err.code === 1) setLocBlocked(true)
@@ -64,8 +66,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       if (data.valid) setPromoApplied(data)
       else setPromoError(data.message || "Invalid promo code.")
     } catch {
-      // Demo fallback
-      const demos = { WELCOME10: { valid: true, type: "percentage", value: 10, code: "WELCOME10" }, FREEDEL: { valid: true, type: "free_delivery", value: 0, code: "FREEDEL" } }
+      const demos = {
+        WELCOME10: { valid: true, type: "percentage",    value: 10, code: "WELCOME10" },
+        FREEDEL:   { valid: true, type: "free_delivery", value: 0,  code: "FREEDEL"  },
+      }
       const found = demos[promoCode.trim().toUpperCase()]
       if (found) setPromoApplied(found)
       else setPromoError("Invalid promo code.")
@@ -78,6 +82,9 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     if (!payerPhone.trim()) { alert("Please enter your phone number."); return }
     setSaving(true)
 
+    const ref = `MOMO-${orderId}`
+
+    // Save to localStorage immediately — works even if backend is down
     const order = {
       id:             orderId,
       type:           "buy",
@@ -97,43 +104,50 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       payerPhone,
       deliveryMethod,
       paymentMethod:  "manual_momo",
-      paymentRef:     `MOMO-${orderId}`,
+      paymentRef:     ref,
       status:         "Pending Confirmation",
       delivered:      null,
       createdAt:      Date.now(),
       expiresAt:      Date.now() + 48 * 60 * 60 * 1000,
     }
-
-    // Save to localStorage first (works even if backend fails)
-    // saveOrder also calls notifySellerLocal for same-browser notification
     saveOrder(order)
 
-    // Save to backend — this triggers Socket.io push to seller on other devices
+    // Save to backend — NO auth required on this endpoint now
+    // This is what fires the Socket.io push to the seller's device
     try {
-      const token = localStorage.getItem("silkroad_token")
-      if (token && cart.length > 0) {
-        const firstItem = cart[0]
-        // For DB listings, use _id. For static listings, listingId will be null
-        // and backend will handle it gracefully
-        const listingId = firstItem._id || null
-        // sellerId: from DB item seller object, or null for static items
-        const sellerId  = firstItem._id
-          ? (firstItem.seller?._id || firstItem.seller || null)
-          : null
+      const firstItem = cart[0]
 
+      // Only use DB listing IDs — static demo listings have numeric IDs not ObjectIds
+      const isDbListing = firstItem?._id && typeof firstItem._id === "string" && firstItem._id.length === 24
+      const listingId   = isDbListing ? firstItem._id : null
+
+      // sellerId from the listing's seller object — must be a real MongoDB ObjectId
+      const rawSellerId = firstItem?.seller?._id || firstItem?.seller
+      const isValidId   = rawSellerId && typeof rawSellerId === "string" && rawSellerId.length === 24
+      const sellerId    = isValidId ? rawSellerId : null
+
+      if (listingId || sellerId) {
         const res = await fetch(`${API_URL}/orders`, {
           method:  "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body:    JSON.stringify({
+          headers: {
+            "Content-Type": "application/json",
+            // Send token if logged in, but backend no longer requires it
+            ...(localStorage.getItem("silkroad_token") && {
+              Authorization: `Bearer ${localStorage.getItem("silkroad_token")}`,
+            }),
+          },
+          body: JSON.stringify({
             listingId,
             sellerId,
             type:           "product",
             amount:         total,
-            paystackRef:    `MOMO-${orderId}`,
+            paystackRef:    ref,
             location:       location ? `${location.lat},${location.lng}` : manualLocation,
             landmark,
             extraInfo,
-            contactInfo:    `${payerName} · ${payerPhone}`,
+            contactInfo,
+            payerName,
+            payerPhone,
             promoCode:      promoApplied?.code || null,
             discount,
             deliveryMethod,
@@ -141,21 +155,22 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           }),
         })
         const data = await res.json()
-        if (!res.ok) {
-          console.warn("Backend order save failed:", data.message)
+        if (data.orderId) {
+          console.log("✅ Order saved to backend:", data.orderId)
+          updateOrder(orderId, { backendOrderId: data.orderId })
         } else {
-          console.log("✅ Order saved to backend:", data._id)
-          // Update the local order with the backend ID for cross-device tracking
-          updateOrder(orderId, { backendOrderId: data._id })
+          console.warn("Backend order response:", data.message)
         }
+      } else {
+        console.warn("⚠️ Static demo listing — no backend order saved, no socket push")
       }
     } catch (err) {
-      console.warn("Backend order save error:", err.message)
-      // Not fatal — order is in localStorage
+      console.warn("Backend order save failed:", err.message)
+      // Not fatal — order is in localStorage, buyer can still track it
     }
 
     setSaving(false)
-    setPaymentRef(`MOMO-${orderId}`)
+    setPaymentRef(ref)
     setStep(3)
   }
 
@@ -176,9 +191,9 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       : null
 
   const inp = {
-    width: "100%", background: "#161616", border: "1px solid #1e1e1e", color: "#fff",
-    padding: "12px 16px", borderRadius: "10px", fontSize: "14px", outline: "none",
-    boxSizing: "border-box", fontFamily: "inherit",
+    width: "100%", background: "#161616", border: "1px solid #1e1e1e",
+    color: "#fff", padding: "12px 16px", borderRadius: "10px",
+    fontSize: "14px", outline: "none", boxSizing: "border-box", fontFamily: "inherit",
   }
 
   return (
@@ -188,12 +203,14 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
         {/* Header */}
         <div style={{ padding: "18px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: "18px", fontWeight: "700" }}>
-            {step === 0 ? "📍 Location" : step === 1 ? "✅ Confirm" : step === 2 ? "💳 Payment" : "📦 Track Order"}
+            {step === 0 ? "📍 Your Location" : step === 1 ? "✅ Confirm Order" : step === 2 ? "💳 Payment" : "📦 Track Order"}
           </span>
-          {step < 3 && <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>}
+          {step < 3 && (
+            <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>
+          )}
         </div>
 
-        {/* Steps */}
+        {/* Step indicators */}
         <div style={{ padding: "12px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", gap: "4px" }}>
           {STEPS.map((s, i) => (
             <div key={s} style={{ flex: 1, textAlign: "center" }}>
@@ -223,7 +240,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
 
               {locError && locError !== "blocked" && (
                 <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#fcd34d" }}>
-                  ⚠️ {locError === "unavailable" ? "Could not get location. Try again or enter manually." : locError === "timeout" ? "Timed out. Try again or enter manually." : "Location not supported. Enter manually."}
+                  ⚠️ {locError === "unavailable" ? "Could not get location. Try again or enter manually."
+                      : locError === "timeout"     ? "Timed out. Try again or enter manually."
+                      : locError === "unsupported" ? "GPS not supported. Enter manually."
+                      : "Could not get location. Enter manually."}
                 </div>
               )}
 
@@ -268,7 +288,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
               </div>
 
               <button className="btn-gold" onClick={() => {
-                if (!location && !manualLocation.trim()) { setLocError("Enter your location first."); return }
+                if (!location && !manualLocation.trim()) { setLocError("blocked"); setLocBlocked(true); return }
                 setLocError(null); setStep(1)
               }} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>
                 Continue →
@@ -301,8 +321,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                       <div style={{ fontSize: "13px", fontWeight: "700", color: "#6ee7b7" }}>🎟️ {promoApplied.code} applied!</div>
                       <div style={{ fontSize: "12px", color: "#555" }}>Saving ₵{discount}</div>
                     </div>
-                    <button onClick={() => { setPromoApplied(null); setPromoCode("") }}
-                      style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "18px", minHeight: "auto" }}>✕</button>
+                    <button onClick={() => { setPromoApplied(null); setPromoCode("") }} style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "18px", minHeight: "auto" }}>✕</button>
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: "8px" }}>
@@ -334,17 +353,21 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "19px", fontWeight: "800", color: "#c8a97e", borderTop: "1px solid #222", paddingTop: "10px", letterSpacing: "-0.02em" }}>
-                  <span>Total</span><span>₵{total.toLocaleString()} <span style={{ fontSize: "12px", color: "#333", fontWeight: "400" }}>(${toUSD(total)})</span></span>
+                  <span>Total</span>
+                  <span>₵{total.toLocaleString()} <span style={{ fontSize: "12px", color: "#333", fontWeight: "400" }}>(${toUSD(total)})</span></span>
                 </div>
               </div>
 
               {/* Location summary */}
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "16px", fontSize: "13px", color: "#666", display: "flex", flexDirection: "column", gap: "6px" }}>
-                <div style={{ fontSize: "11px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "4px" }}>DELIVERY DETAILS</div>
-                {location ? <div>📍 GPS: <span style={{ color: "#888" }}>{location.lat}, {location.lng}</span></div> : <div>📍 <span style={{ color: "#888" }}>{manualLocation}</span></div>}
+              <div style={{ background: "#161616", borderRadius: "14px", padding: "14px", fontSize: "13px", color: "#666", display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "4px" }}>DELIVERY DETAILS</div>
+                {location
+                  ? <div>📍 GPS: <span style={{ color: "#888" }}>{location.lat}, {location.lng}</span></div>
+                  : <div>📍 <span style={{ color: "#888" }}>{manualLocation}</span></div>
+                }
                 {landmark && <div>🗺️ Landmark: <span style={{ color: "#888" }}>{landmark}</span></div>}
                 {extraInfo && <div>📝 Notes: <span style={{ color: "#888" }}>{extraInfo}</span></div>}
-                <div>🛵 Method: <span style={{ color: "#888" }}>{deliveryMethod === "rider" ? `Rider (₵${deliveryFee})` : "Campus Pickup (Free)"}</span></div>
+                <div>🚚 Method: <span style={{ color: "#888" }}>{deliveryMethod === "rider" ? `Rider (₵${deliveryFee})` : "Campus Pickup (Free)"}</span></div>
               </div>
 
               <div style={{ display: "flex", gap: "10px" }}>
@@ -356,26 +379,26 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
             </>
           )}
 
-          {/* ── STEP 2 — Payment (Manual MoMo) ── */}
+          {/* ── STEP 2 — Payment ── */}
           {step === 2 && (
             <>
-              <div style={{ background: "#ffd700", borderRadius: "16px", padding: "22px", textAlign: "center" }}>
+              <div style={{ background: "#ffd700", borderRadius: "14px", padding: "20px", textAlign: "center" }}>
                 <div style={{ fontSize: "13px", fontWeight: "600", color: "#554400", marginBottom: "6px" }}>SEND THIS EXACT AMOUNT VIA MTN MOMO</div>
                 <div style={{ fontSize: "40px", fontWeight: "900", color: "#1a1a00", letterSpacing: "-0.03em" }}>₵{total.toLocaleString()}</div>
                 <div style={{ fontSize: "13px", color: "#554400", marginTop: "4px" }}>${toUSD(total)} USD</div>
               </div>
 
-              <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "14px", padding: "18px", fontSize: "13px", color: "#fcd34d", display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#fcd34d", display: "flex", flexDirection: "column", gap: "6px" }}>
                 <div style={{ fontWeight: "700", fontSize: "14px" }}>⚠️ How to pay:</div>
                 <div>1. Dial <strong>*170#</strong> → Send Money → MoMo User</div>
-                <div>2. Enter number: <strong style={{ fontSize: "16px" }}>0543883608</strong> (Silk Road GH)</div>
+                <div>2. Enter number: <strong style={{ fontSize: "15px" }}>0543883608</strong> (Silk Road GH)</div>
                 <div>3. Amount: <strong>₵{total}</strong></div>
                 <div>4. Reference/Reason: <strong style={{ fontFamily: "monospace" }}>{orderId}</strong></div>
                 <div>5. Fill in your name and number below, then confirm</div>
               </div>
 
               <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR NAME (as paid)</div>
+                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR NAME (as paid on MoMo)</div>
                 <input placeholder="Full name used on MoMo" value={payerName} onChange={e => setPayerName(e.target.value)} style={inp} />
               </div>
               <div>
@@ -384,7 +407,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
               </div>
               <div>
                 <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>CONTACT FOR SELLER</div>
-                <input placeholder="Phone or Instagram for seller to reach you" value={contactInfo} onChange={e => setContactInfo(e.target.value)} style={inp} />
+                <input placeholder="Phone or Instagram the seller can reach you on" value={contactInfo} onChange={e => setContactInfo(e.target.value)} style={inp} />
               </div>
 
               <div style={{ display: "flex", gap: "10px" }}>
@@ -405,7 +428,9 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: "56px", marginBottom: "10px" }}>✅</div>
                     <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", marginBottom: "8px" }}>Payment Submitted!</h3>
-                    <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.7" }}>Your order has been sent to the seller. Confirm below when your item arrives.</p>
+                    <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.7" }}>
+                      Your order has been sent to the seller. Confirm below once your item arrives.
+                    </p>
                   </div>
 
                   <OrderIdBanner orderId={orderId} />
@@ -413,10 +438,14 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                   <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", fontSize: "13px", color: "#666", display: "flex", flexDirection: "column", gap: "8px" }}>
                     {cart.length > 0 && <div>📦 <span style={{ color: "#c8a97e", fontWeight: "700" }}>{cart.map(i => i.title).join(", ")}</span></div>}
                     <div>💰 Total: <span style={{ color: "#aaa" }}>₵{total.toLocaleString()} (${toUSD(total)})</span></div>
-                    {location ? <div>📍 GPS: <span style={{ color: "#aaa" }}>{location.lat}, {location.lng}</span></div> : <div>📍 <span style={{ color: "#aaa" }}>{manualLocation}</span></div>}
-                    {landmark && <div>🗺️ {landmark}</div>}
+                    {location
+                      ? <div>📍 GPS: <span style={{ color: "#aaa" }}>{location.lat}, {location.lng}</span></div>
+                      : <div>📍 <span style={{ color: "#aaa" }}>{manualLocation}</span></div>
+                    }
+                    {landmark   && <div>🗺️ {landmark}</div>}
+                    {extraInfo  && <div>📝 {extraInfo}</div>}
                     {promoApplied && <div>🎟️ Promo: <span style={{ color: "#6ee7b7" }}>{promoApplied.code} (−₵{discount})</span></div>}
-                    <div>📞 Contact: <span style={{ color: "#c8a97e" }}>{contactInfo || payerPhone}</span></div>
+                    <div>📞 Seller will contact: <span style={{ color: "#c8a97e" }}>{contactInfo || payerPhone}</span></div>
                     {paymentRef && <div style={{ fontSize: "10px", color: "#444", fontFamily: "monospace", marginTop: "4px" }}>Ref: {paymentRef}</div>}
                   </div>
 
