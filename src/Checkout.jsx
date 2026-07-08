@@ -80,11 +80,22 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const handlePay = async () => {
     if (!payerName.trim())  { alert("Please enter your name."); return }
     if (!payerPhone.trim()) { alert("Please enter your phone number."); return }
+
+    // ── DEBUG ALERT — remove after testing ──
+    const firstItem = cart[0]
+    alert(
+      "DEBUG — Cart item data:\n\n" +
+      "_id: " + JSON.stringify(firstItem?._id) + "\n" +
+      "seller: " + JSON.stringify(firstItem?.seller) + "\n" +
+      "title: " + JSON.stringify(firstItem?.title) + "\n\n" +
+      "Full seller object:\n" + JSON.stringify(firstItem?.seller, null, 2)
+    )
+    // ── END DEBUG ──
+
     setSaving(true)
 
     const ref = `MOMO-${orderId}`
 
-    // Save to localStorage immediately — works even if backend is down
     const order = {
       id:             orderId,
       type:           "buy",
@@ -112,26 +123,28 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     }
     saveOrder(order)
 
-    // Save to backend — NO auth required on this endpoint now
-    // This is what fires the Socket.io push to the seller's device
     try {
-      const firstItem = cart[0]
-
-      // Only use DB listing IDs — static demo listings have numeric IDs not ObjectIds
       const isDbListing = firstItem?._id && typeof firstItem._id === "string" && firstItem._id.length === 24
       const listingId   = isDbListing ? firstItem._id : null
-
-      // sellerId from the listing's seller object — must be a real MongoDB ObjectId
       const rawSellerId = firstItem?.seller?._id || firstItem?.seller
       const isValidId   = rawSellerId && typeof rawSellerId === "string" && rawSellerId.length === 24
       const sellerId    = isValidId ? rawSellerId : null
+
+      // ── DEBUG ALERT 2 — shows what gets sent to backend ──
+      alert(
+        "DEBUG — What gets sent to backend:\n\n" +
+        "listingId: " + listingId + "\n" +
+        "sellerId: " + sellerId + "\n" +
+        "isDbListing: " + isDbListing + "\n" +
+        "isValidId: " + isValidId
+      )
+      // ── END DEBUG 2 ──
 
       if (listingId || sellerId) {
         const res = await fetch(`${API_URL}/orders`, {
           method:  "POST",
           headers: {
             "Content-Type": "application/json",
-            // Send token if logged in, but backend no longer requires it
             ...(localStorage.getItem("silkroad_token") && {
               Authorization: `Bearer ${localStorage.getItem("silkroad_token")}`,
             }),
@@ -155,18 +168,20 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           }),
         })
         const data = await res.json()
+
+        // ── DEBUG ALERT 3 — shows backend response ──
+        alert("DEBUG — Backend response:\n\n" + JSON.stringify(data, null, 2))
+        // ── END DEBUG 3 ──
+
         if (data.orderId) {
           console.log("✅ Order saved to backend:", data.orderId)
           updateOrder(orderId, { backendOrderId: data.orderId })
-        } else {
-          console.warn("Backend order response:", data.message)
         }
       } else {
-        console.warn("⚠️ Static demo listing — no backend order saved, no socket push")
+        alert("DEBUG — Skipped backend call because listingId and sellerId are both null/invalid")
       }
     } catch (err) {
-      console.warn("Backend order save failed:", err.message)
-      // Not fatal — order is in localStorage, buyer can still track it
+      alert("DEBUG — Backend call threw an error:\n\n" + err.message)
     }
 
     setSaving(false)
@@ -200,7 +215,6 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
       <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "540px", maxHeight: "92vh", overflowY: "auto", border: "1px solid #1e1e1e" }}>
 
-        {/* Header */}
         <div style={{ padding: "18px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: "18px", fontWeight: "700" }}>
             {step === 0 ? "📍 Your Location" : step === 1 ? "✅ Confirm Order" : step === 2 ? "💳 Payment" : "📦 Track Order"}
@@ -210,7 +224,6 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           )}
         </div>
 
-        {/* Step indicators */}
         <div style={{ padding: "12px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", gap: "4px" }}>
           {STEPS.map((s, i) => (
             <div key={s} style={{ flex: 1, textAlign: "center" }}>
@@ -273,7 +286,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
               <div>
                 <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>DELIVERY METHOD</div>
                 <div style={{ display: "flex", gap: "8px" }}>
-                  {[["pickup", "📍 Pickup (Free)", 0], ["rider", `🛵 Rider (₵${siteSettings?.deliveryFee || 10})`, siteSettings?.deliveryFee || 10]].map(([val, label]) => (
+                  {[["pickup", "📍 Pickup (Free)"], ["rider", `🛵 Rider (₵${siteSettings?.deliveryFee || 10})`]].map(([val, label]) => (
                     <button key={val} onClick={() => setDeliveryMethod(val)}
                       style={{ flex: 1, background: deliveryMethod === val ? "#c8a97e18" : "#161616", border: `1.5px solid ${deliveryMethod === val ? "#c8a97e" : "#1e1e1e"}`, color: deliveryMethod === val ? "#c8a97e" : "#888", padding: "12px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
                       {label}
@@ -312,7 +325,6 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 ))}
               </div>
 
-              {/* Promo code */}
               <div>
                 <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>PROMO CODE</div>
                 {promoApplied ? (
@@ -337,7 +349,6 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 {promoError && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "6px" }}>⚠️ {promoError}</div>}
               </div>
 
-              {/* Totals */}
               <div style={{ background: "#161616", borderRadius: "14px", padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}>
                   <span>Subtotal</span><span>₵{subtotal.toLocaleString()}</span>
@@ -358,7 +369,6 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 </div>
               </div>
 
-              {/* Location summary */}
               <div style={{ background: "#161616", borderRadius: "14px", padding: "14px", fontSize: "13px", color: "#666", display: "flex", flexDirection: "column", gap: "6px" }}>
                 <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "4px" }}>DELIVERY DETAILS</div>
                 {location
