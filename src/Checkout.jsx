@@ -81,20 +81,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     if (!payerName.trim())  { alert("Please enter your name."); return }
     if (!payerPhone.trim()) { alert("Please enter your phone number."); return }
 
-    // ── DEBUG ALERT — remove after testing ──
-    const firstItem = cart[0]
-    alert(
-      "DEBUG — Cart item data:\n\n" +
-      "_id: " + JSON.stringify(firstItem?._id) + "\n" +
-      "seller: " + JSON.stringify(firstItem?.seller) + "\n" +
-      "title: " + JSON.stringify(firstItem?.title) + "\n\n" +
-      "Full seller object:\n" + JSON.stringify(firstItem?.seller, null, 2)
-    )
-    // ── END DEBUG ──
-
     setSaving(true)
 
-    const ref = `MOMO-${orderId}`
+    const ref       = `MOMO-${orderId}`
+    const firstItem = cart[0]
 
     const order = {
       id:             orderId,
@@ -121,24 +111,17 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       createdAt:      Date.now(),
       expiresAt:      Date.now() + 48 * 60 * 60 * 1000,
     }
+
+    // Save to localStorage immediately
     saveOrder(order)
 
+    // Save to backend — fires socket push to seller on their device
     try {
       const isDbListing = firstItem?._id && typeof firstItem._id === "string" && firstItem._id.length === 24
       const listingId   = isDbListing ? firstItem._id : null
       const rawSellerId = firstItem?.seller?._id || firstItem?.seller
       const isValidId   = rawSellerId && typeof rawSellerId === "string" && rawSellerId.length === 24
       const sellerId    = isValidId ? rawSellerId : null
-
-      // ── DEBUG ALERT 2 — shows what gets sent to backend ──
-      alert(
-        "DEBUG — What gets sent to backend:\n\n" +
-        "listingId: " + listingId + "\n" +
-        "sellerId: " + sellerId + "\n" +
-        "isDbListing: " + isDbListing + "\n" +
-        "isValidId: " + isValidId
-      )
-      // ── END DEBUG 2 ──
 
       if (listingId || sellerId) {
         const res = await fetch(`${API_URL}/orders`, {
@@ -168,20 +151,12 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           }),
         })
         const data = await res.json()
-
-        // ── DEBUG ALERT 3 — shows backend response ──
-        alert("DEBUG — Backend response:\n\n" + JSON.stringify(data, null, 2))
-        // ── END DEBUG 3 ──
-
         if (data.orderId) {
-          console.log("✅ Order saved to backend:", data.orderId)
           updateOrder(orderId, { backendOrderId: data.orderId })
         }
-      } else {
-        alert("DEBUG — Skipped backend call because listingId and sellerId are both null/invalid")
       }
     } catch (err) {
-      alert("DEBUG — Backend call threw an error:\n\n" + err.message)
+      console.warn("Backend order save failed:", err.message)
     }
 
     setSaving(false)
@@ -215,6 +190,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
       <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "540px", maxHeight: "92vh", overflowY: "auto", border: "1px solid #1e1e1e" }}>
 
+        {/* Header */}
         <div style={{ padding: "18px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: "18px", fontWeight: "700" }}>
             {step === 0 ? "📍 Your Location" : step === 1 ? "✅ Confirm Order" : step === 2 ? "💳 Payment" : "📦 Track Order"}
@@ -224,6 +200,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           )}
         </div>
 
+        {/* Step indicators */}
         <div style={{ padding: "12px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", gap: "4px" }}>
           {STEPS.map((s, i) => (
             <div key={s} style={{ flex: 1, textAlign: "center" }}>
@@ -452,8 +429,8 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                       ? <div>📍 GPS: <span style={{ color: "#aaa" }}>{location.lat}, {location.lng}</span></div>
                       : <div>📍 <span style={{ color: "#aaa" }}>{manualLocation}</span></div>
                     }
-                    {landmark   && <div>🗺️ {landmark}</div>}
-                    {extraInfo  && <div>📝 {extraInfo}</div>}
+                    {landmark    && <div>🗺️ {landmark}</div>}
+                    {extraInfo   && <div>📝 {extraInfo}</div>}
                     {promoApplied && <div>🎟️ Promo: <span style={{ color: "#6ee7b7" }}>{promoApplied.code} (−₵{discount})</span></div>}
                     <div>📞 Seller will contact: <span style={{ color: "#c8a97e" }}>{contactInfo || payerPhone}</span></div>
                     {paymentRef && <div style={{ fontSize: "10px", color: "#444", fontFamily: "monospace", marginTop: "4px" }}>Ref: {paymentRef}</div>}
