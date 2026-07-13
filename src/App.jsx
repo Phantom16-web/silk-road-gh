@@ -10,6 +10,8 @@ import SellListing from "./SellListing"
 import AdminPanel from "./AdminPanel"
 import OrderTracker, { NotificationBell, connectSellerSocket, disconnectSocket } from "./OrderTracker"
 import RiderDashboard from "./RiderDashboard"
+import RiderAuth from "./RiderAuth"
+import RiderApp  from "./RiderApp"
 import { getListings } from "./api"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
@@ -42,14 +44,14 @@ const ALL_LISTINGS = [
 ]
 
 const RENTALS_SEARCH = [
-  { id: 101, title: "Canon EOS M50 Camera",          category: "Electronics", imageId: 21, section: "rent" },
-  { id: 102, title: "Projector – Epson X41",          category: "Electronics", imageId: 22, section: "rent" },
-  { id: 103, title: "Mountain Bike",                  category: "Sports",      imageId: 23, section: "rent" },
-  { id: 104, title: "MacBook Air M1",                 category: "Electronics", imageId: 24, section: "rent" },
-  { id: 105, title: "Acoustic Guitar",                category: "Music",       imageId: 25, section: "rent" },
-  { id: 106, title: "Camping Tent (4-person)",        category: "Outdoors",    imageId: 26, section: "rent" },
+  { id: 101, title: "Canon EOS M50 Camera",         category: "Electronics", imageId: 21, section: "rent" },
+  { id: 102, title: "Projector – Epson X41",         category: "Electronics", imageId: 22, section: "rent" },
+  { id: 103, title: "Mountain Bike",                 category: "Sports",      imageId: 23, section: "rent" },
+  { id: 104, title: "MacBook Air M1",                category: "Electronics", imageId: 24, section: "rent" },
+  { id: 105, title: "Acoustic Guitar",               category: "Music",       imageId: 25, section: "rent" },
+  { id: 106, title: "Camping Tent (4-person)",       category: "Outdoors",    imageId: 26, section: "rent" },
   { id: 107, title: "PS5 Console + 2 Controllers",   category: "Gaming",      imageId: 27, section: "rent" },
-  { id: 108, title: "Scientific Calculator (Casio)",  category: "Academic",    imageId: 28, section: "rent" },
+  { id: 108, title: "Scientific Calculator (Casio)", category: "Academic",    imageId: 28, section: "rent" },
 ]
 
 const SERVICES_SEARCH = [
@@ -69,8 +71,8 @@ const ALL_ITEMS = [
   ...SERVICES_SEARCH,
 ]
 
-const SECTION_LABEL = { buy: "🛒 Buy",     rent: "📦 Rent",    service: "🛠️ Service" }
-const SECTION_COLOR = { buy: "#c8a97e",   rent: "#93c5fd",   service: "#6ee7b7" }
+const SECTION_LABEL = { buy: "🛒 Buy", rent: "📦 Rent", service: "🛠️ Service" }
+const SECTION_COLOR = { buy: "#c8a97e", rent: "#93c5fd", service: "#6ee7b7" }
 const PAGE_SIZE = 16
 
 const SECTION_KEYWORDS = {
@@ -93,12 +95,12 @@ const parseSearch = (query) => {
   const q = query.toLowerCase().trim()
   const words = q.split(" ")
   let detectedSection = null
-  let remainingWords = [...words]
+  let remainingWords  = [...words]
   for (const [section, keywords] of Object.entries(SECTION_KEYWORDS)) {
     for (const kw of keywords) {
       if (words.includes(kw)) {
         detectedSection = section
-        remainingWords = words.filter(w => w !== kw)
+        remainingWords  = words.filter(w => w !== kw)
         break
       }
     }
@@ -110,12 +112,12 @@ const parseSearch = (query) => {
 // ── Product Modal ──────────────────────────────────────────────────────────────
 function ProductModal({ item, onClose, onCart, rate }) {
   if (!item) return null
-  const isDb = !!item._id
+  const isDb       = !!item._id
   const sellerName = isDb ? item.seller?.name : item.seller
   const university = isDb ? item.seller?.university : item.university
   const itemImage  = item.image || `https://picsum.photos/seed/${item.id}/600/350`
   const delivery   = item.delivery || []
-  const toUSD = (ghs) => rate ? (ghs / rate).toFixed(2) : "..."
+  const toUSD      = (ghs) => rate ? (ghs / rate).toFixed(2) : "..."
 
   return (
     <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
@@ -273,8 +275,8 @@ function Footer({ onOpen, siteSettings }) {
 // ── Search Results ─────────────────────────────────────────────────────────────
 function SearchResults({ query, onClose, onNavigate }) {
   const { detectedSection, keyword } = parseSearch(query)
-  const [dbResults, setDbResults] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [dbResults, setDbResults]   = useState([])
+  const [loading, setLoading]       = useState(true)
 
   useEffect(() => {
     setLoading(true)
@@ -295,7 +297,11 @@ function SearchResults({ query, onClose, onNavigate }) {
     : dbResults.map(item => ({ id: item._id, imageId: item._id, title: item.title, category: item.category, section: "buy", image: item.image }))
 
   const results = [...dbBuyResults, ...staticResults]
-  const grouped = { buy: results.filter(r => r.section === "buy"), rent: results.filter(r => r.section === "rent"), service: results.filter(r => r.section === "service") }
+  const grouped = {
+    buy:     results.filter(r => r.section === "buy"),
+    rent:    results.filter(r => r.section === "rent"),
+    service: results.filter(r => r.section === "service"),
+  }
 
   return (
     <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "80px 20px 20px" }} onClick={onClose}>
@@ -378,10 +384,19 @@ function App() {
   const [showAdmin, setShowAdmin]         = useState(false)
   const [showTracker, setShowTracker]     = useState(false)
   const [showRiderDashboard, setShowRiderDashboard] = useState(false)
+  const [showRiderAuth, setShowRiderAuth] = useState(false)
   const [trackedOrder, setTrackedOrder]   = useState(null)
   const [authCallback, setAuthCallback]   = useState(null)
   const [siteSettings, setSiteSettings]   = useState(DEFAULT_SITE_SETTINGS)
   const [notifTick, setNotifTick]         = useState(0)
+
+  // Rider session
+  const [riderUser, setRiderUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem("silkroad_rider")
+      return saved ? JSON.parse(saved) : null
+    } catch { return null }
+  })
 
   const [dbListings, setDbListings]           = useState([])
   const [listingsLoading, setListingsLoading] = useState(false)
@@ -397,9 +412,9 @@ function App() {
   const isAtBottomRef         = useRef(false)
   const searchRef             = useRef(null)
 
-  const usingDb        = dbListings.length > 0
+  const usingDb         = dbListings.length > 0
   const displayListings = usingDb ? dbListings : ALL_LISTINGS.slice(0, visibleCount)
-  const hasMore        = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
+  const hasMore         = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
 
   // ── Site settings ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -409,7 +424,7 @@ function App() {
       .catch(() => {})
   }, [])
 
-  // ── Live notifications — same-tab custom event ────────────────────────────
+  // ── Live notifications ───────────────────────────────────────────────────────
   useEffect(() => {
     const handler = () => setNotifTick(n => n + 1)
     window.addEventListener("silkroad_new_notification", handler)
@@ -509,7 +524,7 @@ function App() {
 
   useEffect(() => { if (window.location.pathname === "/admin") setShowAdmin(true) }, [])
 
-  // ── Session restore — reconnects socket so seller gets live notifications ────
+  // ── Session restore ──────────────────────────────────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem("silkroad_token")
     if (token && !user) {
@@ -522,7 +537,6 @@ function App() {
               joined: new Date(data.createdAt || Date.now()).toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
             }
             setUser(userData)
-            // Reconnect socket after page refresh so seller keeps receiving notifications
             connectSellerSocket(userData._id)
           }
         }).catch(() => {})
@@ -530,7 +544,7 @@ function App() {
     }
   }, [])
 
-  // ── Exchange rate — fetch USD base, display as $1 = ₵X ──────────────────────
+  // ── Exchange rate ────────────────────────────────────────────────────────────
   const fetchRate = async () => {
     setRateLoading(true)
     try {
@@ -542,14 +556,13 @@ function App() {
 
   useEffect(() => { fetchRate() }, [])
 
-  // rate = GHS per 1 USD → display as "$1 = ₵X"
   const rateDisplay = rate ? `$1 = ₵${rate.toFixed(2)}` : "..."
-  const toUSD = (ghs) => rate ? (ghs / rate).toFixed(2) : "..."
+  const toUSD       = (ghs) => rate ? (ghs / rate).toFixed(2) : "..."
 
   const getItemId  = (item) => item._id || item.id
   const addToCart  = (item) => {
     setCart(prev => {
-      const id = getItemId(item)
+      const id     = getItemId(item)
       const exists = prev.find(i => getItemId(i) === id)
       if (exists) return prev.map(i => getItemId(i) === id ? { ...i, qty: i.qty + 1 } : i)
       return [...prev, { ...item, qty: 1 }]
@@ -577,6 +590,18 @@ function App() {
     return [...dbMatches, ...staticMatches].slice(0, 8)
   })()
 
+  // ── If rider is logged in, show rider app ────────────────────────────────────
+  if (riderUser) return (
+    <RiderApp
+      rider={riderUser}
+      onSignOut={() => {
+        localStorage.removeItem("silkroad_rider_token")
+        localStorage.removeItem("silkroad_rider")
+        setRiderUser(null)
+      }}
+    />
+  )
+
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#f0ede8", display: "flex", flexDirection: "column" }}>
 
@@ -587,6 +612,11 @@ function App() {
             Silk Road
           </h1>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {/* Rider portal button */}
+            <button onClick={() => setShowRiderAuth(true)}
+              style={{ background: "#1a1a1a", border: "1px solid #252525", color: "#93c5fd", padding: "8px 14px", borderRadius: "9px", fontWeight: "700", cursor: "pointer", fontSize: "13px", whiteSpace: "nowrap", fontFamily: "inherit" }}>
+              🛵 Rider
+            </button>
             <button onClick={() => setShowSell(true)}
               style={{ background: "#1a1a1a", border: "1px solid #252525", color: "#c8a97e", padding: "8px 14px", borderRadius: "9px", fontWeight: "700", cursor: "pointer", fontSize: "13px", whiteSpace: "nowrap", fontFamily: "inherit" }}>
               + Sell
@@ -603,7 +633,6 @@ function App() {
             </button>
             {user ? (
               <>
-                {/* NotificationBell handles cross-device socket + cross-tab storage events */}
                 <NotificationBell user={user} onClick={() => setShowAccount(true)} notifTick={notifTick} />
                 <button onClick={() => setShowAccount(true)}
                   style={{ background: "linear-gradient(135deg,#c8a97e,#9a7040)", border: "none", width: "34px", height: "34px", borderRadius: "50%", fontWeight: "800", cursor: "pointer", fontSize: "14px", color: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -619,9 +648,7 @@ function App() {
             <button onClick={() => setCartOpen(true)}
               style={{ position: "relative", background: "transparent", border: "none", color: "#fff", fontSize: "22px", cursor: "pointer", padding: "4px" }}>
               🛒
-              {cartCount > 0 && (
-                <span className="badge">{cartCount}</span>
-              )}
+              {cartCount > 0 && <span className="badge">{cartCount}</span>}
             </button>
           </div>
         </div>
@@ -718,12 +745,12 @@ function App() {
               {listingsLoading
                 ? Array.from({ length: PAGE_SIZE }).map((_, i) => <ListingSkeleton key={i} />)
                 : displayListings.map((item, index) => {
-                    const itemId      = getItemId(item)
-                    const isDb        = !!item._id
-                    const sellerName  = isDb ? item.seller?.name : item.seller
-                    const university  = isDb ? item.seller?.university : item.university
-                    const itemPrice   = item.price || item.dailyRate || 0
-                    const itemImage   = item.image || `https://picsum.photos/seed/${item.id}/300/200`
+                    const itemId     = getItemId(item)
+                    const isDb       = !!item._id
+                    const sellerName = isDb ? item.seller?.name : item.seller
+                    const university = isDb ? item.seller?.university : item.university
+                    const itemPrice  = item.price || item.dailyRate || 0
+                    const itemImage  = item.image || `https://picsum.photos/seed/${item.id}/300/200`
                     return (
                       <div key={itemId} className="listing-card reveal" style={{ animationDelay: `${(index % 8) * 55}ms` }}>
                         <div style={{ overflow: "hidden", position: "relative" }}>
@@ -779,7 +806,6 @@ function App() {
           onAuth={(userData) => {
             setUser(userData)
             setShowAuth(false)
-            // Connect socket so seller receives live notifications on this device
             connectSellerSocket(userData._id)
             if (authCallback) { authCallback(); setAuthCallback(null) }
           }}
@@ -795,7 +821,6 @@ function App() {
             setUser(null)
             setShowAccount(false)
             localStorage.removeItem("silkroad_token")
-            // Disconnect socket on sign out
             disconnectSocket()
           }}
           onClose={() => setShowAccount(false)}
@@ -827,6 +852,17 @@ function App() {
       )}
 
       {showRiderDashboard && <RiderDashboard user={user} onClose={() => setShowRiderDashboard(false)} />}
+
+      {/* Rider Auth Portal */}
+      {showRiderAuth && (
+        <RiderAuth
+          onAuth={(riderData) => {
+            setRiderUser(riderData)
+            setShowRiderAuth(false)
+          }}
+          onClose={() => setShowRiderAuth(false)}
+        />
+      )}
 
       {/* ── CART DRAWER ── */}
       {cartOpen && (
