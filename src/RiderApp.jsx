@@ -18,8 +18,8 @@ const STATUS_COLORS = {
 const STATUS_LABEL = {
   pending:   "⏳ Pending",
   accepted:  "✅ Accepted — Head to Pickup",
-  picked_up: "📦 Package Picked Up",
-  delivered: "🚪 Delivered — Awaiting OTP",
+  picked_up: "📦 Package Picked Up — Head to Buyer",
+  delivered: "🚪 Delivered — Enter Buyer's OTP",
   completed: "🎉 Complete",
   cancelled: "❌ Cancelled",
 }
@@ -68,12 +68,9 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
       reconnectionAttempts: Infinity,
       transports:           ["websocket", "polling"],
     })
-
     s.on("connect", () => {
-      console.log("🔌 Rider socket:", s.id)
       s.emit("register_rider", String(rider._id))
     })
-
     s.on("new_delivery_job", (job) => {
       setActive(prev => {
         if (!prev) {
@@ -87,7 +84,6 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
         return prev
       })
     })
-
     socketRef.current = s
     return () => s.disconnect()
   }, [rider._id])
@@ -102,9 +98,15 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
         riderCall("/deliveries/my-active"),
       ])
       if (Array.isArray(jobsRes.jobs)) setJobs(jobsRes.jobs)
-      if (activeRes.delivery) { setActive(activeRes.delivery); setTab("active") }
-      else { setActive(null) }
-    } catch (err) { console.error("Fetch error:", err.message) }
+      if (activeRes.delivery) {
+        setActive(activeRes.delivery)
+        setTab("active")
+      } else {
+        setActive(null)
+      }
+    } catch (err) {
+      console.error("Fetch error:", err.message)
+    }
     setLoading(false)
   }
 
@@ -112,14 +114,18 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
     try {
       const res = await riderCall("/rider-auth/toggle-online", "PUT")
       setIsOnline(res.isOnline)
-    } catch (err) { console.error("Toggle error:", err.message) }
+    } catch {}
   }
 
   const handleAccept = async (deliveryId) => {
     setActionLoading(deliveryId); setActionError("")
     try {
       const res = await riderCall(`/deliveries/${deliveryId}/accept`, "PUT")
-      if (res.delivery) { setActive(res.delivery); setJobs([]); setTab("active") }
+      if (res.delivery) {
+        setActive(res.delivery)
+        setJobs([])
+        setTab("active")
+      }
     } catch (err) {
       setActionError(err.message || "Could not accept. Try again.")
       fetchJobsAndActive()
@@ -132,11 +138,10 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
     try {
       await riderCall(`/deliveries/${deliveryId}/decline`, "PUT")
       setJobs(prev => prev.filter(j => (j._id || j.deliveryId) !== deliveryId))
-    } catch (err) { console.error("Decline error:", err.message) }
+    } catch {}
     setActionLoading("")
   }
 
-  // ── Cancel active delivery ─────────────────────────────────────────────────
   const handleCancelDelivery = async () => {
     if (!cancelConfirm) { setCancelConfirm(true); return }
     const id = activeDelivery?._id || activeDelivery?.id
@@ -145,6 +150,7 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
     try {
       await riderCall(`/deliveries/${id}/cancel-by-rider`, "PUT")
       setActive(null)
+      setOtpInput("")
       setTab("jobs")
       await fetchJobsAndActive()
     } catch (err) {
@@ -155,23 +161,29 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
 
   const handlePickedUp = async () => {
     const id = activeDelivery?._id || activeDelivery?.id
-    if (!id) { setActionError("Delivery ID missing."); return }
+    if (!id) { setActionError("Delivery ID missing. Tap refresh below."); return }
     setActionLoading("pickup"); setActionError("")
     try {
       const res = await riderCall(`/deliveries/${id}/picked-up`, "PUT")
       setActive(res.delivery)
-    } catch (err) { setActionError(err.message || "Could not update. Try again.") }
+    } catch (err) {
+      setActionError(err.message || "Could not update. Try again.")
+    }
     setActionLoading("")
   }
 
   const handleDelivered = async () => {
     const id = activeDelivery?._id || activeDelivery?.id
-    if (!id) { setActionError("Delivery ID missing."); return }
+    if (!id) { setActionError("Delivery ID missing. Tap refresh below."); return }
     setActionLoading("deliver"); setActionError("")
     try {
       const res = await riderCall(`/deliveries/${id}/delivered`, "PUT")
+      // res.delivery has status: "delivered"
+      // res.otp and res.localOrderId are returned so buyer's OrderTracker can poll
       setActive(res.delivery)
-    } catch (err) { setActionError(err.message || "Could not update. Try again.") }
+    } catch (err) {
+      setActionError(err.message || "Could not update. Try again.")
+    }
     setActionLoading("")
   }
 
@@ -183,10 +195,15 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
     try {
       const res = await riderCall(`/deliveries/${id}/confirm-otp`, "PUT", { otp: otpInput.trim() })
       setActive(res.delivery)
-      setEarnings(e => ({ total: e.total + (activeDelivery.deliveryFee || 0), deliveries: e.deliveries + 1 }))
+      setEarnings(e => ({
+        total:      e.total      + (activeDelivery.deliveryFee || 0),
+        deliveries: e.deliveries + 1,
+      }))
       setOtpInput("")
       setTimeout(() => { setActive(null); setTab("jobs"); fetchJobsAndActive() }, 3000)
-    } catch (err) { setOtpError(err.message || "Incorrect OTP. Ask the buyer to check again.") }
+    } catch (err) {
+      setOtpError(err.message || "Incorrect OTP. Ask the buyer to check again.")
+    }
     setOtpLoading(false)
   }
 
@@ -303,7 +320,6 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
                 const eta = rider.vehicle === "motorbike" ? Math.round(km * 3)
                           : rider.vehicle === "bicycle"   ? Math.round(km * 6)
                           : Math.round(km * 12)
-
                 return (
                   <div key={id} style={{ background: "#111", borderRadius: "16px", border: "1px solid #1e1e1e", overflow: "hidden" }}>
                     <div style={{ padding: "16px 18px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -316,7 +332,6 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
                         <div style={{ fontSize: "11px", color: "#555" }}>delivery fee</div>
                       </div>
                     </div>
-
                     <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
                       <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
                         <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#c8a97e", marginTop: "5px", flexShrink: 0 }} />
@@ -340,7 +355,6 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
                         </div>
                       </div>
                     </div>
-
                     <div style={{ padding: "0 18px 18px", display: "flex", gap: "10px" }}>
                       <button onClick={() => handleDecline(id)} disabled={!!actionLoading}
                         style={{ flex: 1, background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "12px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "14px", fontFamily: "inherit", opacity: actionLoading === `decline-${id}` ? 0.6 : 1 }}>
@@ -444,6 +458,7 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
 
                 {/* ── Action buttons by status ── */}
 
+                {/* ACCEPTED → pick up the package */}
                 {activeDelivery.status === "accepted" && (
                   <button onClick={handlePickedUp} disabled={actionLoading === "pickup"}
                     style={{ background: "#c8a97e", border: "none", padding: "18px", borderRadius: "14px", fontWeight: "700", cursor: actionLoading === "pickup" ? "not-allowed" : "pointer", fontSize: "16px", color: "#000", fontFamily: "inherit", opacity: actionLoading === "pickup" ? 0.7 : 1 }}>
@@ -451,34 +466,43 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
                   </button>
                 )}
 
+                {/* PICKED UP → go deliver */}
                 {activeDelivery.status === "picked_up" && (
                   <button onClick={handleDelivered} disabled={actionLoading === "deliver"}
                     style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "18px", borderRadius: "14px", fontWeight: "700", cursor: actionLoading === "deliver" ? "not-allowed" : "pointer", fontSize: "16px", fontFamily: "inherit", opacity: actionLoading === "deliver" ? 0.7 : 1 }}>
-                    {actionLoading === "deliver" ? "⏳ Updating..." : "🚪 I've Delivered — Request OTP from Buyer"}
+                    {actionLoading === "deliver" ? "⏳ Generating OTP..." : "🚪 I've Delivered — Get OTP from Buyer"}
                   </button>
                 )}
 
+                {/* DELIVERED → buyer reads OTP to rider */}
                 {activeDelivery.status === "delivered" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                    <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "18px", textAlign: "center" }}>
+                    <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "20px", textAlign: "center" }}>
                       <div style={{ fontSize: "32px", marginBottom: "10px" }}>📱</div>
-                      <div style={{ fontSize: "15px", fontWeight: "700", color: "#6ee7b7", marginBottom: "6px" }}>Ask the buyer for their OTP</div>
-                      <div style={{ fontSize: "13px", color: "#888" }}>
-                        The buyer has a 6-digit code on their order tracker screen. Ask them to read it to you.
+                      <div style={{ fontSize: "15px", fontWeight: "700", color: "#6ee7b7", marginBottom: "8px" }}>Ask the buyer for their OTP</div>
+                      <div style={{ fontSize: "13px", color: "#888", lineHeight: "1.6" }}>
+                        The buyer has a 6-digit code on their <strong>order tracker screen</strong>.<br />
+                        Ask them to open it and read the code to you.
                       </div>
                     </div>
-                    <input
-                      placeholder="000000"
-                      value={otpInput}
-                      onChange={e => { setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError("") }}
-                      maxLength={6}
-                      style={{ width: "100%", background: "#161616", border: `1.5px solid ${otpError ? "#991b1b" : "#c8a97e44"}`, color: "#c8a97e", padding: "16px", borderRadius: "12px", fontSize: "32px", fontWeight: "900", fontFamily: "monospace", letterSpacing: ".2em", textAlign: "center", outline: "none", boxSizing: "border-box" }}
-                    />
+
+                    <div>
+                      <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>ENTER THE BUYER'S OTP</div>
+                      <input
+                        placeholder="000000"
+                        value={otpInput}
+                        onChange={e => { setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError("") }}
+                        maxLength={6}
+                        style={{ width: "100%", background: "#161616", border: `1.5px solid ${otpError ? "#991b1b" : "#c8a97e44"}`, color: "#c8a97e", padding: "16px", borderRadius: "12px", fontSize: "36px", fontWeight: "900", fontFamily: "monospace", letterSpacing: ".25em", textAlign: "center", outline: "none", boxSizing: "border-box" }}
+                      />
+                    </div>
+
                     {otpError && (
                       <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#fca5a5", textAlign: "center" }}>
                         ⚠️ {otpError}
                       </div>
                     )}
+
                     <button onClick={handleConfirmOTP} disabled={otpInput.length !== 6 || otpLoading}
                       style={{ background: "#c8a97e", border: "none", padding: "16px", borderRadius: "14px", fontWeight: "700", cursor: (otpInput.length !== 6 || otpLoading) ? "not-allowed" : "pointer", fontSize: "16px", color: "#000", fontFamily: "inherit", opacity: (otpInput.length !== 6 || otpLoading) ? 0.5 : 1 }}>
                       {otpLoading ? "⏳ Verifying..." : "✅ Confirm OTP & Complete Delivery"}
@@ -486,45 +510,50 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
                   </div>
                 )}
 
+                {/* COMPLETED */}
                 {activeDelivery.status === "completed" && (
                   <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "32px", textAlign: "center" }}>
                     <div style={{ fontSize: "56px", marginBottom: "12px" }}>🎉</div>
                     <div style={{ fontSize: "20px", fontWeight: "800", color: "#6ee7b7", marginBottom: "8px" }}>Delivery Complete!</div>
                     <div style={{ fontSize: "24px", fontWeight: "800", color: "#c8a97e", marginBottom: "8px" }}>+₵{activeDelivery.deliveryFee}</div>
-                    <div style={{ fontSize: "13px", color: "#888" }}>Added to your earnings.</div>
+                    <div style={{ fontSize: "13px", color: "#888" }}>Loading next jobs...</div>
                   </div>
                 )}
 
-                {/* ── CANCEL BUTTON ── shows for accepted and picked_up only ── */}
+                {/* ── CANCEL BUTTON — only for accepted or picked_up ── */}
                 {(activeDelivery.status === "accepted" || activeDelivery.status === "picked_up") && (
-                  <div style={{ marginTop: "8px" }}>
+                  <div style={{ marginTop: "4px" }}>
                     {!cancelConfirm ? (
                       <button onClick={() => setCancelConfirm(true)}
-                        style={{ width: "100%", background: "transparent", border: "1px solid #333", color: "#555", padding: "12px", borderRadius: "12px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
+                        style={{ width: "100%", background: "transparent", border: "1px solid #2a2a2a", color: "#444", padding: "12px", borderRadius: "12px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
                         ❌ Cancel This Delivery
                       </button>
                     ) : (
                       <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "14px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                        <div style={{ fontSize: "13px", color: "#fca5a5", fontWeight: "700", textAlign: "center" }}>
-                          ⚠️ Are you sure?
-                        </div>
+                        <div style={{ fontSize: "14px", fontWeight: "700", color: "#fca5a5", textAlign: "center" }}>⚠️ Cancel this delivery?</div>
                         <div style={{ fontSize: "12px", color: "#888", textAlign: "center", lineHeight: "1.6" }}>
-                          The job goes back to the board for another rider. Only cancel if you genuinely cannot complete this delivery.
+                          The job goes back to the board for another rider. Only cancel if you genuinely cannot complete it.
                         </div>
                         <div style={{ display: "flex", gap: "10px" }}>
                           <button onClick={() => setCancelConfirm(false)}
                             style={{ flex: 1, background: "#161616", border: "1px solid #222", color: "#888", padding: "12px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
-                            Go Back
+                            Keep Going
                           </button>
                           <button onClick={handleCancelDelivery} disabled={actionLoading === "cancel"}
                             style={{ flex: 1, background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "12px", borderRadius: "10px", cursor: actionLoading === "cancel" ? "not-allowed" : "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit", opacity: actionLoading === "cancel" ? 0.7 : 1 }}>
-                            {actionLoading === "cancel" ? "⏳ Cancelling..." : "Yes, Cancel"}
+                            {actionLoading === "cancel" ? "⏳..." : "Yes, Cancel"}
                           </button>
                         </div>
                       </div>
                     )}
                   </div>
                 )}
+
+                {/* Refresh button */}
+                <button onClick={fetchJobsAndActive}
+                  style={{ background: "transparent", border: "1px solid #1a1a1a", color: "#333", padding: "10px", borderRadius: "10px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>
+                  🔄 Refresh delivery status
+                </button>
 
               </div>
             )}
