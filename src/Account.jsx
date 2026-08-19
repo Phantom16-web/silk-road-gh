@@ -27,7 +27,7 @@ const inp = (err) => ({
   fontSize: "14px", outline: "none", boxSizing: "border-box", fontFamily: "inherit",
 })
 
-// ── Geocode address → coordinates using OpenStreetMap Nominatim (free, no key) ─
+// ── Geocode address → GPS coords ───────────────────────────────────────────────
 async function geocodeAddress(address) {
   try {
     const query = encodeURIComponent(address + ", Ghana")
@@ -37,7 +37,7 @@ async function geocodeAddress(address) {
     )
     const data = await res.json()
     if (data && data.length > 0) {
-      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), display: data[0].display_name }
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
     }
     return null
   } catch { return null }
@@ -173,16 +173,14 @@ function ActiveServices() {
 
 // ── Delivery Request Modal ─────────────────────────────────────────────────────
 function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
-  // Pickup state
-  const [pickupMode, setPickupMode]       = useState("gps")  // "gps" | "manual"
-  const [pickupLat, setPickupLat]         = useState("")
-  const [pickupLng, setPickupLng]         = useState("")
-  const [pickupAddress, setPickupAddress] = useState("")
-  const [pickupResolved, setPickupResolved] = useState(false)
-  const [locLoading, setLocLoading]       = useState(false)
-  const [geocodeLoading, setGeocodeLoading] = useState(false)
+  const [pickupMode, setPickupMode]           = useState("gps")
+  const [pickupLat, setPickupLat]             = useState("")
+  const [pickupLng, setPickupLng]             = useState("")
+  const [pickupAddress, setPickupAddress]     = useState("")
+  const [pickupResolved, setPickupResolved]   = useState(false)
+  const [locLoading, setLocLoading]           = useState(false)
+  const [geocodeLoading, setGeocodeLoading]   = useState(false)
 
-  // Drop state — parse from buyer's checkout
   const parsedDrop = (() => {
     if (!notification.location) return { lat: "", lng: "" }
     const parts = notification.location.toString().split(",")
@@ -194,27 +192,23 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
     return { lat: "", lng: "" }
   })()
 
-  const [dropLat, setDropLat]         = useState(parsedDrop.lat)
-  const [dropLng, setDropLng]         = useState(parsedDrop.lng)
-  const [dropAddress, setDropAddress] = useState(notification.location || "")
-  const [dropResolved, setDropResolved] = useState(!!(parsedDrop.lat && parsedDrop.lng))
+  const [dropLat, setDropLat]                 = useState(parsedDrop.lat)
+  const [dropLng, setDropLng]                 = useState(parsedDrop.lng)
+  const [dropAddress, setDropAddress]         = useState(notification.location || "")
+  const [dropResolved, setDropResolved]       = useState(!!(parsedDrop.lat && parsedDrop.lng))
   const [dropGeocodeLoading, setDropGeocodeLoading] = useState(false)
 
-  const [quote, setQuote]           = useState(null)
+  const [quote, setQuote]               = useState(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
-  const [requesting, setRequesting] = useState(false)
-  const [done, setDone]             = useState(false)
-  const [error, setError]           = useState("")
+  const [requesting, setRequesting]     = useState(false)
+  const [done, setDone]                 = useState(false)
+  const [error, setError]               = useState("")
 
   const token = localStorage.getItem("silkroad_token")
 
-  // ── GPS detect ────────────────────────────────────────────────────────────
-  const detectGPS = () => {
+  const detectPickup = () => {
     setLocLoading(true); setError(""); setPickupResolved(false)
-    if (!navigator.geolocation) {
-      setError("GPS not supported by your browser. Please use manual entry.")
-      setPickupMode("manual"); setLocLoading(false); return
-    }
+    if (!navigator.geolocation) { setError("GPS not supported. Use Type Address."); setLocLoading(false); return }
     navigator.geolocation.getCurrentPosition(
       pos => {
         const lat = pos.coords.latitude.toFixed(6)
@@ -223,99 +217,62 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
         setPickupAddress(`${lat}, ${lng}`)
         setPickupResolved(true); setLocLoading(false)
       },
-      (err) => {
-        setLocLoading(false)
-        if (err.code === 1) {
-          setError("Location access was denied. Please use manual address entry below.")
-          setPickupMode("manual")
-        } else {
-          setError("Could not get GPS location. Please use manual address entry.")
-          setPickupMode("manual")
-        }
-      },
+      () => { setError("GPS denied. Use Type Address instead."); setPickupMode("manual"); setLocLoading(false) },
       { timeout: 10000 }
     )
   }
 
-  // ── Geocode pickup address → coords ───────────────────────────────────────
   const geocodePickup = async () => {
-    if (!pickupAddress.trim()) { setError("Please enter your address first."); return }
+    if (!pickupAddress.trim()) { setError("Enter your address first."); return }
     setGeocodeLoading(true); setError(""); setPickupResolved(false)
     const result = await geocodeAddress(pickupAddress)
     if (result) {
-      setPickupLat(result.lat.toString())
-      setPickupLng(result.lng.toString())
+      setPickupLat(result.lat.toString()); setPickupLng(result.lng.toString())
       setPickupResolved(true)
-      setPickupAddress(pickupAddress) // keep what they typed
-    } else {
-      setError("Could not find that address. Try adding more detail like the university name or area.")
-    }
+    } else { setError("Could not find that address. Add more detail like the university name.") }
     setGeocodeLoading(false)
   }
 
-  // ── Geocode drop address → coords (when buyer didn't share GPS) ───────────
   const geocodeDrop = async () => {
-    if (!dropAddress.trim()) { setError("Please enter the buyer's address first."); return }
+    if (!dropAddress.trim()) { setError("Enter buyer address first."); return }
     setDropGeocodeLoading(true); setError(""); setDropResolved(false)
     const result = await geocodeAddress(dropAddress)
     if (result) {
-      setDropLat(result.lat.toString())
-      setDropLng(result.lng.toString())
+      setDropLat(result.lat.toString()); setDropLng(result.lng.toString())
       setDropResolved(true)
-    } else {
-      setError("Could not find buyer's address. Try adding the university name or area.")
-    }
+    } else { setError("Could not find buyer address. Add the university name.") }
     setDropGeocodeLoading(false)
   }
 
-  // ── Get quote ─────────────────────────────────────────────────────────────
   const handleGetQuote = async () => {
     setError("")
-    if (!pickupResolved || !pickupLat || !pickupLng) {
-      setError("Please resolve your pickup location first (GPS or geocode your address).")
-      return
-    }
-    if (!dropResolved || !dropLat || !dropLng) {
-      setError("Please resolve the buyer's drop-off location first.")
-      return
-    }
+    if (!pickupResolved || !pickupLat || !pickupLng) { setError("Resolve your pickup location first."); return }
+    if (!dropResolved   || !dropLat   || !dropLng)   { setError("Resolve the buyer's drop-off location first."); return }
     setQuoteLoading(true)
     try {
-      // No auth needed for quote endpoint
       const res  = await fetch(`${API_URL}/deliveries/quote`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          pickupLat: parseFloat(pickupLat),
-          pickupLng: parseFloat(pickupLng),
-          dropLat:   parseFloat(dropLat),
-          dropLng:   parseFloat(dropLng),
-        }),
+        body:    JSON.stringify({ pickupLat: Number(pickupLat), pickupLng: Number(pickupLng), dropLat: Number(dropLat), dropLng: Number(dropLng) }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.message || "Could not calculate quote."); setQuoteLoading(false); return }
       setQuote(data)
-    } catch { setError("Network error — could not reach server. Check your connection.") }
+    } catch { setError("Network error. Try again.") }
     setQuoteLoading(false)
   }
 
-  // ── Request rider ─────────────────────────────────────────────────────────
   const handleRequestRider = async () => {
     setRequesting(true); setError("")
     try {
       const res  = await fetch(`${API_URL}/deliveries`, {
         method:  "POST",
-        headers: {
-          "Content-Type":  "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({
           orderId:       notification.orderId,
-          pickupLat:     parseFloat(pickupLat),
-          pickupLng:     parseFloat(pickupLng),
-          pickupAddress: pickupAddress,
-          dropLat:       parseFloat(dropLat),
-          dropLng:       parseFloat(dropLng),
+          pickupLat:     Number(pickupLat), pickupLng: Number(pickupLng),
+          pickupAddress: pickupAddress || `${pickupLat}, ${pickupLng}`,
+          dropLat:       Number(dropLat), dropLng: Number(dropLng),
           dropAddress:   dropAddress || notification.location || `${dropLat}, ${dropLng}`,
           sellerContact: user?.phone || "",
           buyerContact:  notification.buyerContact || "",
@@ -325,47 +282,33 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.message || "Could not request rider. Try again."); setRequesting(false); return }
-      setDone(true)
-      onRequested(data)
+      if (!res.ok) { setError(data.message || "Could not request rider."); setRequesting(false); return }
+      setDone(true); onRequested(data)
     } catch { setError("Network error. Try again."); setRequesting(false) }
   }
 
-  const fieldStyle = {
-    width: "100%", background: "#161616", border: "1px solid #1e1e1e",
-    color: "#fff", padding: "11px 14px", borderRadius: "10px",
-    fontSize: "14px", outline: "none", boxSizing: "border-box", fontFamily: "inherit",
-  }
-
+  const fieldStyle = { width: "100%", background: "#161616", border: "1px solid #1e1e1e", color: "#fff", padding: "11px 14px", borderRadius: "10px", fontSize: "14px", outline: "none", boxSizing: "border-box", fontFamily: "inherit" }
   const canGetQuote = pickupResolved && dropResolved
 
   return (
     <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000dd", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
       <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "500px", maxHeight: "92vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
-
         <div style={{ padding: "18px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#111", zIndex: 1 }}>
           <span style={{ fontSize: "17px", fontWeight: "700" }}>🛵 Request a Rider</span>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>
         </div>
-
         <div style={{ padding: "22px", display: "flex", flexDirection: "column", gap: "18px" }}>
-
-          {/* Order summary */}
           <div style={{ background: "#161616", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#888", display: "flex", flexDirection: "column", gap: "7px" }}>
             <div>📦 <span style={{ color: "#c8a97e", fontWeight: "700" }}>{notification.itemTitle}</span></div>
-            <div>💰 Order amount: <span style={{ color: "#aaa" }}>₵{notification.amount}</span></div>
-            {notification.buyerContact && <div>📞 Buyer contact: <span style={{ color: "#aaa" }}>{notification.buyerContact}</span></div>}
+            <div>💰 Order: <span style={{ color: "#aaa" }}>₵{notification.amount}</span></div>
+            {notification.buyerContact && <div>📞 Buyer: <span style={{ color: "#aaa" }}>{notification.buyerContact}</span></div>}
           </div>
 
           {!done ? (
             <>
-              {/* ── PICKUP LOCATION ── */}
+              {/* Pickup */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{ fontSize: "12px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em" }}>
-                  📍 Your Location (Pickup)
-                </div>
-
-                {/* Mode toggle */}
+                <div style={{ fontSize: "12px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em" }}>📍 Your Location (Pickup)</div>
                 <div style={{ display: "flex", gap: "8px" }}>
                   {[["gps", "📍 Use GPS"], ["manual", "✏️ Type Address"]].map(([mode, label]) => (
                     <button key={mode} onClick={() => { setPickupMode(mode); setPickupResolved(false); setError("") }}
@@ -374,46 +317,26 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
                     </button>
                   ))}
                 </div>
-
-                {pickupMode === "gps" && (
+                {pickupMode === "gps" ? (
+                  <button onClick={detectPickup} disabled={locLoading}
+                    style={{ width: "100%", background: pickupResolved ? "#064e3b" : "#1a1a1a", border: `1px solid ${pickupResolved ? "#065f46" : "#2a2a2a"}`, color: pickupResolved ? "#6ee7b7" : "#c8a97e", padding: "13px", borderRadius: "10px", cursor: locLoading ? "not-allowed" : "pointer", fontWeight: "700", fontSize: "14px", fontFamily: "inherit" }}>
+                    {locLoading ? "⏳ Detecting..." : pickupResolved ? `✅ GPS: ${parseFloat(pickupLat).toFixed(4)}, ${parseFloat(pickupLng).toFixed(4)}` : "📍 Tap to Detect My Location"}
+                  </button>
+                ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <button onClick={detectGPS} disabled={locLoading}
-                      style={{ width: "100%", background: pickupResolved ? "#064e3b" : "#1a1a1a", border: `1px solid ${pickupResolved ? "#065f46" : "#2a2a2a"}`, color: pickupResolved ? "#6ee7b7" : "#c8a97e", padding: "13px", borderRadius: "10px", cursor: locLoading ? "not-allowed" : "pointer", fontWeight: "700", fontSize: "14px", fontFamily: "inherit", transition: "all 0.2s" }}>
-                      {locLoading ? "⏳ Detecting GPS..." : pickupResolved ? `✅ GPS Ready: ${parseFloat(pickupLat).toFixed(4)}, ${parseFloat(pickupLng).toFixed(4)}` : "📍 Tap to Detect My Location"}
-                    </button>
-                    <div style={{ fontSize: "11px", color: "#444", textAlign: "center" }}>
-                      If GPS is denied, switch to "Type Address" above
-                    </div>
-                  </div>
-                )}
-
-                {pickupMode === "manual" && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <input
-                      placeholder="e.g. KNUST Main Gate, Kumasi"
-                      value={pickupAddress}
-                      onChange={e => { setPickupAddress(e.target.value); setPickupResolved(false) }}
-                      style={fieldStyle}
-                    />
+                    <input placeholder="e.g. KNUST Main Gate, Kumasi" value={pickupAddress} onChange={e => { setPickupAddress(e.target.value); setPickupResolved(false) }} style={fieldStyle} />
                     <button onClick={geocodePickup} disabled={geocodeLoading || !pickupAddress.trim()}
                       style={{ background: "#c8a97e18", border: "1px solid #c8a97e44", color: "#c8a97e", padding: "11px", borderRadius: "10px", cursor: (geocodeLoading || !pickupAddress.trim()) ? "not-allowed" : "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit", opacity: (geocodeLoading || !pickupAddress.trim()) ? 0.6 : 1 }}>
-                      {geocodeLoading ? "⏳ Finding on map..." : "🗺️ Find Location on Map"}
+                      {geocodeLoading ? "⏳ Finding..." : "🗺️ Find on Map"}
                     </button>
-                    {pickupResolved && (
-                      <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#6ee7b7" }}>
-                        ✅ Location found: {parseFloat(pickupLat).toFixed(4)}, {parseFloat(pickupLng).toFixed(4)}
-                      </div>
-                    )}
+                    {pickupResolved && <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#6ee7b7" }}>✅ Found: {parseFloat(pickupLat).toFixed(4)}, {parseFloat(pickupLng).toFixed(4)}</div>}
                   </div>
                 )}
               </div>
 
-              {/* ── DROP-OFF LOCATION ── */}
+              {/* Drop */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{ fontSize: "12px", color: "#6ee7b7", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em" }}>
-                  🎯 Buyer Location (Drop-off)
-                </div>
-
+                <div style={{ fontSize: "12px", color: "#6ee7b7", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em" }}>🎯 Buyer Location (Drop-off)</div>
                 {dropResolved && parsedDrop.lat ? (
                   <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "12px", padding: "12px 16px", fontSize: "13px", color: "#6ee7b7", display: "flex", flexDirection: "column", gap: "5px" }}>
                     <div>✅ Buyer shared GPS at checkout</div>
@@ -423,35 +346,21 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d" }}>
-                      ⚠️ Buyer entered their location manually. Type it below to estimate distance.
+                      ⚠️ Buyer entered address manually. Type it below to estimate distance.
                     </div>
-                    <input
-                      placeholder={notification.location || "e.g. Mensah Sarbah Hall, UG Legon"}
-                      value={dropAddress}
-                      onChange={e => { setDropAddress(e.target.value); setDropResolved(false) }}
-                      style={fieldStyle}
-                    />
+                    <input placeholder={notification.location || "e.g. Mensah Sarbah Hall, UG Legon"} value={dropAddress} onChange={e => { setDropAddress(e.target.value); setDropResolved(false) }} style={fieldStyle} />
                     <button onClick={geocodeDrop} disabled={dropGeocodeLoading || !dropAddress.trim()}
                       style={{ background: "#064e3b18", border: "1px solid #065f46", color: "#6ee7b7", padding: "11px", borderRadius: "10px", cursor: (dropGeocodeLoading || !dropAddress.trim()) ? "not-allowed" : "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit", opacity: (dropGeocodeLoading || !dropAddress.trim()) ? 0.6 : 1 }}>
-                      {dropGeocodeLoading ? "⏳ Finding on map..." : "🗺️ Find Buyer Location"}
+                      {dropGeocodeLoading ? "⏳ Finding..." : "🗺️ Find Buyer Location"}
                     </button>
-                    {dropResolved && (
-                      <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#6ee7b7" }}>
-                        ✅ Buyer location found: {parseFloat(dropLat).toFixed(4)}, {parseFloat(dropLng).toFixed(4)}
-                      </div>
-                    )}
+                    {dropResolved && <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#6ee7b7" }}>✅ Found: {parseFloat(dropLat).toFixed(4)}, {parseFloat(dropLng).toFixed(4)}</div>}
                   </div>
                 )}
               </div>
 
-              {/* Error */}
-              {error && (
-                <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "12px 14px", fontSize: "13px", color: "#fca5a5" }}>
-                  ⚠️ {error}
-                </div>
-              )}
+              {error && <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "12px 14px", fontSize: "13px", color: "#fca5a5" }}>⚠️ {error}</div>}
 
-              {/* Status summary */}
+              {/* Status pills */}
               <div style={{ display: "flex", gap: "8px" }}>
                 <div style={{ flex: 1, background: pickupResolved ? "#064e3b18" : "#1a1a1a", border: `1px solid ${pickupResolved ? "#065f46" : "#222"}`, borderRadius: "10px", padding: "10px", textAlign: "center", fontSize: "12px", color: pickupResolved ? "#6ee7b7" : "#444" }}>
                   {pickupResolved ? "✅ Pickup Ready" : "⏳ Pickup Needed"}
@@ -461,44 +370,32 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
                 </div>
               </div>
 
-              {/* Quote result */}
+              {/* Quote */}
               {quote && (
                 <div style={{ background: "#1a1a1a", border: "1px solid #c8a97e44", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px" }}>
                   <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em" }}>📋 DELIVERY QUOTE</div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}>
-                    <span>Distance (estimated)</span><span style={{ color: "#aaa" }}>{quote.distanceKm} km</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}>
-                    <span>Base fee</span><span style={{ color: "#aaa" }}>₵5.00</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}>
-                    <span>{quote.distanceKm}km × ₵2.50</span>
-                    <span style={{ color: "#aaa" }}>₵{(quote.distanceKm * 2.5).toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "20px", fontWeight: "800", color: "#c8a97e", borderTop: "1px solid #222", paddingTop: "10px", letterSpacing: "-0.02em" }}>
-                    <span>Rider Fee</span><span>₵{quote.deliveryFee}</span>
-                  </div>
-                  <div style={{ fontSize: "12px", color: "#555", lineHeight: "1.6" }}>
-                    Paid to rider upon OTP confirmation by buyer.
-                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}><span>Distance</span><span style={{ color: "#aaa" }}>{quote.distanceKm} km</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}><span>Base fee</span><span style={{ color: "#aaa" }}>₵5.00</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}><span>{quote.distanceKm}km × ₵2.50</span><span style={{ color: "#aaa" }}>₵{(quote.distanceKm * 2.5).toFixed(2)}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "20px", fontWeight: "800", color: "#c8a97e", borderTop: "1px solid #222", paddingTop: "10px", letterSpacing: "-0.02em" }}><span>Rider Fee</span><span>₵{quote.deliveryFee}</span></div>
+                  <div style={{ fontSize: "12px", color: "#555" }}>Paid to rider on OTP confirmation by buyer.</div>
                 </div>
               )}
 
-              {/* Action buttons */}
               {!quote ? (
                 <button onClick={handleGetQuote} disabled={!canGetQuote || quoteLoading}
-                  style={{ background: canGetQuote ? "#c8a97e" : "#1a1a1a", border: "none", color: canGetQuote ? "#000" : "#444", padding: "15px", borderRadius: "12px", fontWeight: "700", cursor: (!canGetQuote || quoteLoading) ? "not-allowed" : "pointer", fontSize: "15px", fontFamily: "inherit", opacity: quoteLoading ? 0.7 : 1, transition: "all 0.2s" }}>
-                  {quoteLoading ? "⏳ Calculating distance..." : canGetQuote ? "📐 Get Delivery Quote" : "⚠️ Resolve both locations first"}
+                  style={{ background: canGetQuote ? "#c8a97e" : "#1a1a1a", border: "none", color: canGetQuote ? "#000" : "#444", padding: "15px", borderRadius: "12px", fontWeight: "700", cursor: (!canGetQuote || quoteLoading) ? "not-allowed" : "pointer", fontSize: "15px", fontFamily: "inherit", opacity: quoteLoading ? 0.7 : 1 }}>
+                  {quoteLoading ? "⏳ Calculating..." : canGetQuote ? "📐 Get Delivery Quote" : "⚠️ Resolve both locations first"}
                 </button>
               ) : (
                 <div style={{ display: "flex", gap: "10px" }}>
-                  <button onClick={() => { setQuote(null) }}
+                  <button onClick={() => setQuote(null)}
                     style={{ flex: 1, background: "#161616", border: "1px solid #222", color: "#888", padding: "13px", borderRadius: "12px", cursor: "pointer", fontWeight: "600", fontSize: "14px", fontFamily: "inherit" }}>
                     ← Recalculate
                   </button>
                   <button onClick={handleRequestRider} disabled={requesting}
                     style={{ flex: 2, background: "#c8a97e", border: "none", color: "#000", padding: "13px", borderRadius: "12px", fontWeight: "700", cursor: requesting ? "not-allowed" : "pointer", fontSize: "15px", fontFamily: "inherit", opacity: requesting ? 0.7 : 1 }}>
-                    {requesting ? "⏳ Broadcasting to riders..." : "🛵 Request Rider Now"}
+                    {requesting ? "⏳ Broadcasting..." : "🛵 Request Rider Now"}
                   </button>
                 </div>
               )}
@@ -507,19 +404,14 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
             <div style={{ textAlign: "center", padding: "20px 0", display: "flex", flexDirection: "column", gap: "16px", alignItems: "center" }}>
               <div style={{ fontSize: "56px" }}>✅</div>
               <div style={{ fontSize: "20px", fontWeight: "800", color: "#6ee7b7" }}>Riders Notified!</div>
-              <div style={{ fontSize: "13px", color: "#888", lineHeight: "1.7" }}>
-                All online riders have been notified. You'll get an alert the moment one accepts.
-              </div>
+              <div style={{ fontSize: "13px", color: "#888", lineHeight: "1.7" }}>All online riders have been notified. You'll get an alert the moment one accepts.</div>
               {quote && (
                 <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#666", width: "100%", textAlign: "left", display: "flex", flexDirection: "column", gap: "7px" }}>
                   <div>📦 {notification.itemTitle}</div>
-                  <div>📏 Distance: <span style={{ color: "#aaa" }}>{quote.distanceKm} km</span></div>
-                  <div>🛵 Rider fee: <span style={{ color: "#c8a97e", fontWeight: "700" }}>₵{quote.deliveryFee}</span></div>
+                  <div>📏 {quote.distanceKm} km · 🛵 ₵{quote.deliveryFee}</div>
                 </div>
               )}
-              <button className="btn-gold" onClick={onClose} style={{ width: "100%", padding: "14px", borderRadius: "12px", fontSize: "15px" }}>
-                Back to Notifications
-              </button>
+              <button className="btn-gold" onClick={onClose} style={{ width: "100%", padding: "14px", borderRadius: "12px", fontSize: "15px" }}>Back to Notifications</button>
             </div>
           )}
         </div>
@@ -529,62 +421,26 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
 }
 
 // ── Self Delivery Modal ────────────────────────────────────────────────────────
-// CORRECT OTP FLOW:
-// Seller arrives → taps "I've Delivered" → system generates OTP
-// OTP is sent to BUYER (via their order tracker / notification)
-// Buyer sees OTP on their screen and tells it to the seller verbally
-// Seller enters OTP here to confirm delivery and release payment
 function SelfDeliveryModal({ notification, onClose }) {
-  const [step, setStep]           = useState("info")   // info | waiting | enter_otp | done
-  const [otp, setOtp]             = useState("")
-  const [otpInput, setOtpInput]   = useState("")
-  const [otpError, setOtpError]   = useState("")
-  const [confirmed, setConfirmed] = useState(false)
+  const [step, setStep] = useState("info")
+  const [otp, setOtp]   = useState("")
+  const [otpInput, setOtpInput] = useState("")
+  const [otpError, setOtpError] = useState("")
 
-  const handleDelivered = () => {
-    // Generate OTP and store it — buyer will read this from their OrderTracker
+  const generateOTP = () => {
     const code = Math.floor(100000 + Math.random() * 900000).toString()
     setOtp(code)
-
-    // Store OTP keyed by orderId so buyer's OrderTracker can display it
     try {
       const otps = JSON.parse(localStorage.getItem("silkroad_delivery_otps") || "{}")
-      otps[notification.orderId] = {
-        otp:       code,
-        itemTitle: notification.itemTitle,
-        createdAt: Date.now(),
-        expiresAt: Date.now() + 30 * 60 * 1000,
-        confirmed: false,
-      }
+      otps[notification.orderId] = { otp: code, createdAt: Date.now(), expiresAt: Date.now() + 30 * 60 * 1000 }
       localStorage.setItem("silkroad_delivery_otps", JSON.stringify(otps))
-
-      // Broadcast cross-tab so buyer's tab updates immediately
-      localStorage.setItem("silkroad_last_event", JSON.stringify({
-        type:    "delivery_otp_ready",
-        orderId: notification.orderId,
-        ts:      Date.now(),
-      }))
     } catch {}
-
     setStep("enter_otp")
   }
 
-  const handleConfirmOTP = () => {
+  const handleConfirm = () => {
     setOtpError("")
-    // Verify OTP matches what was generated
-    if (otpInput.trim() !== otp) {
-      setOtpError("Incorrect OTP. Ask the buyer to check again.")
-      return
-    }
-    // Mark as confirmed
-    try {
-      const otps = JSON.parse(localStorage.getItem("silkroad_delivery_otps") || "{}")
-      if (otps[notification.orderId]) {
-        otps[notification.orderId].confirmed = true
-        localStorage.setItem("silkroad_delivery_otps", JSON.stringify(otps))
-      }
-    } catch {}
-    setConfirmed(true)
+    if (otpInput.trim() !== otp) { setOtpError("Incorrect OTP. Ask the buyer to check again."); return }
     setStep("done")
   }
 
@@ -595,10 +451,7 @@ function SelfDeliveryModal({ notification, onClose }) {
           <span style={{ fontSize: "17px", fontWeight: "700" }}>📍 Deliver Myself</span>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>
         </div>
-
         <div style={{ padding: "22px", display: "flex", flexDirection: "column", gap: "16px" }}>
-
-          {/* INFO step — before delivery */}
           {step === "info" && (
             <>
               <div style={{ background: "#161616", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#888", display: "flex", flexDirection: "column", gap: "7px" }}>
@@ -607,34 +460,29 @@ function SelfDeliveryModal({ notification, onClose }) {
                 {notification.location    && <div>📍 Location: <span style={{ color: "#aaa" }}>{notification.location}</span></div>}
                 {notification.landmark   && <div>🗺️ Landmark: <span style={{ color: "#aaa" }}>{notification.landmark}</span></div>}
               </div>
-
               <div style={{ background: "#1e3a5f18", border: "1px solid #1d4ed8", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#93c5fd", lineHeight: "1.8" }}>
                 <div style={{ fontWeight: "700", marginBottom: "8px" }}>📋 How it works:</div>
-                <div>1. Go deliver the item to the buyer</div>
-                <div>2. Tap "I've Delivered" — a 6-digit OTP is sent to the <strong>buyer's</strong> order screen</div>
-                <div>3. The buyer tells you their OTP verbally</div>
-                <div>4. You enter it here to confirm delivery</div>
-                <div>5. Payment is released to you ✅</div>
+                <div>1. Deliver the item to the buyer</div>
+                <div>2. Tap below — an OTP is sent to the buyer's screen</div>
+                <div>3. Buyer reads you the OTP verbally</div>
+                <div>4. Enter it here to confirm delivery</div>
+                <div>5. Payment released ✅</div>
               </div>
-
-              <button className="btn-gold" onClick={handleDelivered} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>
-                ✅ I've Delivered the Item — Get OTP from Buyer
+              <button className="btn-gold" onClick={generateOTP} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>
+                ✅ I've Delivered — Generate OTP
               </button>
               <button onClick={onClose} style={{ background: "transparent", border: "1px solid #222", color: "#555", padding: "12px", borderRadius: "12px", cursor: "pointer", fontWeight: "600", fontSize: "14px", fontFamily: "inherit" }}>
                 Not Yet — Close
               </button>
             </>
           )}
-
-          {/* ENTER OTP step — seller enters OTP that buyer reads from their screen */}
           {step === "enter_otp" && (
             <>
-              <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "12px", padding: "16px", fontSize: "13px", color: "#6ee7b7", lineHeight: "1.7", textAlign: "center" }}>
+              <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "12px", padding: "16px", fontSize: "13px", color: "#6ee7b7", textAlign: "center" }}>
                 <div style={{ fontSize: "24px", marginBottom: "10px" }}>📱</div>
                 <div style={{ fontWeight: "700", marginBottom: "6px" }}>OTP sent to buyer's screen</div>
                 <div style={{ fontSize: "12px", color: "#888" }}>Ask the buyer to open their order tracker and read you the 6-digit code</div>
               </div>
-
               <div>
                 <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>ENTER THE OTP THE BUYER GIVES YOU</div>
                 <input
@@ -644,34 +492,24 @@ function SelfDeliveryModal({ notification, onClose }) {
                   maxLength={6}
                   style={{ width: "100%", background: "#161616", border: `1px solid ${otpError ? "#991b1b" : "#1e1e1e"}`, color: "#c8a97e", padding: "16px", borderRadius: "12px", fontSize: "28px", fontWeight: "900", fontFamily: "monospace", letterSpacing: ".2em", textAlign: "center", outline: "none", boxSizing: "border-box" }}
                 />
-                {otpError && (
-                  <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "10px 14px", fontSize: "13px", color: "#fca5a5", marginTop: "8px" }}>
-                    ⚠️ {otpError}
-                  </div>
-                )}
+                {otpError && <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "10px 14px", fontSize: "13px", color: "#fca5a5", marginTop: "8px" }}>⚠️ {otpError}</div>}
               </div>
-
-              <button onClick={handleConfirmOTP} disabled={otpInput.length !== 6}
+              <button onClick={handleConfirm} disabled={otpInput.length !== 6}
                 style={{ background: "#c8a97e", border: "none", padding: "15px", borderRadius: "12px", fontWeight: "700", cursor: otpInput.length !== 6 ? "not-allowed" : "pointer", fontSize: "15px", color: "#000", fontFamily: "inherit", opacity: otpInput.length !== 6 ? 0.5 : 1 }}>
                 ✅ Confirm OTP & Complete Delivery
               </button>
             </>
           )}
-
-          {/* DONE step */}
           {step === "done" && (
             <>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: "56px", marginBottom: "12px" }}>🎉</div>
                 <div style={{ fontSize: "20px", fontWeight: "800", color: "#6ee7b7", marginBottom: "8px" }}>Delivery Confirmed!</div>
-                <div style={{ fontSize: "13px", color: "#888" }}>OTP verified. Payment has been released.</div>
+                <div style={{ fontSize: "13px", color: "#888" }}>OTP verified. Payment released.</div>
               </div>
-              <button className="btn-gold" onClick={onClose} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>
-                Done
-              </button>
+              <button className="btn-gold" onClick={onClose} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>Done</button>
             </>
           )}
-
         </div>
       </div>
     </div>
@@ -679,12 +517,15 @@ function SelfDeliveryModal({ notification, onClose }) {
 }
 
 // ── Notifications Tab ──────────────────────────────────────────────────────────
+const NOTIFICATIONS_KEY = "silkroad_seller_notifications"
+
 function NotificationsTab({ user }) {
   const [notifications, setNotifications]     = useState([])
   const [expandedId, setExpandedId]           = useState(null)
   const [deliveryModal, setDeliveryModal]     = useState(null)
   const [selfDeliveryModal, setSelfDelivery]  = useState(null)
   const [requestedOrders, setRequestedOrders] = useState({})
+  const [clearConfirm, setClearConfirm]       = useState(false)
 
   useEffect(() => {
     if (user?._id) {
@@ -701,6 +542,18 @@ function NotificationsTab({ user }) {
     return new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
   }
 
+  // ── Clear all notifications for this seller ──────────────────────────────
+  const handleClearAll = () => {
+    if (!clearConfirm) { setClearConfirm(true); return }
+    try {
+      const all      = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || "[]")
+      const filtered = all.filter(n => n.sellerId !== String(user._id))
+      localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(filtered))
+    } catch {}
+    setNotifications([])
+    setClearConfirm(false)
+  }
+
   if (!notifications.length) return (
     <div style={{ background: "#141414", borderRadius: "14px", padding: "56px 24px", border: "1px solid #1e1e1e", textAlign: "center", color: "#444" }}>
       <div style={{ fontSize: "36px", marginBottom: "14px" }}>🔔</div>
@@ -711,6 +564,28 @@ function NotificationsTab({ user }) {
 
   return (
     <>
+      {/* ── Clear all button ── */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "14px" }}>
+        {!clearConfirm ? (
+          <button onClick={() => setClearConfirm(true)}
+            style={{ background: "transparent", border: "1px solid #2a2a2a", color: "#555", padding: "8px 16px", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontSize: "12px", fontFamily: "inherit" }}>
+            🗑️ Clear All
+          </button>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "12px", color: "#fca5a5" }}>Delete all {notifications.length} notifications?</span>
+            <button onClick={() => setClearConfirm(false)}
+              style={{ background: "#161616", border: "1px solid #222", color: "#888", padding: "7px 12px", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>
+              Cancel
+            </button>
+            <button onClick={handleClearAll}
+              style={{ background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit" }}>
+              Yes, Clear All
+            </button>
+          </div>
+        )}
+      </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         {notifications.map(n => {
           const open        = expandedId === n.id
@@ -742,7 +617,7 @@ function NotificationsTab({ user }) {
                       ["Amount",   <span style={{ color: "#6ee7b7", fontWeight: "700" }}>₵{n.amount?.toLocaleString()}</span>],
                       ["Payment",  <span style={{ color: "#888" }}>{n.paymentMethod === "paystack" ? "⚡ Paystack" : "📱 Manual MoMo"}</span>],
                       n.paymentRef  && ["Ref",      <span style={{ color: "#444", fontSize: "11px", fontFamily: "monospace" }}>{n.paymentRef}</span>],
-                      ["Delivery",    <span style={{ color: "#888" }}>{n.deliveryMethod === "rider" ? "🛵 Rider" : "📍 Pickup"}</span>],
+                      ["Delivery",   <span style={{ color: "#888" }}>{n.deliveryMethod === "rider" ? "🛵 Rider" : "📍 Pickup"}</span>],
                       n.location    && ["Location", <span style={{ color: "#888", fontSize: "11px", fontFamily: "monospace" }}>{n.location}</span>],
                       n.landmark    && ["Landmark", <span style={{ color: "#888" }}>{n.landmark}</span>],
                       n.promoCode   && ["Promo",    <span style={{ color: "#6ee7b7" }}>🎟️ {n.promoCode} (-₵{n.discount})</span>],
@@ -803,10 +678,7 @@ function NotificationsTab({ user }) {
       )}
 
       {selfDeliveryModal && (
-        <SelfDeliveryModal
-          notification={selfDeliveryModal}
-          onClose={() => setSelfDelivery(null)}
-        />
+        <SelfDeliveryModal notification={selfDeliveryModal} onClose={() => setSelfDelivery(null)} />
       )}
     </>
   )
@@ -935,9 +807,11 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
         <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "#000000aa", zIndex: 10 }} />
       )}
 
+      {/* ── Sidebar ── */}
       <div style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: "240px", background: "#0d0d0d", borderRight: "1px solid #1a1a1a", display: "flex", flexDirection: "column", zIndex: 20, transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)" }}>
         <div style={{ padding: "16px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: "10px" }}>
-          <button onClick={() => setSidebarOpen(false)} style={{ background: "transparent", border: "1px solid #222", color: "#888", width: "32px", height: "32px", borderRadius: "8px", cursor: "pointer", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, minHeight: "auto" }}>✕</button>
+          <button onClick={() => setSidebarOpen(false)}
+            style={{ background: "transparent", border: "1px solid #222", color: "#888", width: "32px", height: "32px", borderRadius: "8px", cursor: "pointer", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, minHeight: "auto" }}>✕</button>
           <div>
             <div style={{ fontSize: "13px", fontWeight: "700", color: "#c8a97e" }}>Silk Road GH</div>
             <div style={{ fontSize: "11px", color: "#444" }}>My Account</div>
@@ -976,6 +850,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
         </div>
       </div>
 
+      {/* ── Main area ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1a1a1a", padding: "12px 18px", display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
           <button onClick={() => setSidebarOpen(true)}
@@ -988,7 +863,8 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
             <div style={{ fontSize: "16px", fontWeight: "700", color: "#f0ede8" }}>{currentTab?.icon} {currentTab?.label}</div>
             <div style={{ fontSize: "11px", color: "#555" }}>{user.name} · {user.university}</div>
           </div>
-          <button onClick={onClose} style={{ background: "#1a1a1a", border: "1px solid #222", color: "#888", padding: "8px 14px", borderRadius: "9px", cursor: "pointer", fontSize: "13px", fontWeight: "600", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+          <button onClick={onClose}
+            style={{ background: "#1a1a1a", border: "1px solid #222", color: "#888", padding: "8px 14px", borderRadius: "9px", cursor: "pointer", fontSize: "13px", fontWeight: "600", fontFamily: "inherit", whiteSpace: "nowrap" }}>
             ← Back
           </button>
         </div>
@@ -996,6 +872,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
         <div style={{ flex: 1, overflowY: "auto" }}>
           <div style={{ maxWidth: "860px", margin: "0 auto", padding: "28px 20px 80px" }}>
 
+            {/* ── OVERVIEW ── */}
             {tab === "overview" && (
               <>
                 <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>Welcome back, {user.name.split(" ")[0]} 👋</h1>
@@ -1006,6 +883,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
                   <StatCard icon="📦" label="Pending Orders"  value={pendingOrders} sub="Awaiting action" />
                   <StatCard icon="🏷️" label="Active Listings" value={activeListingsCount} sub={`${listings.length} total`} />
                 </div>
+
                 {notifCount > 0 && (
                   <div onClick={() => setTab("notifications")}
                     style={{ background: "#161a1e", border: "1px solid #c8a97e44", borderRadius: "14px", padding: "18px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", marginBottom: "28px" }}>
@@ -1019,11 +897,14 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
                     <span style={{ color: "#c8a97e", fontSize: "18px" }}>→</span>
                   </div>
                 )}
+
                 <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8", marginBottom: "14px" }}>Recent Sales</h3>
                 {loadingOrders ? (
                   <div style={{ textAlign: "center", color: "#444", padding: "32px", fontSize: "13px" }}>⏳ Loading...</div>
                 ) : !sellingOrders.length ? (
-                  <div style={{ background: "#141414", borderRadius: "14px", padding: "32px", border: "1px solid #1e1e1e", textAlign: "center", color: "#444", fontSize: "13px" }}>No sales yet.</div>
+                  <div style={{ background: "#141414", borderRadius: "14px", padding: "32px", border: "1px solid #1e1e1e", textAlign: "center", color: "#444", fontSize: "13px" }}>
+                    No sales yet. Once someone buys from you, it'll show here.
+                  </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                     {sellingOrders.slice(0, 5).map(order => (
@@ -1041,6 +922,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
               </>
             )}
 
+            {/* ── NOTIFICATIONS ── */}
             {tab === "notifications" && (
               <>
                 <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>🔔 Notifications</h1>
@@ -1049,6 +931,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
               </>
             )}
 
+            {/* ── ORDERS ── */}
             {tab === "orders" && (
               <>
                 <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>📦 Orders & Sales</h1>
@@ -1116,6 +999,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
               </>
             )}
 
+            {/* ── LISTINGS ── */}
             {tab === "listings" && (
               <>
                 <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>🏷️ My Listings</h1>
@@ -1150,6 +1034,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
               </>
             )}
 
+            {/* ── RENTALS ── */}
             {tab === "rentals" && (
               <>
                 <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>🔄 Active Rentals</h1>
@@ -1158,6 +1043,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
               </>
             )}
 
+            {/* ── SERVICES ── */}
             {tab === "services" && (
               <>
                 <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>🛠️ Active Services</h1>
@@ -1166,6 +1052,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
               </>
             )}
 
+            {/* ── PROFILE ── */}
             {tab === "profile" && (
               <>
                 <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>👤 Edit Profile</h1>
@@ -1206,6 +1093,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
               </>
             )}
 
+            {/* ── SETTINGS ── */}
             {tab === "settings" && (
               <>
                 <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>⚙️ Settings</h1>
@@ -1221,6 +1109,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
                       {passwordSaving ? "⏳ Saving..." : passwordSaved ? "✅ Password Updated!" : "Update Password"}
                     </button>
                   </div>
+
                   <div style={{ background: "#7f1d1d10", borderRadius: "14px", padding: "22px", border: "1px solid #7f1d1d44", display: "flex", flexDirection: "column", gap: "14px" }}>
                     <div style={{ fontSize: "14px", fontWeight: "700", color: "#fca5a5" }}>⚠️ Danger Zone</div>
                     <p style={{ fontSize: "12px", color: "#888", margin: 0, lineHeight: "1.6" }}>Deleting your account is permanent and removes all your listings, orders, and data.</p>
@@ -1230,6 +1119,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
                       {deleteLoading ? "⏳ Deleting..." : deleteConfirm ? "⚠️ Click Again to Confirm" : "Delete Account"}
                     </button>
                   </div>
+
                   <button onClick={onSignOut}
                     style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "13px", borderRadius: "12px", cursor: "pointer", fontWeight: "600", fontSize: "14px", fontFamily: "inherit" }}>
                     Sign Out
