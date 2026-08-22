@@ -1,96 +1,32 @@
 import { useState, useEffect, useRef } from "react"
-import { io } from "socket.io-client"
 
-const STORAGE_KEY       = "silkroad_orders"
-const NOTIFICATIONS_KEY = "silkroad_seller_notifications"
-const EVENT_KEY         = "silkroad_last_event"
-const SELLER_ID_KEY     = "silkroad_socket_seller_id"
-const API_URL           = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
-
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 const SOCKET_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace("/api", "")
   : "http://localhost:5000"
 
-// ── Singleton socket ───────────────────────────────────────────────────────────
-let _socket          = null
-let _currentSellerId = null
+const STORAGE_KEY    = "silkroad_orders"
+const NOTIF_KEY      = "silkroad_seller_notifications"
+const socketRegistry = {}
+let   socketInstance = null
 
-function getSocket() {
-  if (!_socket) {
-    _socket = io(SOCKET_URL, {
-      autoConnect:          false,
-      reconnection:         true,
-      reconnectionDelay:    1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: Infinity,
-      transports:           ["websocket", "polling"],
-      timeout:              10000,
-    })
-
-    _socket.on("connect", () => {
-      console.log("🔌 Socket connected:", _socket.id)
-      if (_currentSellerId) {
-        _socket.emit("register_seller", String(_currentSellerId))
-        console.log("✅ Re-registered seller after connect:", _currentSellerId)
-      }
-    })
-
-    _socket.on("seller_registered", ({ sellerId, socketId }) => {
-      console.log(`✅ Server confirmed — seller: ${sellerId}, socket: ${socketId}`)
-    })
-
-    _socket.on("disconnect", (reason) => {
-      console.log("🔌 Socket disconnected:", reason)
-    })
-
-    _socket.on("connect_error", (err) => {
-      console.log("⚠️ Socket connect error:", err.message)
-    })
-  }
-  return _socket
+// ── Order storage helpers ─────────────────────────────────────────────────────
+export function generateOrderId() {
+  return `SR-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
 }
 
-export function connectSellerSocket(sellerId) {
-  if (!sellerId) return
-  const id = String(sellerId)
-  _currentSellerId = id
-  try { localStorage.setItem(SELLER_ID_KEY, id) } catch {}
-  const s = getSocket()
-  if (s.connected) {
-    s.emit("register_seller", id)
-  } else {
-    s.connect()
-  }
-}
-
-export function disconnectSocket() {
-  _currentSellerId = null
-  try { localStorage.removeItem(SELLER_ID_KEY) } catch {}
-  if (_socket) _socket.disconnect()
-}
-
-// Restore seller ID on module load
-;(function restoreSellerIdOnLoad() {
-  try {
-    const saved = localStorage.getItem(SELLER_ID_KEY)
-    if (saved && !_currentSellerId) _currentSellerId = saved
-  } catch {}
-})()
-
-// ── Core order storage ─────────────────────────────────────────────────────────
 export function saveOrder(order) {
   try {
-    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
-    existing[order.id] = order
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(existing))
-    if (order.cart && order.cart.length > 0) notifySellerLocal(order)
+    const orders = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
+    orders[order.id] = { ...order, updatedAt: Date.now() }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(orders))
   } catch {}
 }
 
 export function getOrder(id) {
   try {
-    const all = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
-    return all[id] || null
+    const orders = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
+    return orders[id] || null
   } catch { return null }
 }
 
@@ -99,456 +35,339 @@ export function getOrders() {
   catch { return {} }
 }
 
-export function updateOrder(id, updates) {
+export function updateOrder(id, patch) {
   try {
-    const all = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
-    if (all[id]) {
-      all[id] = { ...all[id], ...updates }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
+    const orders = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
+    if (orders[id]) {
+      orders[id] = { ...orders[id], ...patch, updatedAt: Date.now() }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(orders))
     }
   } catch {}
 }
 
-export function generateOrderId() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-  let id = "SR-"
-  for (let i = 0; i < 6; i++) id += chars[Math.floor(Math.random() * chars.length)]
-  return id
-}
-
-// ── Local notification (same browser fallback) ─────────────────────────────────
-function notifySellerLocal(order) {
-  try {
-    const notifications = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || "[]")
-    const firstItem     = order.cart?.[0]
-    if (!firstItem) return
-    const sellerId = firstItem.seller?._id || firstItem.seller
-    if (!sellerId) return
-
-    const notification = {
-      id:             `NOTIF-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      type:           "new_order",
-      orderId:        order.id,
-      sellerId:       String(sellerId),
-      itemTitle:      firstItem.title,
-      itemImage:      firstItem.image || null,
-      amount:         order.total,
-      buyerContact:   order.contactInfo,
-      buyerName:      order.payerName || "A buyer",
-      deliveryMethod: order.deliveryMethod,
-      location:       order.location
-        ? `${order.location.lat},${order.location.lng}`
-        : order.manualLocation,
-      landmark:       order.landmark,
-      promoCode:      order.promoCode   || null,
-      discount:       order.discount    || 0,
-      paymentRef:     order.paymentRef,
-      paymentMethod:  order.paymentMethod,
-      status:         "unread",
-      createdAt:      Date.now(),
-    }
-
-    notifications.unshift(notification)
-    if (notifications.length > 50) notifications.splice(50)
-    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications))
-
-    // Cross-tab broadcast
-    localStorage.setItem(EVENT_KEY, JSON.stringify({
-      type:           "new_notification",
-      sellerId:       String(sellerId),
-      notificationId: notification.id,
-      ts:             Date.now(),
-    }))
-
-    // Same-tab
-    window.dispatchEvent(new CustomEvent("silkroad_new_notification", { detail: notification }))
-  } catch {}
-}
-
-export function storeSocketNotification(notification) {
-  try {
-    const notifications = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || "[]")
-    if (notifications.find(n => n.id === notification.id)) return
-    notifications.unshift({ ...notification, status: "unread" })
-    if (notifications.length > 50) notifications.splice(50)
-    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications))
-
-    localStorage.setItem(EVENT_KEY, JSON.stringify({
-      type:           "new_notification",
-      sellerId:       String(notification.sellerId),
-      notificationId: notification.id,
-      ts:             Date.now(),
-    }))
-
-    window.dispatchEvent(new CustomEvent("silkroad_new_notification", { detail: notification }))
-  } catch {}
-}
-
+// ── Notification helpers ──────────────────────────────────────────────────────
 export function getSellerNotifications(sellerId) {
   try {
-    const all = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || "[]")
-    return sellerId ? all.filter(n => n.sellerId === String(sellerId)) : all
+    const all = JSON.parse(localStorage.getItem(NOTIF_KEY) || "[]")
+    return all.filter(n => n.sellerId === String(sellerId)).sort((a, b) => b.createdAt - a.createdAt)
   } catch { return [] }
-}
-
-export function markNotificationRead(notificationId) {
-  try {
-    const all = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || "[]")
-    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(
-      all.map(n => n.id === notificationId ? { ...n, status: "read" } : n)
-    ))
-  } catch {}
 }
 
 export function markAllNotificationsRead(sellerId) {
   try {
-    const all = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || "[]")
-    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(
-      all.map(n => n.sellerId === String(sellerId) ? { ...n, status: "read" } : n)
-    ))
+    const all = JSON.parse(localStorage.getItem(NOTIF_KEY) || "[]")
+    const updated = all.map(n => n.sellerId === String(sellerId) ? { ...n, status: "read" } : n)
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(updated))
   } catch {}
 }
 
-export function getUnreadCount(sellerId) {
+function saveNotification(notif) {
   try {
-    const all = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || "[]")
-    return all.filter(n => n.sellerId === String(sellerId) && n.status === "unread").length
-  } catch { return 0 }
+    const all = JSON.parse(localStorage.getItem(NOTIF_KEY) || "[]")
+    const exists = all.find(n => n.id === notif.id)
+    if (!exists) {
+      all.unshift(notif)
+      if (all.length > 200) all.splice(200)
+      localStorage.setItem(NOTIF_KEY, JSON.stringify(all))
+    }
+  } catch {}
 }
 
-// ── Order ID Banner ────────────────────────────────────────────────────────────
-export function OrderIdBanner({ orderId }) {
-  const [copied, setCopied] = useState(false)
-  const copy = () => {
-    navigator.clipboard.writeText(orderId).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+// ── Socket singleton ──────────────────────────────────────────────────────────
+export function connectSellerSocket(sellerId) {
+  if (!sellerId) return
+  const id = String(sellerId)
+
+  if (socketInstance?.connected) {
+    socketInstance.emit("register_seller", id)
+    return
   }
-  return (
-    <div style={{ background: "#1a1a1a", border: "1px solid #c8a97e44", borderRadius: "12px", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-      <div>
-        <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", letterSpacing: ".1em", marginBottom: "4px" }}>YOUR ORDER ID</div>
-        <div style={{ fontSize: "18px", fontWeight: "800", color: "#f0ede8", fontFamily: "monospace", letterSpacing: ".06em" }}>{orderId}</div>
-        <div style={{ fontSize: "11px", color: "#555", marginTop: "4px" }}>Works on any device — paste it to track your order</div>
-      </div>
-      <button onClick={copy}
-        style={{ background: copied ? "#064e3b" : "#161616", border: `1px solid ${copied ? "#065f46" : "#2a2a2a"}`, color: copied ? "#6ee7b7" : "#c8a97e", padding: "9px 16px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit", whiteSpace: "nowrap", transition: "all 0.2s" }}>
-        {copied ? "✅ Copied!" : "📋 Copy"}
-      </button>
-    </div>
-  )
+
+  import("socket.io-client").then(({ io }) => {
+    if (socketInstance) { socketInstance.disconnect(); socketInstance = null }
+
+    const s = io(SOCKET_URL, {
+      autoConnect:          true,
+      reconnection:         true,
+      reconnectionDelay:    1000,
+      reconnectionAttempts: Infinity,
+      transports:           ["websocket", "polling"],
+    })
+
+    s.on("connect", () => {
+      s.emit("register_seller", id)
+    })
+
+    s.on("new_order", (data) => {
+      const notif = {
+        id:             data.orderId || `notif-${Date.now()}`,
+        sellerId:       id,
+        orderId:        data.orderId,
+        itemTitle:      data.itemTitle  || "New Order",
+        itemImage:      data.itemImage  || null,
+        amount:         data.amount     || 0,
+        buyerName:      data.buyerName  || "A buyer",
+        buyerContact:   data.buyerContact || "",
+        location:       data.location   || "",
+        landmark:       data.landmark   || "",
+        paymentRef:     data.paymentRef || "",
+        paymentMethod:  data.paymentMethod || "manual_momo",
+        deliveryMethod: data.deliveryMethod || "pickup",
+        discount:       data.discount   || 0,
+        promoCode:      data.promoCode  || null,
+        status:         "unread",
+        createdAt:      Date.now(),
+      }
+      saveNotification(notif)
+      Object.values(socketRegistry).forEach(cb => cb(notif))
+      window.dispatchEvent(new CustomEvent("silkroad_new_order", { detail: notif }))
+    })
+
+    s.on("delivery_accepted",         (d) => window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d })))
+    s.on("delivery_picked_up",        (d) => window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d })))
+    s.on("delivery_at_door",          (d) => window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d })))
+    s.on("delivery_completed",        (d) => window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d })))
+    s.on("delivery_cancelled_by_rider",(d) => window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d })))
+    s.on("delivery_otp",              (d) => window.dispatchEvent(new CustomEvent("silkroad_delivery_otp",    { detail: d })))
+
+    socketInstance = s
+  }).catch(() => {})
 }
 
-// ── Notification Bell ──────────────────────────────────────────────────────────
-export function NotificationBell({ user, onClick, notifTick }) {
-  const [unread, setUnread] = useState(0)
-  const userIdRef           = useRef(null)
+export function disconnectSocket() {
+  if (socketInstance) { socketInstance.disconnect(); socketInstance = null }
+}
+
+// ── Notification bell ─────────────────────────────────────────────────────────
+export function NotificationBell({ sellerId, onClick }) {
+  const [count, setCount] = useState(0)
+
+  const refresh = () => {
+    if (!sellerId) return
+    setCount(getSellerNotifications(sellerId).filter(n => n.status === "unread").length)
+  }
 
   useEffect(() => {
-    if (!user?._id) return
-    userIdRef.current = user._id
-
-    const refresh = () => {
-      if (userIdRef.current) setUnread(getUnreadCount(userIdRef.current))
-    }
     refresh()
-
-    // Layer 1 — Socket.io cross-device
-    const s = getSocket()
-    const handleSocketNotif = (notification) => {
-      if (String(notification.sellerId) === String(user._id)) {
-        storeSocketNotification(notification)
-        refresh()
-      }
-    }
-    s.on("new_order_notification", handleSocketNotif)
-
-    // Layer 2 — same-tab
-    window.addEventListener("silkroad_new_notification", refresh)
-
-    // Layer 3 — cross-tab
-    const handleStorage = (e) => {
-      if (e.key === EVENT_KEY || e.key === NOTIFICATIONS_KEY) refresh()
-    }
-    window.addEventListener("storage", handleStorage)
-
-    // Layer 4 — poll + watchdog
-    const interval = setInterval(() => {
-      refresh()
-      if (_currentSellerId && _socket && !_socket.connected) {
-        console.log("🔄 Watchdog: socket down, reconnecting...")
-        _socket.connect()
-      }
-    }, 8000)
-
+    const key = String(sellerId || "bell")
+    socketRegistry[key] = refresh
+    window.addEventListener("silkroad_new_order", refresh)
+    window.addEventListener("storage", refresh)
     return () => {
-      s.off("new_order_notification", handleSocketNotif)
-      window.removeEventListener("silkroad_new_notification", refresh)
-      window.removeEventListener("storage", handleStorage)
-      clearInterval(interval)
+      delete socketRegistry[key]
+      window.removeEventListener("silkroad_new_order", refresh)
+      window.removeEventListener("storage", refresh)
     }
-  }, [user?._id])
-
-  useEffect(() => {
-    if (user?._id) setUnread(getUnreadCount(user._id))
-  }, [notifTick, user?._id])
-
-  if (!user) return null
+  }, [sellerId])
 
   return (
-    <button onClick={onClick}
-      style={{ position: "relative", background: unread > 0 ? "#c8a97e14" : "transparent", border: `1px solid ${unread > 0 ? "#c8a97e44" : "#222"}`, color: unread > 0 ? "#c8a97e" : "#888", padding: "7px 10px", borderRadius: "9px", cursor: "pointer", fontSize: "16px", transition: "all 0.2s" }}
-      title="Notifications">
+    <button onClick={onClick} style={{ position: "relative", background: "transparent", border: "none", color: "#aaa", fontSize: "22px", cursor: "pointer", padding: "4px" }}>
       🔔
-      {unread > 0 && (
-        <span style={{ position: "absolute", top: "-4px", right: "-4px", background: "#c8a97e", color: "#000", fontSize: "9px", fontWeight: "800", borderRadius: "50%", width: "17px", height: "17px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {unread > 9 ? "9+" : unread}
+      {count > 0 && (
+        <span style={{ position: "absolute", top: "-2px", right: "-2px", background: "#c8a97e", color: "#000", fontSize: "9px", fontWeight: "800", borderRadius: "50%", width: "16px", height: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {count > 9 ? "9+" : count}
         </span>
       )}
     </button>
   )
 }
 
-// ── Order Tracker Modal ────────────────────────────────────────────────────────
-export default function OrderTracker({ onClose, onOpenOrder }) {
-  const [idInput, setIdInput]       = useState("")
-  const [found, setFound]           = useState(null)
-  const [error, setError]           = useState("")
-  const [deliveryOtp, setDeliveryOtp] = useState(null)
-  const [otpLoading, setOtpLoading] = useState(false)
-  const otpPollRef                  = useRef(null)
+// ── Order ID banner ───────────────────────────────────────────────────────────
+export function OrderIdBanner({ orderId }) {
+  const [copied, setCopied] = useState(false)
 
-  // Cross-tab: if order updated in another tab, re-read
-  useEffect(() => {
-    const handleStorage = (e) => {
-      if (e.key === STORAGE_KEY && found) {
-        const order = getOrder(found.id)
-        if (order) setFound(order)
-      }
-    }
-    window.addEventListener("storage", handleStorage)
-    return () => window.removeEventListener("storage", handleStorage)
-  }, [found])
-
-  // ── Poll for delivery OTP ──────────────────────────────────────────────────
-  // When a rider marks the order as delivered, the backend generates an OTP.
-  // Guest buyers have no socket, so we poll the public endpoint every 5s.
-  // The OTP shows on the buyer's screen — they read it to the rider verbally.
-  useEffect(() => {
-    // Clear any existing poll
-    if (otpPollRef.current) clearInterval(otpPollRef.current)
-    setDeliveryOtp(null)
-
-    // Only poll if we have an active order that hasn't been confirmed yet
-    if (!found?.id || found?.delivered !== null) return
-
-    const poll = async () => {
-      try {
-        setOtpLoading(true)
-        const res  = await fetch(`${API_URL}/deliveries/otp-for-order/${found.id}`)
-        const data = await res.json()
-        setOtpLoading(false)
-        if (data.otp) {
-          setDeliveryOtp(data)
-          // Stop polling once we have the OTP
-          clearInterval(otpPollRef.current)
-        }
-      } catch { setOtpLoading(false) }
-    }
-
-    poll() // check immediately on search
-    otpPollRef.current = setInterval(poll, 5000)
-
-    return () => clearInterval(otpPollRef.current)
-  }, [found?.id, found?.delivered])
-
-  const handleSearch = () => {
-    setError("")
-    setDeliveryOtp(null)
-    const trimmed = idInput.trim().toUpperCase()
-    if (!trimmed) { setError("Please enter your Order ID."); return }
-    const order = getOrder(trimmed)
-    if (!order) { setError("Order not found. Check your ID and try again."); return }
-    setFound(order)
-  }
-
-  const formatDate = (ts) => {
-    if (!ts) return "N/A"
-    return new Date(ts).toLocaleString("en-GB", {
-      day: "numeric", month: "short", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
+  const copy = () => {
+    navigator.clipboard.writeText(orderId).then(() => {
+      setCopied(true); setTimeout(() => setCopied(false), 2000)
     })
   }
 
-  const statusColor = (s) => {
-    if (s === "Pending Confirmation") return { color: "#fcd34d", bg: "#78350f18", border: "#92400e" }
-    if (s === "Paid" || s === "Completed") return { color: "#6ee7b7", bg: "#064e3b18", border: "#065f46" }
-    if (s === "Cancelled" || s === "Refunded") return { color: "#fca5a5", bg: "#7f1d1d18", border: "#7f1d1d" }
-    return { color: "#93c5fd", bg: "#1e3a5f18", border: "#1d4ed8" }
+  return (
+    <div style={{ background: "#161616", border: "1px solid #c8a97e44", borderRadius: "14px", padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
+      <div>
+        <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "4px" }}>YOUR ORDER ID</div>
+        <div style={{ fontSize: "16px", fontWeight: "800", color: "#f0ede8", fontFamily: "monospace", letterSpacing: ".04em" }}>{orderId}</div>
+        <div style={{ fontSize: "11px", color: "#444", marginTop: "3px" }}>Save this to track your order anytime</div>
+      </div>
+      <button onClick={copy}
+        style={{ background: copied ? "#064e3b" : "#1a1a1a", border: `1px solid ${copied ? "#065f46" : "#222"}`, color: copied ? "#6ee7b7" : "#c8a97e", padding: "8px 14px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+        {copied ? "✅ Copied!" : "📋 Copy"}
+      </button>
+    </div>
+  )
+}
+
+// ── OTP Poller — reusable, used by both Checkout and OrderTracker modal ───────
+export function OtpPoller({ orderId, deliveryMethod, onOtpReceived }) {
+  const pollRef = useRef(null)
+
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current)
+
+    // Only poll for rider deliveries
+    if (deliveryMethod !== "rider" || !orderId) return
+
+    const poll = async () => {
+      try {
+        const res  = await fetch(`${API_URL}/deliveries/otp-for-order/${orderId}`)
+        const data = await res.json()
+        if (data.otp) {
+          clearInterval(pollRef.current)
+          onOtpReceived(data)
+        }
+      } catch {}
+    }
+
+    poll()
+    pollRef.current = setInterval(poll, 5000)
+    return () => clearInterval(pollRef.current)
+  }, [orderId, deliveryMethod])
+
+  return null
+}
+
+// ── Main OrderTracker modal ───────────────────────────────────────────────────
+export default function OrderTracker({ onClose, onOpenOrder }) {
+  const [input, setInput]       = useState("")
+  const [order, setOrder]       = useState(null)
+  const [notFound, setNotFound] = useState(false)
+  const [deliveryOtp, setDeliveryOtp] = useState(null)
+
+  const search = () => {
+    const id = input.trim().toUpperCase()
+    if (!id) return
+    const found = getOrder(id)
+    if (found) { setOrder(found); setNotFound(false); setDeliveryOtp(null) }
+    else        { setOrder(null);  setNotFound(true) }
   }
 
-  return (
-    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
-      <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "480px", maxHeight: "92vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
+  const fmt = (ts) => new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
 
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: "18px", fontWeight: "700" }}>📦 Track Order</span>
+  const isRiderOrder = order?.deliveryMethod === "rider"
+
+  return (
+    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+      <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "480px", maxHeight: "92vh", overflowY: "auto", border: "1px solid #1e1e1e" }}>
+
+        <div style={{ padding: "18px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: "17px", fontWeight: "700" }}>📦 Track Your Order</span>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>
         </div>
 
-        <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div style={{ padding: "22px", display: "flex", flexDirection: "column", gap: "16px" }}>
 
-          <p style={{ fontSize: "13px", color: "#555", lineHeight: "1.6" }}>
-            Enter your Order ID — works on any device, any browser.
-          </p>
-
-          <div style={{ display: "flex", gap: "8px" }}>
-            <input
-              className="search-input"
-              placeholder="e.g. SR-AB3DEF"
-              value={idInput}
-              onChange={e => { setIdInput(e.target.value.toUpperCase()); setError(""); setFound(null) }}
-              onKeyDown={e => e.key === "Enter" && handleSearch()}
-              style={{ flex: 1, fontFamily: "monospace", fontSize: "15px", letterSpacing: ".05em" }}
-            />
-            <button className="btn-gold" onClick={handleSearch}
-              style={{ padding: "11px 20px", borderRadius: "10px", fontSize: "14px", whiteSpace: "nowrap" }}>
-              Search
-            </button>
+          {/* Search */}
+          <div>
+            <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>ENTER YOUR ORDER ID</div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <input
+                placeholder="e.g. SR-M5X3K2-AB12"
+                value={input}
+                onChange={e => setInput(e.target.value.toUpperCase())}
+                onKeyDown={e => e.key === "Enter" && search()}
+                style={{ flex: 1, background: "#161616", border: "1px solid #1e1e1e", color: "#f0ede8", padding: "12px 16px", borderRadius: "10px", fontSize: "15px", fontFamily: "monospace", letterSpacing: ".04em", outline: "none" }}
+              />
+              <button onClick={search}
+                style={{ background: "#c8a97e", border: "none", padding: "12px 20px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", color: "#000", whiteSpace: "nowrap" }}>
+                Track →
+              </button>
+            </div>
           </div>
 
-          {error && (
-            <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#fca5a5" }}>
-              ⚠️ {error}
+          {notFound && (
+            <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "14px 16px", fontSize: "13px", color: "#fca5a5" }}>
+              ⚠️ Order not found. Check the ID and try again.
             </div>
           )}
 
-          {found && (
+          {order && (
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
 
-              {/* Order summary card */}
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div>
-                    <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "4px" }}>ORDER FOUND</div>
-                    <div style={{ fontSize: "18px", fontWeight: "800", color: "#c8a97e", fontFamily: "monospace" }}>{found.id}</div>
-                  </div>
-                  {found.status && (() => {
-                    const sc = statusColor(found.status)
-                    return (
-                      <span style={{ fontSize: "11px", fontWeight: "700", background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, padding: "4px 12px", borderRadius: "20px" }}>
-                        {found.status}
-                      </span>
-                    )
-                  })()}
-                </div>
-
-                <hr style={{ border: "none", borderTop: "1px solid #1a1a1a", margin: 0 }} />
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px" }}>
-                  {found.cart?.length > 0 && (
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                      <span style={{ color: "#555", flexShrink: 0 }}>Items</span>
-                      <span style={{ color: "#888", textAlign: "right" }}>{found.cart.map(i => i.title).join(", ")}</span>
-                    </div>
-                  )}
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#555" }}>Total</span>
-                    <span style={{ color: "#c8a97e", fontWeight: "700" }}>₵{found.total?.toLocaleString() || "—"}</span>
-                  </div>
-                  {found.paymentRef && (
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                      <span style={{ color: "#555", flexShrink: 0 }}>Reference</span>
-                      <span style={{ color: "#444", fontSize: "11px", fontFamily: "monospace", textAlign: "right" }}>{found.paymentRef}</span>
-                    </div>
-                  )}
-                  {found.deliveryMethod && (
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#555" }}>Delivery</span>
-                      <span style={{ color: "#888" }}>{found.deliveryMethod === "rider" ? "🛵 Rider" : "📍 Pickup"}</span>
-                    </div>
-                  )}
-                  {found.promoCode && (
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#555" }}>Promo</span>
-                      <span style={{ color: "#6ee7b7" }}>🎟️ {found.promoCode}</span>
-                    </div>
-                  )}
-                  {found.createdAt && (
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#555" }}>Placed</span>
-                      <span style={{ color: "#888" }}>{formatDate(found.createdAt)}</span>
-                    </div>
-                  )}
-
-                  {found.delivered === true && (
-                    <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "8px", padding: "8px 12px", color: "#6ee7b7", fontSize: "12px" }}>
-                      ✅ Delivery confirmed — order complete
-                    </div>
-                  )}
-                  {found.delivered === false && (
-                    <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "8px", padding: "8px 12px", color: "#fca5a5", fontSize: "12px" }}>
-                      ❌ Cancelled — refund in progress
-                    </div>
-                  )}
-                  {found.delivered === null && !deliveryOtp && (
-                    <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "8px", padding: "8px 12px", color: "#fcd34d", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span>⏳ In progress — awaiting delivery</span>
-                      {otpLoading && <span style={{ fontSize: "11px", color: "#555" }}>checking...</span>}
-                    </div>
-                  )}
+              {/* Status */}
+              <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "16px 18px" }}>
+                <div style={{ fontSize: "11px", color: "#6ee7b7", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "6px" }}>STATUS</div>
+                <div style={{ fontSize: "17px", fontWeight: "800", color: "#6ee7b7" }}>
+                  {order.delivered === true  ? "✅ Delivered & Complete"
+                  : order.delivered === false ? "❌ Cancelled / Refund Pending"
+                  : isRiderOrder             ? "🛵 Rider Delivery in Progress"
+                  :                            "⏳ Awaiting Delivery"}
                 </div>
               </div>
 
-              {/* ── OTP DISPLAY — shows when rider marks as delivered ── */}
-              {deliveryOtp && found.delivered === null && (
-                <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "22px", textAlign: "center", display: "flex", flexDirection: "column", gap: "14px" }}>
-                  <div style={{ fontSize: "32px" }}>🚪</div>
-                  <div>
-                    <div style={{ fontSize: "14px", fontWeight: "700", color: "#6ee7b7", marginBottom: "6px" }}>Your Package Has Arrived!</div>
-                    <div style={{ fontSize: "13px", color: "#888" }}>Read this code to the rider to confirm delivery</div>
-                  </div>
+              {/* Order details */}
+              <div style={{ background: "#161616", borderRadius: "14px", padding: "16px 18px", fontSize: "13px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "4px" }}>ORDER DETAILS</div>
+                <div>🏷️ ID: <span style={{ color: "#c8a97e", fontFamily: "monospace", fontWeight: "700" }}>{order.id}</span></div>
+                <div>💰 Total: <span style={{ color: "#aaa" }}>₵{order.total?.toLocaleString()}</span></div>
+                <div>🚚 Delivery: <span style={{ color: "#aaa" }}>{order.deliveryMethod === "rider" ? "🛵 Rider" : "📍 Pickup"}</span></div>
+                {order.location ? <div>📍 GPS: <span style={{ color: "#aaa", fontFamily: "monospace", fontSize: "11px" }}>{typeof order.location === "object" ? `${order.location.lat}, ${order.location.lng}` : order.location}</span></div>
+                  : order.manualLocation ? <div>📍 <span style={{ color: "#aaa" }}>{order.manualLocation}</span></div> : null}
+                {order.landmark && <div>🗺️ <span style={{ color: "#aaa" }}>{order.landmark}</span></div>}
+                <div>📅 Placed: <span style={{ color: "#aaa" }}>{fmt(order.createdAt)}</span></div>
+              </div>
 
-                  {/* Big OTP display */}
-                  <div style={{ fontSize: "52px", fontWeight: "900", color: "#c8a97e", fontFamily: "monospace", letterSpacing: ".2em", background: "#161616", borderRadius: "14px", padding: "20px 12px", border: "2px solid #c8a97e44" }}>
-                    {deliveryOtp.otp}
-                  </div>
+              {/* ── OTP section for rider orders ── */}
+              {isRiderOrder && order.delivered === null && (
+                <>
+                  {/* This polls the backend every 5s until rider marks delivered */}
+                  <OtpPoller
+                    orderId={order.id}
+                    deliveryMethod="rider"
+                    onOtpReceived={setDeliveryOtp}
+                  />
 
-                  <div style={{ fontSize: "12px", color: "#555" }}>
-                    ⏰ Expires at {new Date(deliveryOtp.expiresAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                  </div>
-
-                  <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
-                    ⚠️ Only share this with the person delivering your package. Once the rider enters it, your order is marked complete and payment is released.
-                  </div>
-                </div>
+                  {deliveryOtp ? (
+                    <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
+                      <div style={{ fontSize: "28px" }}>🚪</div>
+                      <div>
+                        <div style={{ fontSize: "15px", fontWeight: "700", color: "#6ee7b7", marginBottom: "6px" }}>Your Package Has Arrived!</div>
+                        <div style={{ fontSize: "13px", color: "#888" }}>Read this 6-digit code to the rider to confirm delivery</div>
+                      </div>
+                      <div style={{ fontSize: "52px", fontWeight: "900", color: "#c8a97e", fontFamily: "monospace", letterSpacing: ".2em", background: "#161616", borderRadius: "14px", padding: "20px 12px", border: "2px solid #c8a97e44" }}>
+                        {deliveryOtp.otp}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#555" }}>
+                        ⏰ Expires at {new Date(deliveryOtp.expiresAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                      <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
+                        ⚠️ Only share this with the person delivering your package.
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#c8a97e", flexShrink: 0 }} />
+                        <div style={{ fontSize: "13px", color: "#888" }}>Waiting for rider to deliver...</div>
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
+                        When the rider arrives and marks your package as delivered, a 6-digit OTP will appear here automatically. Read it to the rider to complete delivery.
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
-              {/* Polling indicator when waiting for rider to deliver */}
-              {found.delivered === null && !deliveryOtp && (
-                <div style={{ background: "#161616", borderRadius: "12px", padding: "14px", fontSize: "12px", color: "#444", display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#555", animation: "pulse 2s infinite", flexShrink: 0 }} />
-                  <span>Watching for delivery updates — this page checks automatically every 5 seconds.</span>
-                </div>
-              )}
-
-              {/* Reopen order button */}
-              {found.delivered === null && (
-                <button className="btn-gold" onClick={() => { onOpenOrder(found); onClose() }}
-                  style={{ width: "100%", padding: "13px", borderRadius: "12px", fontSize: "15px" }}>
-                  📦 Reopen This Order
+              {/* Reopen in checkout button */}
+              {order.delivered === null && (
+                <button onClick={() => { onOpenOrder(order); onClose() }}
+                  style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "14px", borderRadius: "12px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
+                  📂 Open Full Order View
                 </button>
               )}
 
+              {order.delivered === true && (
+                <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#6ee7b7", textAlign: "center" }}>
+                  🎉 Order complete! Payment has been released to the seller.
+                </div>
+              )}
+
+              {order.delivered === false && (
+                <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#fca5a5", textAlign: "center" }}>
+                  Your refund of ₵{order.total?.toLocaleString()} is being processed.
+                </div>
+              )}
             </div>
           )}
-
-          <div style={{ background: "#161616", borderRadius: "12px", padding: "14px", fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
-            <div style={{ fontWeight: "600", color: "#555", marginBottom: "4px" }}>Works on any device</div>
-            Your Order ID (e.g. SR-AB3DEF) is shown after checkout. Enter it here on any phone or computer to track your order and receive your delivery OTP.
-          </div>
-
         </div>
       </div>
     </div>
