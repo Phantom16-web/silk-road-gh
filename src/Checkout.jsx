@@ -1,8 +1,14 @@
 import { useState, useEffect, useRef } from "react"
-import { saveOrder, generateOrderId, updateOrder, OrderIdBanner } from "./OrderTracker"
+import { saveOrder, generateOrderId, updateOrder, OrderIdBanner, OtpPoller } from "./OrderTracker"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
-const STEPS   = ["Location", "Confirm Order", "Payment", "Track"]
+const SILK_ROAD_MOMO      = "0543883608"
+const SILK_ROAD_MOMO_NAME = "Silk Road GH"
+const STEPS = ["Location", "Confirm Order", "Payment", "Track"]
+
+function isMongoId(str) {
+  return str && /^[a-f\d]{24}$/i.test(String(str))
+}
 
 export default function Checkout({ cart, rate, onClose, initialOrder, siteSettings }) {
   const [step, setStep]                     = useState(initialOrder ? 3 : 0)
@@ -20,51 +26,30 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const [paymentRef, setPaymentRef]         = useState(initialOrder?.paymentRef || null)
   const [orderId]                           = useState(initialOrder?.id || generateOrderId())
   const [saving, setSaving]                 = useState(false)
-  const [deliveryMethod, setDeliveryMethod] = useState(initialOrder?.deliveryMethod || "pickup")
-  const [promoCode, setPromoCode]           = useState("")
-  const [promoApplied, setPromoApplied]     = useState(null)
-  const [promoError, setPromoError]         = useState("")
-  const [promoLoading, setPromoLoading]     = useState(false)
+  const [copied, setCopied]                 = useState(false)
 
-  // OTP polling — for when a rider has delivered the package
-  const [deliveryOtp, setDeliveryOtp]   = useState(null)
-  const [otpPolling, setOtpPolling]     = useState(false)
-  const otpPollRef                      = useRef(null)
+  // deliveryMethod — read from saved order or default to pickup
+  const [deliveryMethod, setDeliveryMethod] = useState(
+    initialOrder?.deliveryMethod || "pickup"
+  )
 
-  const deliveryFee  = deliveryMethod === "rider" ? (siteSettings?.deliveryFee || 10) : 0
-  const subtotal     = initialOrder?.subtotal || cart.reduce((s, i) => s + (i.price || i.dailyRate || 0) * i.qty, 0)
-  const discount     = promoApplied?.type === "percentage"    ? Math.round(subtotal * promoApplied.value / 100)
-                     : promoApplied?.type === "fixed"         ? promoApplied.value
-                     : promoApplied?.type === "free_delivery" ? deliveryFee
-                     : 0
-  const total        = Math.max(0, subtotal + deliveryFee - discount)
-  const platformFee  = Math.round(subtotal * 0.08)
-  const toUSD        = (ghs) => rate ? (ghs / rate).toFixed(2) : "..."
+  const [promoCode, setPromoCode]       = useState("")
+  const [promoApplied, setPromoApplied] = useState(null)
+  const [promoError, setPromoError]     = useState("")
+  const [promoLoading, setPromoLoading] = useState(false)
 
-  // ── Poll for OTP when on step 3 and order not yet confirmed ──────────────
-  useEffect(() => {
-    if (otpPollRef.current) clearInterval(otpPollRef.current)
-    setDeliveryOtp(null)
+  // OTP state — populated when rider marks delivered
+  const [deliveryOtp, setDeliveryOtp] = useState(null)
 
-    // Only poll if we're on the track step and haven't confirmed yet
-    const currentOrderId = initialOrder?.id || orderId
-    if (step !== 3 || delivered !== null || !currentOrderId) return
-
-    const poll = async () => {
-      try {
-        const res  = await fetch(`${API_URL}/deliveries/otp-for-order/${currentOrderId}`)
-        const data = await res.json()
-        if (data.otp) {
-          setDeliveryOtp(data)
-          clearInterval(otpPollRef.current)
-        }
-      } catch {}
-    }
-
-    poll()
-    otpPollRef.current = setInterval(poll, 5000)
-    return () => clearInterval(otpPollRef.current)
-  }, [step, delivered, orderId, initialOrder?.id])
+  const deliveryFee = siteSettings?.deliveryFee || 10
+  const subtotal    = initialOrder?.subtotal || cart.reduce((s, i) => s + (i.price || i.dailyRate || 0) * i.qty, 0)
+  const discount    = promoApplied?.type === "percentage"    ? Math.round(subtotal * promoApplied.value / 100)
+                    : promoApplied?.type === "fixed"         ? promoApplied.value
+                    : promoApplied?.type === "free_delivery" ? deliveryFee
+                    : 0
+  const total       = Math.max(0, subtotal + (deliveryMethod === "rider" && promoApplied?.type !== "free_delivery" ? deliveryFee : deliveryMethod === "rider" ? 0 : 0) - (promoApplied?.type !== "free_delivery" ? discount : 0))
+  const platformFee = Math.round(subtotal * 0.08)
+  const toUSD       = (ghs) => rate ? (ghs / rate).toFixed(2) : "..."
 
   const detectLocation = () => {
     setLocLoading(true); setLocError(null); setLocBlocked(false)
@@ -72,7 +57,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     navigator.geolocation.getCurrentPosition(
       pos => {
         setLocation({ lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6) })
-        setLocBlocked(false); setLocError(null); setLocLoading(false)
+        setLocLoading(false); setLocError(null); setLocBlocked(false)
       },
       err => {
         setLocLoading(false)
@@ -88,20 +73,19 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     setPromoLoading(true); setPromoError(""); setPromoApplied(null)
     try {
       const res  = await fetch(`${API_URL}/promos/validate`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ code: promoCode.trim().toUpperCase() }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: promoCode.trim().toUpperCase() }),
       })
       const data = await res.json()
-      if (data.valid) setPromoApplied(data)
+      if (data.valid) setPromoApplied(data.promo || data)
       else setPromoError(data.message || "Invalid promo code.")
     } catch {
-      const demos = {
-        WELCOME10: { valid: true, type: "percentage",    value: 10, code: "WELCOME10" },
-        FREEDEL:   { valid: true, type: "free_delivery", value: 0,  code: "FREEDEL"  },
+      const DEMOS = {
+        WELCOME10: { type: "percentage",    value: 10 },
+        FREEDEL:   { type: "free_delivery", value: 0  },
       }
-      const found = demos[promoCode.trim().toUpperCase()]
-      if (found) setPromoApplied(found)
+      const found = DEMOS[promoCode.trim().toUpperCase()]
+      if (found) setPromoApplied({ ...found, code: promoCode.trim().toUpperCase() })
       else setPromoError("Invalid promo code.")
     }
     setPromoLoading(false)
@@ -109,18 +93,30 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
 
   const handlePay = async () => {
     if (!payerName.trim())  { alert("Please enter your name."); return }
-    if (!payerPhone.trim()) { alert("Please enter your phone number."); return }
+    if (!payerPhone.trim()) { alert("Please enter your MoMo number."); return }
     setSaving(true)
 
-    const ref       = `MOMO-${orderId}`
-    const firstItem = cart[0]
+    const ref = `MOMO-${orderId}`
 
+    // ── CRITICAL: always save deliveryMethod with the order ──
     const order = {
-      id: orderId, type: "buy", cart, total, subtotal,
-      platformFee, deliveryFee, discount,
+      id:             orderId,
+      type:           "buy",
+      cart,
+      total,
+      subtotal,
+      platformFee,
+      deliveryFee:    deliveryMethod === "rider" ? deliveryFee : 0,
+      discount,
       promoCode:      promoApplied?.code || null,
-      location, manualLocation, landmark, extraInfo,
-      contactInfo, payerName, payerPhone, deliveryMethod,
+      location,
+      manualLocation,
+      landmark,
+      extraInfo,
+      contactInfo,
+      payerName,
+      payerPhone,
+      deliveryMethod, // ← always saved
       paymentMethod:  "manual_momo",
       paymentRef:     ref,
       status:         "Pending Confirmation",
@@ -131,36 +127,40 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     saveOrder(order)
 
     try {
-      const isDbListing = firstItem?._id && typeof firstItem._id === "string" && firstItem._id.length === 24
-      const listingId   = isDbListing ? firstItem._id : null
+      const firstItem   = cart[0]
+      const listingId   = firstItem?._id && isMongoId(firstItem._id) ? firstItem._id : null
       const rawSellerId = firstItem?.seller?._id || firstItem?.seller
-      const isValidId   = rawSellerId && typeof rawSellerId === "string" && rawSellerId.length === 24
-      const sellerId    = isValidId ? rawSellerId : null
+      const sellerId    = rawSellerId && isMongoId(String(rawSellerId)) ? String(rawSellerId) : null
 
       if (listingId || sellerId) {
         const res = await fetch(`${API_URL}/orders`, {
           method:  "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(localStorage.getItem("silkroad_token") && {
-              Authorization: `Bearer ${localStorage.getItem("silkroad_token")}`,
-            }),
-          },
-          body: JSON.stringify({
-            listingId, sellerId, type: "product", amount: total,
-            paystackRef:    ref,
-            location:       location ? `${location.lat},${location.lng}` : manualLocation,
-            landmark, extraInfo, contactInfo, payerName, payerPhone,
-            promoCode:      promoApplied?.code || null,
-            discount, deliveryMethod, paymentMethod: "manual_momo",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({
+            listingId,
+            sellerId,
+            localOrderId:  orderId,
+            type:          "product",
+            amount:        total,
+            paystackRef:   ref,
+            location:      location ? `${location.lat},${location.lng}` : manualLocation,
+            landmark,
+            extraInfo,
+            contactInfo,
+            payerName,
+            payerPhone,
+            promoCode:     promoApplied?.code || null,
+            discount,
+            deliveryMethod,
+            paymentMethod: "manual_momo",
           }),
         })
         const data = await res.json()
-        if (data.orderId) updateOrder(orderId, { backendOrderId: data.orderId })
+        if (data.orderId || data._id) {
+          updateOrder(orderId, { backendOrderId: data.orderId || data._id })
+        }
       }
-    } catch (err) {
-      console.warn("Backend order save failed:", err.message)
-    }
+    } catch (err) { console.warn("Backend save failed:", err.message) }
 
     setSaving(false)
     setPaymentRef(ref)
@@ -175,6 +175,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const handleCancelDelivery = () => {
     setDelivered(false)
     updateOrder(orderId, { delivered: false, status: "Cancelled" })
+  }
+
+  const copyMomo = () => {
+    navigator.clipboard.writeText(SILK_ROAD_MOMO).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
   }
 
   const mapEmbedUrl = location
@@ -233,33 +237,32 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
 
               {locError && locError !== "blocked" && (
                 <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#fcd34d" }}>
-                  ⚠️ {locError === "unavailable" ? "Could not get location. Try again or enter manually."
-                      : locError === "timeout"     ? "Timed out. Try again or enter manually."
+                  ⚠️ {locError === "unavailable" ? "Could not get location. Enter manually."
+                      : locError === "timeout"     ? "Timed out. Enter manually."
                       : locError === "unsupported" ? "GPS not supported. Enter manually."
                       : "Could not get location. Enter manually."}
                 </div>
               )}
 
               {locBlocked && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <>
                   <div>
-                    <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR LOCATION / ADDRESS</div>
+                    <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR LOCATION</div>
                     <textarea placeholder="e.g. Mensah Sarbah Hall, Room 204, University of Ghana, Legon" value={manualLocation} onChange={e => setManualLocation(e.target.value)} rows={3} style={{ ...inp, resize: "vertical" }} />
                   </div>
                   <div>
                     <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>NEAREST LANDMARK</div>
                     <input placeholder="e.g. Opposite the main library" value={landmark} onChange={e => setLandmark(e.target.value)} style={inp} />
                   </div>
-                </div>
+                </>
               )}
 
               {mapEmbedUrl && (
                 <div style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e" }}>
-                  <div style={{ background: "#161616", padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #1e1e1e" }}>
+                  <div style={{ background: "#161616", padding: "8px 14px", borderBottom: "1px solid #1e1e1e" }}>
                     <span style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "700" }}>📍 YOUR LOCATION</span>
-                    {location && <span style={{ fontSize: "10px", color: "#444", fontFamily: "monospace" }}>{location.lat}, {location.lng}</span>}
                   </div>
-                  <iframe src={mapEmbedUrl} width="100%" height="200" style={{ border: "none", display: "block" }} allowFullScreen loading="lazy" title="Delivery Location" />
+                  <iframe src={mapEmbedUrl} width="100%" height="200" style={{ border: "none", display: "block" }} allowFullScreen loading="lazy" title="Location" />
                 </div>
               )}
 
@@ -278,6 +281,11 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
               <div>
                 <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>EXTRA DETAILS FOR SELLER</div>
                 <textarea placeholder="e.g. Call when you arrive, third floor..." value={extraInfo} onChange={e => setExtraInfo(e.target.value)} rows={2} style={{ ...inp, resize: "none" }} />
+              </div>
+
+              <div>
+                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR CONTACT (for seller)</div>
+                <input placeholder="Phone or Instagram the seller can reach you on" value={contactInfo} onChange={e => setContactInfo(e.target.value)} style={inp} />
               </div>
 
               <button className="btn-gold" onClick={() => {
@@ -310,7 +318,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 {promoApplied ? (
                   <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "10px", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
-                      <div style={{ fontSize: "13px", fontWeight: "700", color: "#6ee7b7" }}>🎟️ {promoApplied.code} applied!</div>
+                      <div style={{ fontSize: "13px", fontWeight: "700", color: "#6ee7b7" }}>🎟️ {promoApplied.code}</div>
                       <div style={{ fontSize: "12px", color: "#555" }}>Saving ₵{discount}</div>
                     </div>
                     <button onClick={() => { setPromoApplied(null); setPromoCode("") }} style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "18px", minHeight: "auto" }}>✕</button>
@@ -319,9 +327,9 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                   <div style={{ display: "flex", gap: "8px" }}>
                     <input placeholder="Enter promo code" value={promoCode} onChange={e => setPromoCode(e.target.value.toUpperCase())}
                       onKeyDown={e => e.key === "Enter" && handleApplyPromo()}
-                      style={{ ...inp, flex: 1, fontFamily: "monospace", letterSpacing: ".05em" }} />
+                      style={{ ...inp, flex: 1, fontFamily: "monospace" }} />
                     <button onClick={handleApplyPromo} disabled={promoLoading}
-                      style={{ background: "#c8a97e", border: "none", padding: "12px 18px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "13px", color: "#000", whiteSpace: "nowrap", fontFamily: "inherit" }}>
+                      style={{ background: "#c8a97e", border: "none", padding: "12px 18px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "13px", color: "#000", fontFamily: "inherit" }}>
                       {promoLoading ? "..." : "Apply"}
                     </button>
                   </div>
@@ -333,7 +341,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}>
                   <span>Subtotal</span><span>₵{subtotal.toLocaleString()}</span>
                 </div>
-                {deliveryFee > 0 && (
+                {deliveryMethod === "rider" && promoApplied?.type !== "free_delivery" && (
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}>
                     <span>Rider delivery</span><span>₵{deliveryFee}</span>
                   </div>
@@ -343,7 +351,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     <span>🎟️ Promo discount</span><span>−₵{discount}</span>
                   </div>
                 )}
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "19px", fontWeight: "800", color: "#c8a97e", borderTop: "1px solid #222", paddingTop: "10px", letterSpacing: "-0.02em" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "19px", fontWeight: "800", color: "#c8a97e", borderTop: "1px solid #222", paddingTop: "10px" }}>
                   <span>Total</span>
                   <span>₵{total.toLocaleString()} <span style={{ fontSize: "12px", color: "#333", fontWeight: "400" }}>(${toUSD(total)})</span></span>
                 </div>
@@ -352,9 +360,8 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
               <div style={{ background: "#161616", borderRadius: "14px", padding: "14px", fontSize: "13px", color: "#666", display: "flex", flexDirection: "column", gap: "6px" }}>
                 <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "4px" }}>DELIVERY DETAILS</div>
                 {location ? <div>📍 GPS: <span style={{ color: "#888" }}>{location.lat}, {location.lng}</span></div> : <div>📍 <span style={{ color: "#888" }}>{manualLocation}</span></div>}
-                {landmark && <div>🗺️ Landmark: <span style={{ color: "#888" }}>{landmark}</span></div>}
-                {extraInfo && <div>📝 Notes: <span style={{ color: "#888" }}>{extraInfo}</span></div>}
-                <div>🚚 Method: <span style={{ color: "#888" }}>{deliveryMethod === "rider" ? `Rider (₵${deliveryFee})` : "Campus Pickup (Free)"}</span></div>
+                {landmark  && <div>🗺️ <span style={{ color: "#888" }}>{landmark}</span></div>}
+                <div>🚚 Method: <span style={{ color: "#888" }}>{deliveryMethod === "rider" ? "Rider delivery" : "Campus pickup (free)"}</span></div>
               </div>
 
               <div style={{ display: "flex", gap: "10px" }}>
@@ -378,10 +385,21 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
               <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#fcd34d", display: "flex", flexDirection: "column", gap: "6px" }}>
                 <div style={{ fontWeight: "700", fontSize: "14px" }}>⚠️ How to pay:</div>
                 <div>1. Dial <strong>*170#</strong> → Send Money → MoMo User</div>
-                <div>2. Enter number: <strong style={{ fontSize: "15px" }}>0543883608</strong> (Silk Road GH)</div>
+                <div>2. Enter number: <strong style={{ fontSize: "15px" }}>{SILK_ROAD_MOMO}</strong> ({SILK_ROAD_MOMO_NAME})</div>
                 <div>3. Amount: <strong>₵{total}</strong></div>
-                <div>4. Reference/Reason: <strong style={{ fontFamily: "monospace" }}>{orderId}</strong></div>
+                <div>4. Reference: <strong style={{ fontFamily: "monospace" }}>{orderId}</strong></div>
                 <div>5. Fill in your name and number below, then confirm</div>
+              </div>
+
+              <div style={{ background: "#161616", borderRadius: "14px", padding: "14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", letterSpacing: ".04em" }}>{SILK_ROAD_MOMO}</div>
+                  <div style={{ fontSize: "12px", color: "#555", marginTop: "3px" }}>{SILK_ROAD_MOMO_NAME}</div>
+                </div>
+                <button onClick={copyMomo}
+                  style={{ background: copied ? "#064e3b" : "#1a1a1a", border: `1px solid ${copied ? "#065f46" : "#222"}`, color: copied ? "#6ee7b7" : "#c8a97e", padding: "8px 14px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit" }}>
+                  {copied ? "✅ Copied!" : "📋 Copy"}
+                </button>
               </div>
 
               <div>
@@ -391,10 +409,6 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
               <div>
                 <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR MOMO NUMBER</div>
                 <input placeholder="e.g. 0241234567" value={payerPhone} onChange={e => setPayerPhone(e.target.value)} style={inp} />
-              </div>
-              <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>CONTACT FOR SELLER</div>
-                <input placeholder="Phone or Instagram the seller can reach you on" value={contactInfo} onChange={e => setContactInfo(e.target.value)} style={inp} />
               </div>
 
               <div style={{ display: "flex", gap: "10px" }}>
@@ -416,7 +430,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     <div style={{ fontSize: "56px", marginBottom: "10px" }}>✅</div>
                     <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", marginBottom: "8px" }}>Payment Submitted!</h3>
                     <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.7" }}>
-                      Your order has been sent to the seller.
+                      Your order is with the seller. {deliveryMethod === "rider" ? "A rider will be assigned to deliver your package." : "Contact the seller to arrange pickup."}
                     </p>
                   </div>
 
@@ -426,52 +440,62 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     {cart.length > 0 && <div>📦 <span style={{ color: "#c8a97e", fontWeight: "700" }}>{cart.map(i => i.title).join(", ")}</span></div>}
                     <div>💰 Total: <span style={{ color: "#aaa" }}>₵{total.toLocaleString()} (${toUSD(total)})</span></div>
                     {location ? <div>📍 GPS: <span style={{ color: "#aaa" }}>{location.lat}, {location.lng}</span></div> : <div>📍 <span style={{ color: "#aaa" }}>{manualLocation}</span></div>}
-                    {landmark   && <div>🗺️ {landmark}</div>}
-                    {extraInfo  && <div>📝 {extraInfo}</div>}
-                    {promoApplied && <div>🎟️ Promo: <span style={{ color: "#6ee7b7" }}>{promoApplied.code} (−₵{discount})</span></div>}
-                    <div>📞 Seller will contact: <span style={{ color: "#c8a97e" }}>{contactInfo || payerPhone}</span></div>
+                    {landmark  && <div>🗺️ {landmark}</div>}
+                    {extraInfo && <div>📝 {extraInfo}</div>}
+                    <div>📞 Seller contact: <span style={{ color: "#c8a97e" }}>{contactInfo || payerPhone}</span></div>
                     {paymentRef && <div style={{ fontSize: "10px", color: "#444", fontFamily: "monospace", marginTop: "4px" }}>Ref: {paymentRef}</div>}
+                    <div style={{ marginTop: "4px" }}>🚚 <span style={{ color: "#aaa" }}>{deliveryMethod === "rider" ? "Rider delivery" : "Campus pickup"}</span></div>
                   </div>
 
-                  {/* ── OTP display — shows when rider marks as delivered ── */}
-                  {deliveryOtp ? (
-                    <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
-                      <div style={{ fontSize: "28px" }}>🚪</div>
-                      <div>
-                        <div style={{ fontSize: "15px", fontWeight: "700", color: "#6ee7b7", marginBottom: "6px" }}>Your Package Has Arrived!</div>
-                        <div style={{ fontSize: "13px", color: "#888" }}>Read this 6-digit code to the rider to confirm delivery</div>
-                      </div>
-                      <div style={{ fontSize: "52px", fontWeight: "900", color: "#c8a97e", fontFamily: "monospace", letterSpacing: ".2em", background: "#161616", borderRadius: "14px", padding: "20px 12px", border: "2px solid #c8a97e44" }}>
-                        {deliveryOtp.otp}
-                      </div>
-                      <div style={{ fontSize: "12px", color: "#555" }}>
-                        ⏰ Expires at {new Date(deliveryOtp.expiresAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                      </div>
-                      <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
-                        ⚠️ Only share this with the person delivering your package. Once entered, your order is marked complete.
-                      </div>
-                    </div>
+                  {/* ── OTP SECTION — only for rider deliveries ── */}
+                  {deliveryMethod === "rider" ? (
+                    <>
+                      {/* OtpPoller polls every 5s — sets deliveryOtp when rider marks delivered */}
+                      <OtpPoller
+                        orderId={orderId}
+                        deliveryMethod={deliveryMethod}
+                        onOtpReceived={setDeliveryOtp}
+                      />
+
+                      {deliveryOtp ? (
+                        /* ── OTP received — show big gold digits ── */
+                        <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
+                          <div style={{ fontSize: "28px" }}>🚪</div>
+                          <div>
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#6ee7b7", marginBottom: "6px" }}>Your Package Has Arrived!</div>
+                            <div style={{ fontSize: "13px", color: "#888" }}>Read this 6-digit code to the rider to confirm delivery</div>
+                          </div>
+                          <div style={{ fontSize: "52px", fontWeight: "900", color: "#c8a97e", fontFamily: "monospace", letterSpacing: ".2em", background: "#161616", borderRadius: "14px", padding: "20px 12px", border: "2px solid #c8a97e44" }}>
+                            {deliveryOtp.otp}
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#555" }}>
+                            ⏰ Expires at {new Date(deliveryOtp.expiresAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                          <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
+                            ⚠️ Only share this with the person delivering your package. Once they enter it, your order is marked complete.
+                          </div>
+                        </div>
+                      ) : (
+                        /* ── Waiting for rider ── */
+                        <div style={{ background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#c8a97e", flexShrink: 0 }} />
+                            <div style={{ fontSize: "13px", color: "#888" }}>Waiting for rider to deliver...</div>
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
+                            Keep this screen open. When the rider arrives and marks your package delivered, a 6-digit OTP will appear here automatically. Read it to the rider to complete the delivery.
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Cancel only — no "I've Received" button for rider orders */}
+                      <button onClick={handleCancelDelivery}
+                        style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "13px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
+                        ❌ Cancel Order — Refund Me
+                      </button>
+                    </>
                   ) : (
-                    /* No OTP yet — show waiting state with pulsing indicator */
-                    <div style={{ background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#555", animation: "pulse 2s infinite", flexShrink: 0 }} />
-                        <div style={{ fontSize: "13px", color: "#555" }}>Waiting for delivery...</div>
-                      </div>
-                      <div style={{ fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
-                        When the rider delivers your package, a 6-digit OTP will appear here automatically. Read it to the rider to complete delivery and release payment.
-                      </div>
-                    </div>
-                  )}
-
-                  {mapEmbedUrl && (
-                    <div style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e" }}>
-                      <iframe src={mapEmbedUrl} width="100%" height="160" style={{ border: "none", display: "block" }} allowFullScreen loading="lazy" title="Delivery Location" />
-                    </div>
-                  )}
-
-                  {/* Only show these buttons when delivery method is pickup (no rider) */}
-                  {deliveryMethod !== "rider" && !deliveryOtp && (
+                    /* ── Pickup delivery — show confirm button ── */
                     <>
                       <button onClick={handleConfirmDelivery}
                         style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "15px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "15px", fontFamily: "inherit" }}>
@@ -484,12 +508,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     </>
                   )}
 
-                  {/* For rider delivery, show cancel only (no confirm — OTP handles that) */}
-                  {deliveryMethod === "rider" && !deliveryOtp && (
-                    <button onClick={handleCancelDelivery}
-                      style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "13px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-                      ❌ Cancel Order — Refund Me
-                    </button>
+                  {mapEmbedUrl && (
+                    <div style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e" }}>
+                      <iframe src={mapEmbedUrl} width="100%" height="160" style={{ border: "none", display: "block" }} allowFullScreen loading="lazy" title="Location" />
+                    </div>
                   )}
                 </>
               )}
