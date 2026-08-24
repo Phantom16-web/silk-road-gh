@@ -280,8 +280,8 @@ function Footer({ onOpen, siteSettings }) {
 // ── Search Results ─────────────────────────────────────────────────────────────
 function SearchResults({ query, onClose, onNavigate }) {
   const { detectedSection, keyword } = parseSearch(query)
-  const [dbResults, setDbResults] = useState([])
-  const [loading, setLoading]     = useState(true)
+  const [dbResults, setDbResults]   = useState([])
+  const [loading, setLoading]       = useState(true)
 
   useEffect(() => {
     setLoading(true)
@@ -349,7 +349,7 @@ function SearchResults({ query, onClose, onNavigate }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {items.map(item => (
                     <div key={item.id} onClick={() => { onNavigate(item.section); onClose() }}
-                      style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px", borderRadius: "10px", background: "#1a1a1a", cursor: "pointer", border: "1px solid #1e1e1e", transition: "border .2s" }}
+                      style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px", borderRadius: "10px", background: "#1a1a1a", cursor: "pointer", border: "1px solid #1e1e1e" }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = "#c8a97e44"}
                       onMouseLeave={e => e.currentTarget.style.borderColor = "#1e1e1e"}>
                       <img src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }} />
@@ -372,7 +372,7 @@ function SearchResults({ query, onClose, onNavigate }) {
   )
 }
 
-// ── Skeleton loader ────────────────────────────────────────────────────────────
+// ── Skeleton ───────────────────────────────────────────────────────────────────
 function ListingSkeleton() {
   return (
     <div style={{ background: "#111", borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e" }}>
@@ -391,35 +391,35 @@ function ListingSkeleton() {
 
 // ── App ────────────────────────────────────────────────────────────────────────
 function App() {
-  const [rate, setRate]                     = useState(null)
-  const [rateLoading, setRateLoading]       = useState(true)
-  const [cart, setCart]                     = useState([])
-  const [cartOpen, setCartOpen]             = useState(false)
-  const [checkoutOpen, setCheckoutOpen]     = useState(false)
-  const [activePage, setActivePage]         = useState("buy")
+  const [rate, setRate]                       = useState(null)
+  const [rateLoading, setRateLoading]         = useState(true)
+  const [cart, setCart]                       = useState([])
+  const [cartOpen, setCartOpen]               = useState(false)
+  const [checkoutOpen, setCheckoutOpen]       = useState(false)
+  const [activePage, setActivePage]           = useState("buy")
   const [selectedProduct, setSelectedProduct] = useState(null)
-  const [footerModal, setFooterModal]       = useState(null)
-  const [searchQuery, setSearchQuery]       = useState("")
-  const [showDropdown, setShowDropdown]     = useState(false)
+  const [footerModal, setFooterModal]         = useState(null)
+  const [searchQuery, setSearchQuery]         = useState("")
+  const [showDropdown, setShowDropdown]       = useState(false)
   const [showFullResults, setShowFullResults] = useState(false)
-  const [user, setUser]                     = useState(null)
-  const [showAuth, setShowAuth]             = useState(false)
-  const [showAccount, setShowAccount]       = useState(false)
-  const [showSell, setShowSell]             = useState(false)
-  const [showAdmin, setShowAdmin]           = useState(false)
-  const [showTracker, setShowTracker]       = useState(false)
-  const [trackedOrder, setTrackedOrder]     = useState(null)
-  const [authCallback, setAuthCallback]     = useState(null)
-  const [siteSettings, setSiteSettings]     = useState(DEFAULT_SITE_SETTINGS)
-  const [notifTick, setNotifTick]           = useState(0)
+  const [user, setUser]                       = useState(null)
+  const [showAuth, setShowAuth]               = useState(false)
+  const [showAccount, setShowAccount]         = useState(false)
+  const [showSell, setShowSell]               = useState(false)
+  const [showAdmin, setShowAdmin]             = useState(false)
+  const [showTracker, setShowTracker]         = useState(false)
+  const [trackedOrder, setTrackedOrder]       = useState(null)
+  const [authCallback, setAuthCallback]       = useState(null)
+  const [siteSettings, setSiteSettings]       = useState(DEFAULT_SITE_SETTINGS)
+  const [notifTick, setNotifTick]             = useState(0)
 
-  // Rider state
-  const [riderUser, setRiderUser]           = useState(() => {
+  // Rider
+  const [riderUser, setRiderUser]     = useState(() => {
     try { return JSON.parse(localStorage.getItem("silkroad_rider") || "null") } catch { return null }
   })
-  const [showRiderAuth, setShowRiderAuth]   = useState(false)
+  const [showRiderAuth, setShowRiderAuth] = useState(false)
 
-  // Listings state
+  // Listings
   const [dbListings, setDbListings]         = useState([])
   const [listingsLoading, setListingsLoading] = useState(false)
   const [listingsPage, setListingsPage]     = useState(1)
@@ -427,20 +427,20 @@ function App() {
   const [loadingMore, setLoadingMore]       = useState(false)
   const [visibleCount, setVisibleCount]     = useState(PAGE_SIZE)
 
-  // Search state
+  // Search
   const [dbSearchResults, setDbSearchResults] = useState([])
-  const [searchLoading, setSearchLoading]   = useState(false)
-  const searchDebounceRef                   = useRef(null)
+  const [searchLoading, setSearchLoading]     = useState(false)
+  const searchDebounceRef                     = useRef(null)
 
   const bottomReachedTimerRef = useRef(null)
   const isAtBottomRef         = useRef(false)
   const searchRef             = useRef(null)
 
-  const usingDb        = dbListings.length > 0
+  const usingDb         = dbListings.length > 0
   const displayListings = usingDb ? dbListings : ALL_LISTINGS.slice(0, visibleCount)
-  const hasMore        = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
+  const hasMore         = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
 
-  // ── If rider is logged in, show RiderApp full-screen ──────────────────────
+  // ── If rider logged in, show RiderApp fullscreen ───────────────────────────
   if (riderUser) {
     return (
       <>
@@ -506,7 +506,7 @@ function App() {
     return () => { window.removeEventListener("scroll", handleScroll); if (bottomReachedTimerRef.current) clearTimeout(bottomReachedTimerRef.current) }
   }, [hasMore, loadingMore, activePage, usingDb, listingsPage])
 
-  // Debounced live search
+  // Debounced search
   useEffect(() => {
     if (!searchQuery.trim()) { setDbSearchResults([]); return }
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
@@ -522,21 +522,20 @@ function App() {
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
   }, [searchQuery])
 
-  // Close search on outside click
+  // Close dropdown on outside click
   useEffect(() => {
     const handleClick = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) setShowDropdown(false) }
     document.addEventListener("mousedown", handleClick)
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
-  // Ctrl+Shift+A admin shortcut
+  // Admin shortcut
   useEffect(() => {
     const handleKeyDown = (e) => { if (e.ctrlKey && e.shiftKey && e.key === "A") setShowAdmin(true) }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [])
 
-  // /admin route
   useEffect(() => { if (window.location.pathname === "/admin") setShowAdmin(true) }, [])
 
   // Restore seller session
@@ -559,7 +558,7 @@ function App() {
     }
   }, [])
 
-  // Listen for new orders to bump notif badge
+  // New order notif tick
   useEffect(() => {
     const handler = () => setNotifTick(t => t + 1)
     window.addEventListener("silkroad_new_order", handler)
@@ -569,14 +568,16 @@ function App() {
   const fetchRate = async () => {
     setRateLoading(true)
     try {
-      const res = await axios.get("https://open.er-api.com/v6/latest/GHS")
-      setRate(res.data.rates.USD)
+      const res = await axios.get("https://open.er-api.com/v6/latest/USD")
+      setRate(res.data.rates.GHS)
     } catch {}
     setRateLoading(false)
   }
   useEffect(() => { fetchRate() }, [])
 
-  const toUSD      = (ghs) => rate ? (ghs * rate).toFixed(2) : "..."
+  // USD → GHS (rate is GHS per 1 USD)
+  const toGHS = (usd) => rate ? (usd * rate).toFixed(2) : "..."
+
   const getItemId  = (item) => item._id || item.id
   const addToCart  = (item) => {
     setCart(prev => {
@@ -613,6 +614,7 @@ function App() {
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
+      <style>{`@keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }`}</style>
 
       {/* ── NAVBAR ── */}
       <nav style={{ position: "sticky", top: 0, zIndex: 90 }}>
@@ -621,14 +623,13 @@ function App() {
             style={{ color: "#c8a97e", fontWeight: "bold", fontSize: "20px", flexShrink: 0, cursor: "pointer", margin: 0 }}>
             Silk Road
           </h1>
-
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <button onClick={() => setShowSell(true)}
               style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "8px 12px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", whiteSpace: "nowrap" }}>
               + Sell
             </button>
 
-            {/* Rider button */}
+            {/* Rider login button */}
             <button onClick={() => setShowRiderAuth(true)}
               style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
               title="Rider Login">
@@ -642,7 +643,7 @@ function App() {
               📦
             </button>
 
-            {/* Notification bell — only when logged in */}
+            {/* Notification bell — sellers only */}
             {user && (
               <NotificationBell
                 sellerId={user._id}
@@ -746,11 +747,17 @@ function App() {
       <div style={{ flex: 1 }}>
         {activePage === "buy" && (
           <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
-              <span style={{ color: "#888", fontSize: "13px" }}>
-                {rateLoading ? "Fetching live rate..." : `Live rate: ₵1 = $${rate?.toFixed(4)}`}
-              </span>
-              <button onClick={fetchRate} style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "4px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px" }}>
+
+            {/* Live rate bar */}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: rateLoading ? "#444" : "#22c55e", animation: rateLoading ? "none" : "livePulse 2s ease infinite", flexShrink: 0 }} />
+                <span style={{ color: "#666", fontSize: "13px" }}>
+                  {rateLoading ? "Fetching live rate..." : `$1 USD = ₵${rate?.toFixed(2)} GHS`}
+                </span>
+              </div>
+              <button onClick={fetchRate}
+                style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "4px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>
                 ↻ Refresh
               </button>
             </div>
@@ -782,7 +789,7 @@ function App() {
                           )}
                           <div style={{ fontSize: "18px", fontWeight: "700", color: "#c8a97e" }}>
                             ₵{itemPrice.toLocaleString()}
-                            <span style={{ fontSize: "13px", color: "#666", fontWeight: "400" }}> (${toUSD(itemPrice)})</span>
+                            <span style={{ fontSize: "13px", color: "#666", fontWeight: "400" }}> (${(itemPrice / (rate || 1)).toFixed(2)})</span>
                           </div>
                           <button onClick={() => addToCart(item)}
                             style={{ marginTop: "10px", width: "100%", background: "#c8a97e", border: "none", padding: "9px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px" }}>
@@ -819,7 +826,7 @@ function App() {
       )}
 
       {selectedProduct && (
-        <ProductModal item={selectedProduct} onClose={() => setSelectedProduct(null)} onCart={addToCart} toUSD={toUSD} />
+        <ProductModal item={selectedProduct} onClose={() => setSelectedProduct(null)} onCart={addToCart} toUSD={(ghs) => (ghs / (rate || 1)).toFixed(2)} />
       )}
 
       {showAuth && (
@@ -879,6 +886,7 @@ function App() {
       {showRiderAuth && (
         <RiderAuth
           onAuth={(rider) => {
+            localStorage.setItem("silkroad_rider", JSON.stringify(rider))
             setRiderUser(rider)
             setShowRiderAuth(false)
           }}
@@ -886,7 +894,7 @@ function App() {
         />
       )}
 
-      {/* ── CART DRAWER ── */}
+      {/* ── CART ── */}
       {cartOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex" }}>
           <div onClick={() => setCartOpen(false)} style={{ flex: 1, background: "#000000aa" }} />
@@ -913,7 +921,7 @@ function App() {
                       <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px" }}>{item.title}</div>
                       <div style={{ fontSize: "13px", color: "#c8a97e", fontWeight: "700" }}>
                         ₵{(itemPrice * item.qty).toLocaleString()}
-                        <span style={{ color: "#555", fontWeight: "400" }}> (${toUSD(itemPrice * item.qty)})</span>
+                        <span style={{ color: "#555", fontWeight: "400" }}> (${(itemPrice * item.qty / (rate || 1)).toFixed(2)})</span>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
                         <button onClick={() => updateQty(itemId, -1)} style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}>−</button>
@@ -932,7 +940,7 @@ function App() {
                   <span style={{ color: "#888" }}>Total</span>
                   <span style={{ fontSize: "18px", fontWeight: "700", color: "#c8a97e" }}>
                     ₵{cartTotal.toLocaleString()}
-                    <span style={{ fontSize: "13px", color: "#555" }}> (${toUSD(cartTotal)})</span>
+                    <span style={{ fontSize: "13px", color: "#555" }}> (${(cartTotal / (rate || 1)).toFixed(2)})</span>
                   </span>
                 </div>
                 <button onClick={() => { setCartOpen(false); setCheckoutOpen(true) }}
@@ -955,7 +963,7 @@ function App() {
         />
       )}
 
-      {/* ── Global toast notifications ── */}
+      {/* Global toasts */}
       <ToastContainer />
 
     </div>
