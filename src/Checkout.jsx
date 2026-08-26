@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react"
 import { saveOrder, generateOrderId, updateOrder, OrderIdBanner } from "./OrderTracker"
 
-const API_URL          = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
-const SILK_ROAD_MOMO   = "0543883608"
-const SILK_ROAD_NAME   = "Silk Road GH"
-const STEPS            = ["Location", "Confirm Order", "Payment", "Track"]
+const API_URL        = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+const SILK_ROAD_MOMO = "0543883608"
+const SILK_ROAD_NAME = "Silk Road GH"
+const STEPS          = ["Location", "Confirm Order", "Payment", "Track"]
 
 function isMongoId(str) {
   return str && /^[a-f\d]{24}$/i.test(String(str))
@@ -33,10 +33,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const [promoError, setPromoError]         = useState("")
   const [promoLoading, setPromoLoading]     = useState(false)
 
-  // OTP state — for rider deliveries only
-  const [otp, setOtp]         = useState(null)
+  // OTP state — rider deliveries only
+  const [otp, setOtp]           = useState(null)
   const [otpExpiry, setOtpExpiry] = useState(null)
-  const pollRef               = useRef(null)
+  const pollRef                 = useRef(null)
 
   const deliveryFee = siteSettings?.deliveryFee || 10
   const subtotal    = initialOrder?.subtotal || cart.reduce((s, i) => s + (i.price || i.dailyRate || 0) * i.qty, 0)
@@ -45,16 +45,11 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     : promoApplied?.type === "free_delivery" ? deliveryFee : 0
   const total       = Math.max(0, subtotal + (deliveryMethod === "rider" && promoApplied?.type !== "free_delivery" ? deliveryFee : 0) - (promoApplied?.type !== "free_delivery" ? discount : 0))
   const platformFee = Math.round(subtotal * 0.08)
-  const toGHS       = (usd) => rate ? (usd * rate).toFixed(2) : "..."
 
-  // ── OTP polling ──────────────────────────────────────────────────────────
-  // Starts when buyer reaches step 3 with a rider delivery and hasn't confirmed yet
+  // ── OTP polling — starts when buyer reaches step 3 on a rider delivery ──────
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current)
-
-    const shouldPoll = step === 3 && deliveryMethod === "rider" && delivered === null && !otp
-
-    if (!shouldPoll) return
+    if (step !== 3 || deliveryMethod !== "rider" || delivered !== null || otp) return
 
     const poll = async () => {
       try {
@@ -68,11 +63,27 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       } catch {}
     }
 
-    poll() // immediate first check
+    poll()
     pollRef.current = setInterval(poll, 5000)
-
     return () => clearInterval(pollRef.current)
   }, [step, deliveryMethod, delivered, otp, orderId])
+
+  // ── Socket listener — shows OTP instantly when rider marks delivered ─────────
+  useEffect(() => {
+    if (step !== 3 || deliveryMethod !== "rider" || delivered !== null) return
+
+    const handler = (e) => {
+      const data = e.detail
+      if (data?.otp) {
+        setOtp(data.otp)
+        setOtpExpiry(data.expiresAt)
+        if (pollRef.current) clearInterval(pollRef.current)
+      }
+    }
+
+    window.addEventListener("silkroad_delivery_otp", handler)
+    return () => window.removeEventListener("silkroad_delivery_otp", handler)
+  }, [step, deliveryMethod, delivered])
 
   const detectLocation = () => {
     setLocLoading(true); setLocError(null); setLocBlocked(false)
@@ -80,12 +91,12 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     navigator.geolocation.getCurrentPosition(
       pos => {
         setLocation({ lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6) })
-        setLocLoading(false); setLocError(null); setLocBlocked(false)
+        setLocLoading(false)
       },
       err => {
         setLocLoading(false)
         if (err.code === 1) setLocBlocked(true)
-        setLocError(err.code === 1 ? "blocked" : err.code === 2 ? "unavailable" : err.code === 3 ? "timeout" : "unknown")
+        setLocError(err.code === 1 ? "blocked" : "unavailable")
       },
       { timeout: 10000 }
     )
@@ -114,19 +125,29 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     const ref = `MOMO-${orderId}`
 
     const order = {
-      id: orderId, type: "buy", cart, total, subtotal, platformFee,
+      id:            orderId,
+      type:          "buy",
+      cart,
+      total,
+      subtotal,
+      platformFee,
       deliveryFee:   deliveryMethod === "rider" ? deliveryFee : 0,
       discount,
       promoCode:     promoApplied?.code || null,
-      location, manualLocation, landmark, extraInfo,
-      contactInfo, payerName, payerPhone,
-      deliveryMethod, // ← always saved
-      paymentMethod:  "manual_momo",
-      paymentRef:     ref,
-      status:         "Pending Confirmation",
-      delivered:      null,
-      createdAt:      Date.now(),
-      expiresAt:      Date.now() + 48 * 60 * 60 * 1000,
+      location,
+      manualLocation,
+      landmark,
+      extraInfo,
+      contactInfo,
+      payerName,
+      payerPhone,
+      deliveryMethod,
+      paymentMethod: "manual_momo",
+      paymentRef:    ref,
+      status:        "Pending Confirmation",
+      delivered:     null,
+      createdAt:     Date.now(),
+      expiresAt:     Date.now() + 48 * 60 * 60 * 1000,
     }
     saveOrder(order)
 
@@ -141,15 +162,21 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({
-            listingId, sellerId,
+            listingId,
+            sellerId,
             localOrderId:  orderId,
             type:          "product",
             amount:        total,
             paystackRef:   ref,
             location:      location ? `${location.lat},${location.lng}` : manualLocation,
-            landmark, extraInfo, contactInfo, payerName, payerPhone,
+            landmark,
+            extraInfo,
+            contactInfo,
+            payerName,
+            payerPhone,
             promoCode:     promoApplied?.code || null,
-            discount, deliveryMethod,
+            discount,
+            deliveryMethod,
             paymentMethod: "manual_momo",
           }),
         })
@@ -203,7 +230,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           {step < 3 && <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>}
         </div>
 
-        {/* Step indicators */}
+        {/* Steps */}
         <div style={{ padding: "12px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", gap: "4px" }}>
           {STEPS.map((s, i) => (
             <div key={s} style={{ flex: 1, textAlign: "center" }}>
@@ -233,7 +260,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
 
               {locError && locError !== "blocked" && (
                 <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#fcd34d" }}>
-                  ⚠️ {locError === "unsupported" ? "GPS not supported. Enter manually." : "Could not get location. Enter manually."}
+                  ⚠️ Could not get location. Enter manually below.
                 </div>
               )}
 
@@ -362,7 +389,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 <div>2. Enter number: <strong style={{ fontSize: "15px" }}>{SILK_ROAD_MOMO}</strong> ({SILK_ROAD_NAME})</div>
                 <div>3. Amount: <strong>₵{total}</strong></div>
                 <div>4. Reference: <strong style={{ fontFamily: "monospace" }}>{orderId}</strong></div>
-                <div>5. Fill your name and number below, then confirm</div>
+                <div>5. Enter your name and number below, then confirm</div>
               </div>
 
               <div style={{ background: "#161616", borderRadius: "14px", padding: "14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -404,8 +431,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     <div style={{ fontSize: "56px", marginBottom: "10px" }}>✅</div>
                     <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", marginBottom: "8px" }}>Payment Submitted!</h3>
                     <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.7" }}>
-                      Your order is with the seller.
-                      {deliveryMethod === "rider" ? " When the rider delivers your package, a 6-digit OTP will appear below." : " Contact the seller to arrange pickup."}
+                      Your order is with the seller.{" "}
+                      {deliveryMethod === "rider"
+                        ? "When the rider delivers your package, a 6-digit OTP will appear below. Read it to the rider to confirm delivery."
+                        : "Contact the seller to arrange pickup."}
                     </p>
                   </div>
 
@@ -414,7 +443,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                   <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", fontSize: "13px", color: "#666", display: "flex", flexDirection: "column", gap: "8px" }}>
                     {cart.length > 0 && <div>📦 <span style={{ color: "#c8a97e", fontWeight: "700" }}>{cart.map(i => i.title).join(", ")}</span></div>}
                     <div>💰 Total: <span style={{ color: "#aaa" }}>₵{total.toLocaleString()}</span></div>
-                    {location ? <div>📍 GPS: <span style={{ color: "#aaa" }}>{location.lat}, {location.lng}</span></div> : <div>📍 <span style={{ color: "#aaa" }}>{manualLocation}</span></div>}
+                    {location ? <div>📍 GPS: <span style={{ color: "#aaa" }}>{location.lat}, {location.lng}</span></div> : manualLocation ? <div>📍 <span style={{ color: "#aaa" }}>{manualLocation}</span></div> : null}
                     {landmark  && <div>🗺️ {landmark}</div>}
                     <div>🚚 <span style={{ color: "#aaa" }}>{deliveryMethod === "rider" ? "Rider delivery" : "Campus pickup"}</span></div>
                     {paymentRef && <div style={{ fontSize: "10px", color: "#444", fontFamily: "monospace", marginTop: "4px" }}>Ref: {paymentRef}</div>}
@@ -423,7 +452,6 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                   {/* ── RIDER DELIVERY — OTP section ── */}
                   {deliveryMethod === "rider" && (
                     otp ? (
-                      /* OTP received — show big gold digits */
                       <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "24px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
                         <div style={{ fontSize: "28px" }}>🚪</div>
                         <div>
@@ -443,14 +471,13 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                         </div>
                       </div>
                     ) : (
-                      /* Waiting for rider to deliver */
                       <div style={{ background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                           <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#c8a97e", flexShrink: 0 }} />
                           <div style={{ fontSize: "13px", color: "#888" }}>Waiting for rider to deliver your package...</div>
                         </div>
                         <div style={{ fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
-                          Keep this screen open. When the rider arrives and marks delivered, a 6-digit OTP will appear here. Read it to the rider to complete delivery.
+                          Keep this screen open. When the rider arrives and marks your package delivered, a 6-digit OTP will appear here automatically. Read it to the rider to complete delivery.
                         </div>
                       </div>
                     )
@@ -470,7 +497,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     </>
                   )}
 
-                  {/* Cancel for rider too */}
+                  {/* Cancel for rider (only before OTP arrives) */}
                   {deliveryMethod === "rider" && !otp && (
                     <button onClick={handleCancelDelivery}
                       style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "13px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
