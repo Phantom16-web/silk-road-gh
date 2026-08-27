@@ -13,10 +13,16 @@ import OrderTracker, {
   disconnectSocket,
   NotificationBell,
   ToastContainer,
+  getOrders,
 } from "./OrderTracker"
 import RiderAuth from "./RiderAuth"
 import RiderApp from "./RiderApp"
 import { getListings } from "./api"
+
+const API_URL    = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+const SOCKET_URL = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace("/api", "")
+  : "http://localhost:5000"
 
 const ALL_LISTINGS = [
   { id: 1,  title: "Calculus Textbook",       price: 380,  category: "Books",       seller: "Ahmad K.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "8th edition, some highlights but all pages intact. Perfect for MTH 151.",                       delivery: ["Pickup", "Rider"],            section: "buy" },
@@ -414,18 +420,18 @@ function App() {
   const [notifTick, setNotifTick]             = useState(0)
 
   // Rider
-  const [riderUser, setRiderUser]     = useState(() => {
+  const [riderUser, setRiderUser]         = useState(() => {
     try { return JSON.parse(localStorage.getItem("silkroad_rider") || "null") } catch { return null }
   })
   const [showRiderAuth, setShowRiderAuth] = useState(false)
 
   // Listings
-  const [dbListings, setDbListings]         = useState([])
+  const [dbListings, setDbListings]           = useState([])
   const [listingsLoading, setListingsLoading] = useState(false)
-  const [listingsPage, setListingsPage]     = useState(1)
+  const [listingsPage, setListingsPage]       = useState(1)
   const [hasMoreListings, setHasMoreListings] = useState(true)
-  const [loadingMore, setLoadingMore]       = useState(false)
-  const [visibleCount, setVisibleCount]     = useState(PAGE_SIZE)
+  const [loadingMore, setLoadingMore]         = useState(false)
+  const [visibleCount, setVisibleCount]       = useState(PAGE_SIZE)
 
   // Search
   const [dbSearchResults, setDbSearchResults] = useState([])
@@ -435,12 +441,14 @@ function App() {
   const bottomReachedTimerRef = useRef(null)
   const isAtBottomRef         = useRef(false)
   const searchRef             = useRef(null)
+  const guestSocketRef        = useRef(null)
+  const guestPollRef          = useRef(null)
 
   const usingDb         = dbListings.length > 0
   const displayListings = usingDb ? dbListings : ALL_LISTINGS.slice(0, visibleCount)
   const hasMore         = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
 
-  // ── If rider logged in, show RiderApp fullscreen ───────────────────────────
+  // ── If rider logged in show RiderApp fullscreen ────────────────────────────
   if (riderUser) {
     return (
       <>
@@ -456,6 +464,71 @@ function App() {
       </>
     )
   }
+
+  // ── Guest socket + background OTP poll ────────────────────────────────────
+  // Connects a lightweight socket for any guest buyer with pending rider orders
+  // Also polls every 5s for each pending rider order in localStorage
+  // This survives Checkout modal being closed
+  useEffect(() => {
+    // Only run for guests (no seller user)
+    if (user) return
+
+    const connectGuestSocket = () => {
+      if (guestSocketRef.current) return
+      import("socket.io-client").then(({ io }) => {
+        const s = io(SOCKET_URL, {
+          autoConnect:          true,
+          reconnection:         true,
+          reconnectionDelay:    2000,
+          reconnectionAttempts: Infinity,
+          transports:           ["websocket", "polling"],
+        })
+        s.on("delivery_otp", (d) => {
+          window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
+        })
+        s.on("delivery_at_door", (d) => {
+          window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
+          if (d.otp) {
+            window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
+          }
+        })
+        guestSocketRef.current = s
+      }).catch(() => {})
+    }
+
+    // Background OTP poll — checks all pending rider orders in localStorage
+    const startGuestPoll = () => {
+      if (guestPollRef.current) clearInterval(guestPollRef.current)
+      guestPollRef.current = setInterval(async () => {
+        try {
+          const orders = getOrders()
+          const pendingRiderOrders = Object.values(orders).filter(
+            o => o.deliveryMethod === "rider" && o.delivered === null
+          )
+          for (const order of pendingRiderOrders) {
+            try {
+              const res  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(order.id)}`)
+              const data = await res.json()
+              if (data.otp) {
+                window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: data }))
+              }
+            } catch {}
+          }
+        } catch {}
+      }, 5000)
+    }
+
+    connectGuestSocket()
+    startGuestPoll()
+
+    return () => {
+      if (guestPollRef.current) clearInterval(guestPollRef.current)
+      if (guestSocketRef.current) {
+        guestSocketRef.current.disconnect()
+        guestSocketRef.current = null
+      }
+    }
+  }, [user]) // re-runs when user logs in (stops guest poll) or logs out (restarts it)
 
   const fetchListings = async (page = 1, reset = false) => {
     if (page === 1) setListingsLoading(true)
@@ -529,7 +602,7 @@ function App() {
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
-  // Admin shortcut
+  // Admin shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => { if (e.ctrlKey && e.shiftKey && e.key === "A") setShowAdmin(true) }
     window.addEventListener("keydown", handleKeyDown)
@@ -574,9 +647,6 @@ function App() {
     setRateLoading(false)
   }
   useEffect(() => { fetchRate() }, [])
-
-  // USD → GHS (rate is GHS per 1 USD)
-  const toGHS = (usd) => rate ? (usd * rate).toFixed(2) : "..."
 
   const getItemId  = (item) => item._id || item.id
   const addToCart  = (item) => {
@@ -629,21 +699,18 @@ function App() {
               + Sell
             </button>
 
-            {/* Rider login button */}
             <button onClick={() => setShowRiderAuth(true)}
               style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
               title="Rider Login">
               🛵
             </button>
 
-            {/* Track order */}
             <button onClick={() => setShowTracker(true)}
               style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
               title="Track Order">
               📦
             </button>
 
-            {/* Notification bell — sellers only */}
             {user && (
               <NotificationBell
                 sellerId={user._id}
