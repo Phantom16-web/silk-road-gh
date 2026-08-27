@@ -134,36 +134,73 @@ export function connectSellerSocket(sellerId) {
       saveNotification(notif)
       Object.values(socketRegistry).forEach(cb => cb(notif))
       window.dispatchEvent(new CustomEvent("silkroad_new_order", { detail: notif }))
-
-      // ── Fire toast alert ──────────────────────────────────────────────────
       fireToast({
-        type:    "order",
-        title:   "🛒 New Order!",
-        message: `${data.buyerName || "Someone"} ordered ${data.itemTitle || "your item"} · ₵${data.amount || 0}`,
+        type:       "order",
+        title:      "🛒 New Order!",
+        message:    `${data.buyerName || "Someone"} ordered ${data.itemTitle || "your item"} · ₵${data.amount || 0}`,
+        persistent: false,
       })
     })
 
-    s.on("delivery_accepted",          (d) => {
+    s.on("delivery_accepted", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({ type: "delivery", title: "✅ Rider Accepted!", message: d.message || "A rider accepted your delivery job." })
+      fireToast({
+        type:       "delivery",
+        title:      "✅ Rider Accepted!",
+        message:    d.message || "A rider accepted your delivery job.",
+        persistent: false,
+      })
     })
-    s.on("delivery_picked_up",         (d) => {
+
+    s.on("delivery_picked_up", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({ type: "delivery", title: "📦 Package Picked Up", message: d.message || "Rider picked up the package." })
+      fireToast({
+        type:       "delivery",
+        title:      "📦 Package Picked Up",
+        message:    d.message || "Rider picked up the package.",
+        persistent: false,
+      })
     })
-    s.on("delivery_at_door",           (d) => {
+
+    // delivery_at_door — persistent toast, stays until user dismisses
+    // Also fires silkroad_delivery_otp if OTP is in the payload
+    s.on("delivery_at_door", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({ type: "delivery", title: "🚪 Package Delivered", message: d.message || "Package delivered. Waiting for OTP." })
+      if (d.otp) {
+        window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
+      }
+      fireToast({
+        type:       "otp",
+        title:      "🚪 Package at Door!",
+        message:    d.otp
+          ? `OTP for buyer: ${d.otp} — ask them to read it to you`
+          : "Package delivered. Waiting for buyer OTP.",
+        persistent: true, // ← stays until user taps ✕
+      })
     })
-    s.on("delivery_completed",         (d) => {
+
+    s.on("delivery_completed", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({ type: "success", title: "🎉 Delivery Complete!", message: d.message || "OTP confirmed. Payment released." })
+      fireToast({
+        type:       "success",
+        title:      "🎉 Delivery Complete!",
+        message:    d.message || "OTP confirmed. Payment released.",
+        persistent: false,
+      })
     })
-    s.on("delivery_cancelled_by_rider",(d) => {
+
+    s.on("delivery_cancelled_by_rider", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({ type: "warning", title: "⚠️ Rider Cancelled", message: d.message || "Rider cancelled. Job is back on the board." })
+      fireToast({
+        type:       "warning",
+        title:      "⚠️ Rider Cancelled",
+        message:    d.message || "Rider cancelled. Job is back on the board.",
+        persistent: false,
+      })
     })
-    s.on("delivery_otp",               (d) => {
+
+    // Direct OTP push to buyer
+    s.on("delivery_otp", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
     })
 
@@ -184,38 +221,49 @@ export function ToastContainer() {
     return () => toastListeners.delete(setToasts)
   }, [])
 
+  // Auto-dismiss only non-persistent toasts after 5s
   useEffect(() => {
-    if (toasts.length === 0) return
+    const nonPersistent = toasts.filter(t => !t.persistent)
+    if (nonPersistent.length === 0) return
     const timer = setTimeout(() => {
-      const oldest = toasts[0]
-      if (oldest) dismissToast(oldest.id)
+      dismissToast(nonPersistent[0].id)
     }, 5000)
     return () => clearTimeout(timer)
   }, [toasts])
 
   if (toasts.length === 0) return null
 
-  const BG = {
+  const STYLES = {
     order:    { bg: "#161a1e", border: "#c8a97e", accent: "#c8a97e" },
     delivery: { bg: "#0d1a2e", border: "#1d4ed8", accent: "#93c5fd" },
+    otp:      { bg: "#064e3b", border: "#065f46", accent: "#6ee7b7" },
     success:  { bg: "#064e3b18", border: "#065f46", accent: "#6ee7b7" },
     warning:  { bg: "#78350f18", border: "#92400e", accent: "#fcd34d" },
   }
 
   return (
     <div style={{ position: "fixed", top: "16px", right: "16px", zIndex: 9999, display: "flex", flexDirection: "column", gap: "10px", maxWidth: "320px", pointerEvents: "none" }}>
+      <style>{`@keyframes slideInToast { from { transform: translateX(110%); opacity: 0 } to { transform: translateX(0); opacity: 1 } }`}</style>
       {toasts.map(toast => {
-        const style = BG[toast.type] || BG.order
+        const s = STYLES[toast.type] || STYLES.order
         return (
           <div key={toast.id}
-            style={{ background: style.bg, border: `1px solid ${style.border}`, borderRadius: "14px", padding: "14px 16px", display: "flex", gap: "12px", alignItems: "flex-start", boxShadow: "0 8px 32px rgba(0,0,0,.6)", pointerEvents: "all", animation: "slideInToast .25s ease" }}>
-            <style>{`@keyframes slideInToast { from { transform: translateX(110%); opacity: 0 } to { transform: translateX(0); opacity: 1 } }`}</style>
+            style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: "14px", padding: "14px 16px", display: "flex", gap: "12px", alignItems: "flex-start", boxShadow: "0 8px 32px rgba(0,0,0,.6)", pointerEvents: "all", animation: "slideInToast .25s ease" }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "13px", fontWeight: "700", color: style.accent, marginBottom: "4px" }}>{toast.title}</div>
-              <div style={{ fontSize: "12px", color: "#888", lineHeight: "1.5" }}>{toast.message}</div>
+              <div style={{ fontSize: "13px", fontWeight: "700", color: s.accent, marginBottom: "4px" }}>
+                {toast.title}
+                {toast.persistent && (
+                  <span style={{ marginLeft: "8px", fontSize: "10px", fontWeight: "600", background: s.border + "44", color: s.accent, padding: "2px 7px", borderRadius: "20px", letterSpacing: ".04em" }}>
+                    STAY
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: "12px", color: toast.type === "otp" ? "#a7f3d0" : "#888", lineHeight: "1.5", fontWeight: toast.type === "otp" ? "600" : "400" }}>
+                {toast.message}
+              </div>
             </div>
             <button onClick={() => dismissToast(toast.id)}
-              style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "16px", minHeight: "auto", padding: "0", flexShrink: 0, lineHeight: 1 }}>
+              style={{ background: "transparent", border: "none", color: "#aaa", cursor: "pointer", fontSize: "18px", minHeight: "auto", padding: "0", flexShrink: 0, lineHeight: 1, fontWeight: "700" }}>
               ✕
             </button>
           </div>
@@ -263,13 +311,9 @@ export function NotificationBell({ sellerId, onClick }) {
 // ── Order ID banner ───────────────────────────────────────────────────────────
 export function OrderIdBanner({ orderId }) {
   const [copied, setCopied] = useState(false)
-
   const copy = () => {
-    navigator.clipboard.writeText(orderId).then(() => {
-      setCopied(true); setTimeout(() => setCopied(false), 2000)
-    })
+    navigator.clipboard.writeText(orderId).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
   }
-
   return (
     <div style={{ background: "#161616", border: "1px solid #c8a97e44", borderRadius: "14px", padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
       <div>
@@ -285,21 +329,35 @@ export function OrderIdBanner({ orderId }) {
   )
 }
 
-// ── OTP Poller ────────────────────────────────────────────────────────────────
-export function OtpPoller({ orderId, deliveryMethod, onOtpReceived }) {
-  const pollRef = useRef(null)
+// ── Main OrderTracker modal ───────────────────────────────────────────────────
+export default function OrderTracker({ onClose, onOpenOrder }) {
+  const [input, setInput]             = useState("")
+  const [order, setOrder]             = useState(null)
+  const [notFound, setNotFound]       = useState(false)
+  const [deliveryOtp, setDeliveryOtp] = useState(null)
+  const pollRef                       = useRef(null)
 
+  const search = () => {
+    const id = input.trim().toUpperCase()
+    if (!id) return
+    const found = getOrder(id)
+    if (found) { setOrder(found); setNotFound(false); setDeliveryOtp(null) }
+    else        { setOrder(null);  setNotFound(true) }
+  }
+
+  // Poll for OTP when viewing a rider order
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current)
-    if (deliveryMethod !== "rider" || !orderId) return
+    const isRider = order?.deliveryMethod === "rider"
+    if (!order || !isRider || order.delivered !== null) return
 
     const poll = async () => {
       try {
-        const res  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(orderId)}`)
+        const res  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(order.id)}`)
         const data = await res.json()
         if (data.otp) {
+          setDeliveryOtp(data)
           clearInterval(pollRef.current)
-          onOtpReceived(data)
         }
       } catch {}
     }
@@ -307,30 +365,23 @@ export function OtpPoller({ orderId, deliveryMethod, onOtpReceived }) {
     poll()
     pollRef.current = setInterval(poll, 5000)
     return () => clearInterval(pollRef.current)
-  }, [orderId, deliveryMethod])
+  }, [order])
 
-  return null
-}
+  // Socket listener for instant OTP
+  useEffect(() => {
+    if (!order || order.deliveryMethod !== "rider") return
+    const handler = (e) => {
+      const d = e.detail
+      if (d?.otp) {
+        setDeliveryOtp(d)
+        if (pollRef.current) clearInterval(pollRef.current)
+      }
+    }
+    window.addEventListener("silkroad_delivery_otp", handler)
+    return () => window.removeEventListener("silkroad_delivery_otp", handler)
+  }, [order])
 
-// ── Main OrderTracker modal ───────────────────────────────────────────────────
-export default function OrderTracker({ onClose, onOpenOrder }) {
-  const [input, setInput]             = useState("")
-  const [order, setOrder]             = useState(null)
-  const [notFound, setNotFound]       = useState(false)
-  const [deliveryOtp, setDeliveryOtp] = useState(null)
-
-  const search = () => {
-    const id    = input.trim().toUpperCase()
-    if (!id) return
-    const found = getOrder(id)
-    if (found) { setOrder(found); setNotFound(false); setDeliveryOtp(null) }
-    else        { setOrder(null);  setNotFound(true) }
-  }
-
-  const fmt = (ts) => new Date(ts).toLocaleString("en-GB", {
-    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
-  })
-
+  const fmt = (ts) => new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
   const isRiderOrder = order?.deliveryMethod === "rider"
 
   return (
@@ -394,42 +445,36 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
 
               {/* OTP section — rider orders only */}
               {isRiderOrder && order.delivered === null && (
-                <>
-                  <OtpPoller
-                    orderId={order.id}
-                    deliveryMethod="rider"
-                    onOtpReceived={setDeliveryOtp}
-                  />
-
-                  {deliveryOtp ? (
-                    <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
-                      <div style={{ fontSize: "28px" }}>🚪</div>
-                      <div>
-                        <div style={{ fontSize: "15px", fontWeight: "700", color: "#6ee7b7", marginBottom: "6px" }}>Your Package Has Arrived!</div>
-                        <div style={{ fontSize: "13px", color: "#888" }}>Read this 6-digit code to the rider to confirm delivery</div>
-                      </div>
-                      <div style={{ fontSize: "52px", fontWeight: "900", color: "#c8a97e", fontFamily: "monospace", letterSpacing: ".2em", background: "#161616", borderRadius: "14px", padding: "20px 12px", border: "2px solid #c8a97e44" }}>
-                        {deliveryOtp.otp}
-                      </div>
+                deliveryOtp ? (
+                  <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
+                    <div style={{ fontSize: "28px" }}>🚪</div>
+                    <div>
+                      <div style={{ fontSize: "15px", fontWeight: "700", color: "#6ee7b7", marginBottom: "6px" }}>Your Package Has Arrived!</div>
+                      <div style={{ fontSize: "13px", color: "#888" }}>Read this 6-digit code to the rider to confirm delivery</div>
+                    </div>
+                    <div style={{ fontSize: "52px", fontWeight: "900", color: "#c8a97e", fontFamily: "monospace", letterSpacing: ".2em", background: "#161616", borderRadius: "14px", padding: "20px 12px", border: "2px solid #c8a97e44" }}>
+                      {deliveryOtp.otp}
+                    </div>
+                    {deliveryOtp.expiresAt && (
                       <div style={{ fontSize: "12px", color: "#555" }}>
                         ⏰ Expires at {new Date(deliveryOtp.expiresAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
                       </div>
-                      <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
-                        ⚠️ Only share this with the person delivering your package.
-                      </div>
+                    )}
+                    <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
+                      ⚠️ Only share this with the rider delivering your package.
                     </div>
-                  ) : (
-                    <div style={{ background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#c8a97e", flexShrink: 0 }} />
-                        <div style={{ fontSize: "13px", color: "#888" }}>Waiting for rider to deliver...</div>
-                      </div>
-                      <div style={{ fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
-                        Keep this screen open. When the rider arrives and marks your package delivered, a 6-digit OTP will appear here automatically.
-                      </div>
+                  </div>
+                ) : (
+                  <div style={{ background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#c8a97e", flexShrink: 0 }} />
+                      <div style={{ fontSize: "13px", color: "#888" }}>Waiting for rider to deliver...</div>
                     </div>
-                  )}
-                </>
+                    <div style={{ fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
+                      When the rider arrives and marks your package delivered, a 6-digit OTP will appear here automatically.
+                    </div>
+                  </div>
+                )
               )}
 
               {order.delivered === null && (
