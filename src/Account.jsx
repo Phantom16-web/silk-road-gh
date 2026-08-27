@@ -192,10 +192,10 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
     return { lat: "", lng: "" }
   })()
 
-  const [dropLat, setDropLat]                 = useState(parsedDrop.lat)
-  const [dropLng, setDropLng]                 = useState(parsedDrop.lng)
-  const [dropAddress, setDropAddress]         = useState(notification.location || "")
-  const [dropResolved, setDropResolved]       = useState(!!(parsedDrop.lat && parsedDrop.lng))
+  const [dropLat, setDropLat]                       = useState(parsedDrop.lat)
+  const [dropLng, setDropLng]                       = useState(parsedDrop.lng)
+  const [dropAddress, setDropAddress]               = useState(notification.location || "")
+  const [dropResolved, setDropResolved]             = useState(!!(parsedDrop.lat && parsedDrop.lng))
   const [dropGeocodeLoading, setDropGeocodeLoading] = useState(false)
 
   const [quote, setQuote]               = useState(null)
@@ -262,14 +262,16 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
     setQuoteLoading(false)
   }
 
+  // ── THE FIX: explicitly pass localOrderId as SR-XXXXX ────────────────────────
   const handleRequestRider = async () => {
     setRequesting(true); setError("")
     try {
-      const res  = await fetch(`${API_URL}/deliveries`, {
+      const res = await fetch(`${API_URL}/deliveries`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({
           orderId:       notification.orderId,
+          localOrderId:  notification.orderId?.startsWith("SR-") ? notification.orderId : null,
           pickupLat:     Number(pickupLat), pickupLng: Number(pickupLng),
           pickupAddress: pickupAddress || `${pickupLat}, ${pickupLng}`,
           dropLat:       Number(dropLat), dropLng: Number(dropLng),
@@ -422,8 +424,8 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
 
 // ── Self Delivery Modal ────────────────────────────────────────────────────────
 function SelfDeliveryModal({ notification, onClose }) {
-  const [step, setStep] = useState("info")
-  const [otp, setOtp]   = useState("")
+  const [step, setStep]         = useState("info")
+  const [otp, setOtp]           = useState("")
   const [otpInput, setOtpInput] = useState("")
   const [otpError, setOtpError] = useState("")
 
@@ -458,7 +460,7 @@ function SelfDeliveryModal({ notification, onClose }) {
                 <div>📦 <span style={{ color: "#c8a97e", fontWeight: "700" }}>{notification.itemTitle}</span></div>
                 {notification.buyerContact && <div>📞 Buyer: <span style={{ color: "#aaa" }}>{notification.buyerContact}</span></div>}
                 {notification.location    && <div>📍 Location: <span style={{ color: "#aaa" }}>{notification.location}</span></div>}
-                {notification.landmark   && <div>🗺️ Landmark: <span style={{ color: "#aaa" }}>{notification.landmark}</span></div>}
+                {notification.landmark    && <div>🗺️ Landmark: <span style={{ color: "#aaa" }}>{notification.landmark}</span></div>}
               </div>
               <div style={{ background: "#1e3a5f18", border: "1px solid #1d4ed8", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#93c5fd", lineHeight: "1.8" }}>
                 <div style={{ fontWeight: "700", marginBottom: "8px" }}>📋 How it works:</div>
@@ -542,7 +544,6 @@ function NotificationsTab({ user }) {
     return new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
   }
 
-  // ── Clear all notifications for this seller ──────────────────────────────
   const handleClearAll = () => {
     if (!clearConfirm) { setClearConfirm(true); return }
     try {
@@ -564,7 +565,6 @@ function NotificationsTab({ user }) {
 
   return (
     <>
-      {/* ── Clear all button ── */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "14px" }}>
         {!clearConfirm ? (
           <button onClick={() => setClearConfirm(true)}
