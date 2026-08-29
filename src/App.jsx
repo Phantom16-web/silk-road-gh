@@ -3,7 +3,6 @@ import axios from "axios"
 import Checkout from "./Checkout"
 import RentItems from "./RentItems"
 import RequestService from "./RequestService"
-import BecomeRider from "./BecomeRider"
 import Auth from "./Auth"
 import Account from "./Account"
 import SellListing from "./SellListing"
@@ -19,10 +18,7 @@ import RiderAuth from "./RiderAuth"
 import RiderApp from "./RiderApp"
 import { getListings } from "./api"
 
-const API_URL    = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
-const SOCKET_URL = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace("/api", "")
-  : "http://localhost:5000"
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 
 const ALL_LISTINGS = [
   { id: 1,  title: "Calculus Textbook",       price: 380,  category: "Books",       seller: "Ahmad K.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "8th edition, some highlights but all pages intact. Perfect for MTH 151.",                       delivery: ["Pickup", "Rider"],            section: "buy" },
@@ -419,13 +415,11 @@ function App() {
   const [siteSettings, setSiteSettings]       = useState(DEFAULT_SITE_SETTINGS)
   const [notifTick, setNotifTick]             = useState(0)
 
-  // Rider
   const [riderUser, setRiderUser]         = useState(() => {
     try { return JSON.parse(localStorage.getItem("silkroad_rider") || "null") } catch { return null }
   })
   const [showRiderAuth, setShowRiderAuth] = useState(false)
 
-  // Listings
   const [dbListings, setDbListings]           = useState([])
   const [listingsLoading, setListingsLoading] = useState(false)
   const [listingsPage, setListingsPage]       = useState(1)
@@ -433,22 +427,17 @@ function App() {
   const [loadingMore, setLoadingMore]         = useState(false)
   const [visibleCount, setVisibleCount]       = useState(PAGE_SIZE)
 
-  // Search
   const [dbSearchResults, setDbSearchResults] = useState([])
   const [searchLoading, setSearchLoading]     = useState(false)
   const searchDebounceRef                     = useRef(null)
-
-  const bottomReachedTimerRef = useRef(null)
-  const isAtBottomRef         = useRef(false)
-  const searchRef             = useRef(null)
-  const guestSocketRef        = useRef(null)
-  const guestPollRef          = useRef(null)
+  const bottomReachedTimerRef                 = useRef(null)
+  const isAtBottomRef                         = useRef(false)
+  const searchRef                             = useRef(null)
 
   const usingDb         = dbListings.length > 0
   const displayListings = usingDb ? dbListings : ALL_LISTINGS.slice(0, visibleCount)
   const hasMore         = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
 
-  // ── If rider logged in show RiderApp fullscreen ────────────────────────────
   if (riderUser) {
     return (
       <>
@@ -464,71 +453,6 @@ function App() {
       </>
     )
   }
-
-  // ── Guest socket + background OTP poll ────────────────────────────────────
-  // Connects a lightweight socket for any guest buyer with pending rider orders
-  // Also polls every 5s for each pending rider order in localStorage
-  // This survives Checkout modal being closed
-  useEffect(() => {
-    // Only run for guests (no seller user)
-    if (user) return
-
-    const connectGuestSocket = () => {
-      if (guestSocketRef.current) return
-      import("socket.io-client").then(({ io }) => {
-        const s = io(SOCKET_URL, {
-          autoConnect:          true,
-          reconnection:         true,
-          reconnectionDelay:    2000,
-          reconnectionAttempts: Infinity,
-          transports:           ["websocket", "polling"],
-        })
-        s.on("delivery_otp", (d) => {
-          window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
-        })
-        s.on("delivery_at_door", (d) => {
-          window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-          if (d.otp) {
-            window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
-          }
-        })
-        guestSocketRef.current = s
-      }).catch(() => {})
-    }
-
-    // Background OTP poll — checks all pending rider orders in localStorage
-    const startGuestPoll = () => {
-      if (guestPollRef.current) clearInterval(guestPollRef.current)
-      guestPollRef.current = setInterval(async () => {
-        try {
-          const orders = getOrders()
-          const pendingRiderOrders = Object.values(orders).filter(
-            o => o.deliveryMethod === "rider" && o.delivered === null
-          )
-          for (const order of pendingRiderOrders) {
-            try {
-              const res  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(order.id)}`)
-              const data = await res.json()
-              if (data.otp) {
-                window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: data }))
-              }
-            } catch {}
-          }
-        } catch {}
-      }, 5000)
-    }
-
-    connectGuestSocket()
-    startGuestPoll()
-
-    return () => {
-      if (guestPollRef.current) clearInterval(guestPollRef.current)
-      if (guestSocketRef.current) {
-        guestSocketRef.current.disconnect()
-        guestSocketRef.current = null
-      }
-    }
-  }, [user]) // re-runs when user logs in (stops guest poll) or logs out (restarts it)
 
   const fetchListings = async (page = 1, reset = false) => {
     if (page === 1) setListingsLoading(true)
@@ -579,7 +503,6 @@ function App() {
     return () => { window.removeEventListener("scroll", handleScroll); if (bottomReachedTimerRef.current) clearTimeout(bottomReachedTimerRef.current) }
   }, [hasMore, loadingMore, activePage, usingDb, listingsPage])
 
-  // Debounced search
   useEffect(() => {
     if (!searchQuery.trim()) { setDbSearchResults([]); return }
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
@@ -595,14 +518,12 @@ function App() {
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
   }, [searchQuery])
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClick = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) setShowDropdown(false) }
     document.addEventListener("mousedown", handleClick)
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
-  // Admin shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => { if (e.ctrlKey && e.shiftKey && e.key === "A") setShowAdmin(true) }
     window.addEventListener("keydown", handleKeyDown)
@@ -611,7 +532,6 @@ function App() {
 
   useEffect(() => { if (window.location.pathname === "/admin") setShowAdmin(true) }, [])
 
-  // Restore seller session
   useEffect(() => {
     const token = localStorage.getItem("silkroad_token")
     if (token && !user) {
@@ -631,7 +551,6 @@ function App() {
     }
   }, [])
 
-  // New order notif tick
   useEffect(() => {
     const handler = () => setNotifTick(t => t + 1)
     window.addEventListener("silkroad_new_order", handler)
@@ -698,26 +617,19 @@ function App() {
               style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "8px 12px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", whiteSpace: "nowrap" }}>
               + Sell
             </button>
-
             <button onClick={() => setShowRiderAuth(true)}
               style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
               title="Rider Login">
               🛵
             </button>
-
             <button onClick={() => setShowTracker(true)}
               style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
               title="Track Order">
               📦
             </button>
-
             {user && (
-              <NotificationBell
-                sellerId={user._id}
-                onClick={() => setShowAccount(true)}
-              />
+              <NotificationBell sellerId={user._id} onClick={() => setShowAccount(true)} />
             )}
-
             {user ? (
               <button onClick={() => setShowAccount(true)}
                 style={{ background: "#c8a97e", border: "none", width: "34px", height: "34px", borderRadius: "50%", fontWeight: "800", cursor: "pointer", fontSize: "14px", color: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -729,7 +641,6 @@ function App() {
                 Sign In
               </button>
             )}
-
             <button onClick={() => setCartOpen(true)}
               style={{ position: "relative", background: "transparent", border: "none", color: "#fff", fontSize: "22px", cursor: "pointer", padding: "4px" }}>
               🛒
@@ -743,12 +654,12 @@ function App() {
         </div>
 
         <div style={{ background: "#111", borderBottom: "1px solid #1e1e1e" }}>
+          {/* ── Nav tabs — Become a Rider removed ── */}
           <div style={{ padding: "0 16px", display: "flex", gap: "4px", overflowX: "auto" }}>
             {[
               { label: "Buy Products",    page: "buy" },
               { label: "Rent Items",      page: "rent" },
               { label: "Request Service", page: "service" },
-              { label: "Become a Rider",  page: "rider" },
             ].map(link => (
               <button key={link.page} onClick={() => setActivePage(link.page)}
                 style={{ background: "transparent", border: "none", color: activePage === link.page ? "#c8a97e" : "#aaa", cursor: "pointer", fontSize: "13px", fontWeight: "600", borderBottom: activePage === link.page ? "2px solid #c8a97e" : "2px solid transparent", padding: "12px 14px", whiteSpace: "nowrap", fontFamily: "inherit" }}>
@@ -814,8 +725,6 @@ function App() {
       <div style={{ flex: 1 }}>
         {activePage === "buy" && (
           <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px 16px" }}>
-
-            {/* Live rate bar */}
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: rateLoading ? "#444" : "#22c55e", animation: rateLoading ? "none" : "livePulse 2s ease infinite", flexShrink: 0 }} />
@@ -880,12 +789,10 @@ function App() {
 
         {activePage === "rent"    && <RentItems rate={rate} />}
         {activePage === "service" && <RequestService rate={rate} />}
-        {activePage === "rider"   && <BecomeRider />}
       </div>
 
       <Footer onOpen={setFooterModal} siteSettings={siteSettings} />
 
-      {/* ── MODALS ── */}
       <FooterModal type={footerModal} onClose={() => setFooterModal(null)} siteSettings={siteSettings} />
 
       {showFullResults && searchQuery.trim() && (
@@ -961,7 +868,6 @@ function App() {
         />
       )}
 
-      {/* ── CART ── */}
       {cartOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex" }}>
           <div onClick={() => setCartOpen(false)} style={{ flex: 1, background: "#000000aa" }} />
@@ -1030,9 +936,7 @@ function App() {
         />
       )}
 
-      {/* Global toasts */}
       <ToastContainer />
-
     </div>
   )
 }
