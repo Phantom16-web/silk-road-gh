@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from "react"
 import { saveOrder, generateOrderId, updateOrder, OrderIdBanner } from "./OrderTracker"
 
 const API_URL        = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+const SOCKET_URL     = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace("/api", "")
+  : "http://localhost:5000"
 const SILK_ROAD_MOMO = "0543883608"
 const SILK_ROAD_NAME = "Silk Road GH"
 const STEPS          = ["Location", "Confirm Order", "Payment", "Track"]
@@ -33,10 +36,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const [promoError, setPromoError]         = useState("")
   const [promoLoading, setPromoLoading]     = useState(false)
 
-  // OTP state — rider deliveries only
   const [otp, setOtp]           = useState(null)
   const [otpExpiry, setOtpExpiry] = useState(null)
   const pollRef                 = useRef(null)
+  const socketRef               = useRef(null)
 
   const deliveryFee = siteSettings?.deliveryFee || 10
   const subtotal    = initialOrder?.subtotal || cart.reduce((s, i) => s + (i.price || i.dailyRate || 0) * i.qty, 0)
@@ -46,7 +49,42 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const total       = Math.max(0, subtotal + (deliveryMethod === "rider" && promoApplied?.type !== "free_delivery" ? deliveryFee : 0) - (promoApplied?.type !== "free_delivery" ? discount : 0))
   const platformFee = Math.round(subtotal * 0.08)
 
-  // ── OTP polling — starts when buyer reaches step 3 on a rider delivery ──────
+  // ── Connect buyer socket and listen on order-specific OTP channel ──────────
+  useEffect(() => {
+    if (step !== 3 || deliveryMethod !== "rider" || delivered !== null || otp) return
+
+    import("socket.io-client").then(({ io }) => {
+      if (socketRef.current) return // already connected
+
+      const s = io(SOCKET_URL, {
+        autoConnect:          true,
+        reconnection:         true,
+        reconnectionDelay:    1000,
+        reconnectionAttempts: Infinity,
+        transports:           ["websocket", "polling"],
+      })
+
+      // Listen on order-specific OTP channel — only this buyer's order
+      s.on(`otp:${orderId}`, (d) => {
+        if (d?.otp) {
+          setOtp(d.otp)
+          setOtpExpiry(d.expiresAt)
+          if (pollRef.current) clearInterval(pollRef.current)
+        }
+      })
+
+      socketRef.current = s
+    }).catch(() => {})
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect()
+        socketRef.current = null
+      }
+    }
+  }, [step, deliveryMethod, delivered, otp, orderId])
+
+  // ── Poll every 5s as backup ───────────────────────────────────────────────
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current)
     if (step !== 3 || deliveryMethod !== "rider" || delivered !== null || otp) return
@@ -67,23 +105,6 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     pollRef.current = setInterval(poll, 5000)
     return () => clearInterval(pollRef.current)
   }, [step, deliveryMethod, delivered, otp, orderId])
-
-  // ── Socket listener — shows OTP instantly when rider marks delivered ─────────
-  useEffect(() => {
-    if (step !== 3 || deliveryMethod !== "rider" || delivered !== null) return
-
-    const handler = (e) => {
-      const data = e.detail
-      if (data?.otp) {
-        setOtp(data.otp)
-        setOtpExpiry(data.expiresAt)
-        if (pollRef.current) clearInterval(pollRef.current)
-      }
-    }
-
-    window.addEventListener("silkroad_delivery_otp", handler)
-    return () => window.removeEventListener("silkroad_delivery_otp", handler)
-  }, [step, deliveryMethod, delivered])
 
   const detectLocation = () => {
     setLocLoading(true); setLocError(null); setLocBlocked(false)
@@ -433,7 +454,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.7" }}>
                       Your order is with the seller.{" "}
                       {deliveryMethod === "rider"
-                        ? "When the rider delivers your package, a 6-digit OTP will appear below. Read it to the rider to confirm delivery."
+                        ? "When the rider delivers your package, a 6-digit OTP will appear below. Read it to the rider to complete delivery."
                         : "Contact the seller to arrange pickup."}
                     </p>
                   </div>
@@ -483,7 +504,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     )
                   )}
 
-                  {/* ── PICKUP — confirm button ── */}
+                  {/* Pickup confirm */}
                   {deliveryMethod !== "rider" && (
                     <>
                       <button onClick={handleConfirmDelivery}
@@ -497,7 +518,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     </>
                   )}
 
-                  {/* Cancel for rider (only before OTP arrives) */}
+                  {/* Cancel for rider before OTP arrives */}
                   {deliveryMethod === "rider" && !otp && (
                     <button onClick={handleCancelDelivery}
                       style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "13px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
