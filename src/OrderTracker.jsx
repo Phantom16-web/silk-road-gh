@@ -10,7 +10,7 @@ const NOTIF_KEY   = "silkroad_seller_notifications"
 
 const socketRegistry = {}
 let   socketInstance = null
-let   registeredId   = null // track who is currently registered
+let   registeredId   = null
 
 // ── Order storage helpers ─────────────────────────────────────────────────────
 export function generateOrderId() {
@@ -94,14 +94,11 @@ export function connectSellerSocket(sellerId) {
   if (!sellerId) return
   const id = String(sellerId)
 
-  // If already connected and registered as this seller — just re-emit registration
-  // This handles tab switches, page focus, etc.
   if (socketInstance?.connected && registeredId === id) {
     socketInstance.emit("register_seller", id)
     return
   }
 
-  // If connected as a different seller — disconnect first
   if (socketInstance) {
     socketInstance.disconnect()
     socketInstance = null
@@ -117,9 +114,6 @@ export function connectSellerSocket(sellerId) {
       transports:           ["websocket", "polling"],
     })
 
-    // ── Register on EVERY connect and reconnect ───────────────────────────────
-    // This is the critical fix — "connect" fires on initial connect AND
-    // after every reconnect (network drop, server restart, etc.)
     s.on("connect", () => {
       console.log(`🔌 Socket connected: ${s.id} — registering seller ${id}`)
       s.emit("register_seller", id)
@@ -131,20 +125,13 @@ export function connectSellerSocket(sellerId) {
     })
 
     s.on("reconnect", (attempt) => {
-      console.log(`🔄 Socket reconnected after ${attempt} attempt(s) — re-registering seller ${id}`)
+      console.log(`🔄 Reconnected after ${attempt} attempt(s) — re-registering seller ${id}`)
       s.emit("register_seller", id)
-    })
-
-    s.on("reconnect_attempt", (attempt) => {
-      console.log(`🔄 Reconnect attempt ${attempt}...`)
     })
 
     s.on("disconnect", (reason) => {
       console.log(`🔌 Socket disconnected: ${reason}`)
-      if (reason === "io server disconnect") {
-        // Server forcefully disconnected — reconnect manually
-        s.connect()
-      }
+      if (reason === "io server disconnect") s.connect()
     })
 
     s.on("new_order", (data) => {
@@ -190,9 +177,7 @@ export function connectSellerSocket(sellerId) {
 
     s.on("delivery_at_door", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      if (d.otp) {
-        window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
-      }
+      if (d.otp) window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
       fireToast({ type: "otp", title: "🚪 Package at Door!", message: "Package delivered. Waiting for buyer OTP confirmation.", persistent: true })
     })
 
@@ -337,17 +322,72 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
   const [input, setInput]             = useState("")
   const [order, setOrder]             = useState(null)
   const [notFound, setNotFound]       = useState(false)
+  const [searching, setSearching]     = useState(false)
   const [deliveryOtp, setDeliveryOtp] = useState(null)
   const pollRef                       = useRef(null)
 
-  const search = () => {
+  const search = async () => {
     const id = input.trim().toUpperCase()
     if (!id) return
-    const found = getOrder(id)
-    if (found) { setOrder(found); setNotFound(false); setDeliveryOtp(null) }
-    else        { setOrder(null);  setNotFound(true) }
+
+    setSearching(true)
+    setNotFound(false)
+    setOrder(null)
+    setDeliveryOtp(null)
+
+    // Step 1: check localStorage first (instant, works on same device)
+    const local = getOrder(id)
+    if (local) {
+      setOrder(local)
+      setSearching(false)
+      return
+    }
+
+    // Step 2: fall back to backend — works cross-device, different browser, after clearing cache
+    try {
+      const res  = await fetch(`${API_URL}/orders/track/${encodeURIComponent(id)}`)
+      const data = await res.json()
+
+      if (!res.ok || !data.id) {
+        setNotFound(true)
+        setSearching(false)
+        return
+      }
+
+      // Reconstruct a minimal order object matching the localStorage shape
+      const recovered = {
+        id:             data.id,
+        backendOrderId: data.backendOrderId,
+        type:           "buy",
+        cart:           data.itemTitle ? [{ title: data.itemTitle, image: data.itemImage, qty: 1, price: data.amount }] : [],
+        total:          data.amount,
+        subtotal:       data.amount,
+        deliveryMethod: data.deliveryMethod || "pickup",
+        paymentMethod:  data.paymentMethod  || "manual_momo",
+        location:       data.location       || null,
+        manualLocation: data.location       || null,
+        landmark:       data.landmark       || null,
+        extraInfo:      data.extraInfo      || null,
+        payerName:      data.payerName      || null,
+        status:         data.status         || "In Escrow",
+        delivered:      data.delivered,
+        promoCode:      data.promoCode      || null,
+        discount:       data.discount       || 0,
+        createdAt:      new Date(data.createdAt).getTime(),
+        recoveredFromBackend: true,
+      }
+
+      // Save to localStorage so future lookups on this device are instant
+      saveOrder(recovered)
+      setOrder(recovered)
+    } catch {
+      setNotFound(true)
+    }
+
+    setSearching(false)
   }
 
+  // Poll for OTP when viewing a rider order
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current)
     const isRider = order?.deliveryMethod === "rider"
@@ -369,6 +409,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
     return () => clearInterval(pollRef.current)
   }, [order])
 
+  // Socket listener for instant OTP
   useEffect(() => {
     if (!order || order.deliveryMethod !== "rider") return
     const handler = (e) => {
@@ -406,21 +447,30 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                 onKeyDown={e => e.key === "Enter" && search()}
                 style={{ flex: 1, background: "#161616", border: "1px solid #1e1e1e", color: "#f0ede8", padding: "12px 16px", borderRadius: "10px", fontSize: "15px", fontFamily: "monospace", letterSpacing: ".04em", outline: "none" }}
               />
-              <button onClick={search}
-                style={{ background: "#c8a97e", border: "none", padding: "12px 20px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", color: "#000", whiteSpace: "nowrap" }}>
-                Track →
+              <button onClick={search} disabled={searching}
+                style={{ background: "#c8a97e", border: "none", padding: "12px 20px", borderRadius: "10px", fontWeight: "700", cursor: searching ? "not-allowed" : "pointer", fontSize: "14px", fontFamily: "inherit", color: "#000", whiteSpace: "nowrap", opacity: searching ? 0.7 : 1 }}>
+                {searching ? "⏳" : "Track →"}
               </button>
             </div>
+            {searching && (
+              <div style={{ fontSize: "12px", color: "#555", marginTop: "8px" }}>Checking across devices...</div>
+            )}
           </div>
 
           {notFound && (
             <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "14px 16px", fontSize: "13px", color: "#fca5a5" }}>
-              ⚠️ Order not found. Check the ID and try again.
+              ⚠️ Order not found. Double-check the ID — it looks like <span style={{ fontFamily: "monospace" }}>SR-XXXXX-XXXX</span>
             </div>
           )}
 
           {order && (
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+
+              {order.recoveredFromBackend && (
+                <div style={{ background: "#1e3a5f18", border: "1px solid #1d4ed8", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#93c5fd" }}>
+                  ℹ️ Order retrieved from server — now saved on this device for quick access.
+                </div>
+              )}
 
               <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "16px 18px" }}>
                 <div style={{ fontSize: "11px", color: "#6ee7b7", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "6px" }}>STATUS</div>
@@ -444,6 +494,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                 <div>📅 Placed: <span style={{ color: "#aaa" }}>{fmt(order.createdAt)}</span></div>
               </div>
 
+              {/* OTP section — rider orders only */}
               {isRiderOrder && order.delivered === null && (
                 deliveryOtp ? (
                   <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
