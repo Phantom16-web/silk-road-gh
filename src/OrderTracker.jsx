@@ -10,6 +10,7 @@ const NOTIF_KEY   = "silkroad_seller_notifications"
 
 const socketRegistry = {}
 let   socketInstance = null
+let   registeredId   = null // track who is currently registered
 
 // ── Order storage helpers ─────────────────────────────────────────────────────
 export function generateOrderId() {
@@ -93,14 +94,21 @@ export function connectSellerSocket(sellerId) {
   if (!sellerId) return
   const id = String(sellerId)
 
-  if (socketInstance?.connected) {
+  // If already connected and registered as this seller — just re-emit registration
+  // This handles tab switches, page focus, etc.
+  if (socketInstance?.connected && registeredId === id) {
     socketInstance.emit("register_seller", id)
     return
   }
 
-  import("socket.io-client").then(({ io }) => {
-    if (socketInstance) { socketInstance.disconnect(); socketInstance = null }
+  // If connected as a different seller — disconnect first
+  if (socketInstance) {
+    socketInstance.disconnect()
+    socketInstance = null
+    registeredId   = null
+  }
 
+  import("socket.io-client").then(({ io }) => {
     const s = io(SOCKET_URL, {
       autoConnect:          true,
       reconnection:         true,
@@ -109,7 +117,35 @@ export function connectSellerSocket(sellerId) {
       transports:           ["websocket", "polling"],
     })
 
-    s.on("connect", () => { s.emit("register_seller", id) })
+    // ── Register on EVERY connect and reconnect ───────────────────────────────
+    // This is the critical fix — "connect" fires on initial connect AND
+    // after every reconnect (network drop, server restart, etc.)
+    s.on("connect", () => {
+      console.log(`🔌 Socket connected: ${s.id} — registering seller ${id}`)
+      s.emit("register_seller", id)
+      registeredId = id
+    })
+
+    s.on("seller_registered", (data) => {
+      console.log(`✅ Registered as seller ${data.sellerId}`)
+    })
+
+    s.on("reconnect", (attempt) => {
+      console.log(`🔄 Socket reconnected after ${attempt} attempt(s) — re-registering seller ${id}`)
+      s.emit("register_seller", id)
+    })
+
+    s.on("reconnect_attempt", (attempt) => {
+      console.log(`🔄 Reconnect attempt ${attempt}...`)
+    })
+
+    s.on("disconnect", (reason) => {
+      console.log(`🔌 Socket disconnected: ${reason}`)
+      if (reason === "io server disconnect") {
+        // Server forcefully disconnected — reconnect manually
+        s.connect()
+      }
+    })
 
     s.on("new_order", (data) => {
       const notif = {
@@ -144,62 +180,32 @@ export function connectSellerSocket(sellerId) {
 
     s.on("delivery_accepted", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({
-        type:       "delivery",
-        title:      "✅ Rider Accepted!",
-        message:    d.message || "A rider accepted your delivery job.",
-        persistent: false,
-      })
+      fireToast({ type: "delivery", title: "✅ Rider Accepted!", message: d.message || "A rider accepted your delivery job.", persistent: false })
     })
 
     s.on("delivery_picked_up", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({
-        type:       "delivery",
-        title:      "📦 Package Picked Up",
-        message:    d.message || "Rider picked up the package.",
-        persistent: false,
-      })
+      fireToast({ type: "delivery", title: "📦 Package Picked Up", message: d.message || "Rider picked up the package.", persistent: false })
     })
 
-    // delivery_at_door — persistent toast, stays until user dismisses
-    // Also fires silkroad_delivery_otp if OTP is in the payload
     s.on("delivery_at_door", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
       if (d.otp) {
         window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
       }
-      fireToast({
-        type:       "otp",
-        title:      "🚪 Package at Door!",
-        message:    d.otp
-          ? `OTP for buyer: ${d.otp} — ask them to read it to you`
-          : "Package delivered. Waiting for buyer OTP.",
-        persistent: true, // ← stays until user taps ✕
-      })
+      fireToast({ type: "otp", title: "🚪 Package at Door!", message: "Package delivered. Waiting for buyer OTP confirmation.", persistent: true })
     })
 
     s.on("delivery_completed", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({
-        type:       "success",
-        title:      "🎉 Delivery Complete!",
-        message:    d.message || "OTP confirmed. Payment released.",
-        persistent: false,
-      })
+      fireToast({ type: "success", title: "🎉 Delivery Complete!", message: d.message || "OTP confirmed. Payment released.", persistent: false })
     })
 
     s.on("delivery_cancelled_by_rider", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({
-        type:       "warning",
-        title:      "⚠️ Rider Cancelled",
-        message:    d.message || "Rider cancelled. Job is back on the board.",
-        persistent: false,
-      })
+      fireToast({ type: "warning", title: "⚠️ Rider Cancelled", message: d.message || "Rider cancelled. Job is back on the board.", persistent: false })
     })
 
-    // Direct OTP push to buyer
     s.on("delivery_otp", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
     })
@@ -209,10 +215,14 @@ export function connectSellerSocket(sellerId) {
 }
 
 export function disconnectSocket() {
-  if (socketInstance) { socketInstance.disconnect(); socketInstance = null }
+  if (socketInstance) {
+    socketInstance.disconnect()
+    socketInstance = null
+    registeredId   = null
+  }
 }
 
-// ── Toast container — mount once in App.jsx ───────────────────────────────────
+// ── Toast container ───────────────────────────────────────────────────────────
 export function ToastContainer() {
   const [toasts, setToasts] = useState([])
 
@@ -221,13 +231,10 @@ export function ToastContainer() {
     return () => toastListeners.delete(setToasts)
   }, [])
 
-  // Auto-dismiss only non-persistent toasts after 5s
   useEffect(() => {
     const nonPersistent = toasts.filter(t => !t.persistent)
     if (nonPersistent.length === 0) return
-    const timer = setTimeout(() => {
-      dismissToast(nonPersistent[0].id)
-    }, 5000)
+    const timer = setTimeout(() => dismissToast(nonPersistent[0].id), 5000)
     return () => clearTimeout(timer)
   }, [toasts])
 
@@ -253,9 +260,7 @@ export function ToastContainer() {
               <div style={{ fontSize: "13px", fontWeight: "700", color: s.accent, marginBottom: "4px" }}>
                 {toast.title}
                 {toast.persistent && (
-                  <span style={{ marginLeft: "8px", fontSize: "10px", fontWeight: "600", background: s.border + "44", color: s.accent, padding: "2px 7px", borderRadius: "20px", letterSpacing: ".04em" }}>
-                    STAY
-                  </span>
+                  <span style={{ marginLeft: "8px", fontSize: "10px", fontWeight: "600", background: s.border + "44", color: s.accent, padding: "2px 7px", borderRadius: "20px", letterSpacing: ".04em" }}>STAY</span>
                 )}
               </div>
               <div style={{ fontSize: "12px", color: toast.type === "otp" ? "#a7f3d0" : "#888", lineHeight: "1.5", fontWeight: toast.type === "otp" ? "600" : "400" }}>
@@ -263,9 +268,7 @@ export function ToastContainer() {
               </div>
             </div>
             <button onClick={() => dismissToast(toast.id)}
-              style={{ background: "transparent", border: "none", color: "#aaa", cursor: "pointer", fontSize: "18px", minHeight: "auto", padding: "0", flexShrink: 0, lineHeight: 1, fontWeight: "700" }}>
-              ✕
-            </button>
+              style={{ background: "transparent", border: "none", color: "#aaa", cursor: "pointer", fontSize: "18px", minHeight: "auto", padding: "0", flexShrink: 0, lineHeight: 1, fontWeight: "700" }}>✕</button>
           </div>
         )
       })}
@@ -345,7 +348,6 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
     else        { setOrder(null);  setNotFound(true) }
   }
 
-  // Poll for OTP when viewing a rider order
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current)
     const isRider = order?.deliveryMethod === "rider"
@@ -367,7 +369,6 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
     return () => clearInterval(pollRef.current)
   }, [order])
 
-  // Socket listener for instant OTP
   useEffect(() => {
     if (!order || order.deliveryMethod !== "rider") return
     const handler = (e) => {
@@ -443,7 +444,6 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                 <div>📅 Placed: <span style={{ color: "#aaa" }}>{fmt(order.createdAt)}</span></div>
               </div>
 
-              {/* OTP section — rider orders only */}
               {isRiderOrder && order.delivered === null && (
                 deliveryOtp ? (
                   <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
