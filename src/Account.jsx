@@ -1,9 +1,12 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { updateProfile, changePassword, deleteAccount, getMyOrders, getSellingOrders, getMyListings, deleteListing } from "./api"
 import { getOrders, updateOrder, getSellerNotifications, markAllNotificationsRead } from "./OrderTracker"
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
-const UNIS    = ["KNUST", "UG Legon", "Ashesi", "UDS", "UCC", "GIJ", "UHAS", "Other"]
+const API_URL    = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+const SOCKET_URL = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace("/api", "")
+  : "http://localhost:5000"
+const UNIS = ["KNUST", "UG Legon", "Ashesi", "UDS", "UCC", "GIJ", "UHAS", "Other"]
 
 const STATUS_STYLE = {
   "Delivered":            { bg: "#064e3b22", color: "#6ee7b7", border: "#065f46" },
@@ -27,7 +30,6 @@ const inp = (err) => ({
   fontSize: "14px", outline: "none", boxSizing: "border-box", fontFamily: "inherit",
 })
 
-// ── Geocode address → GPS coords ───────────────────────────────────────────────
 async function geocodeAddress(address) {
   try {
     const query = encodeURIComponent(address + ", Ghana")
@@ -36,9 +38,8 @@ async function geocodeAddress(address) {
       { headers: { "Accept-Language": "en", "User-Agent": "SilkRoadGH/1.0" } }
     )
     const data = await res.json()
-    if (data && data.length > 0) {
+    if (data && data.length > 0)
       return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
-    }
     return null
   } catch { return null }
 }
@@ -197,13 +198,11 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
   const [dropAddress, setDropAddress]               = useState(notification.location || "")
   const [dropResolved, setDropResolved]             = useState(!!(parsedDrop.lat && parsedDrop.lng))
   const [dropGeocodeLoading, setDropGeocodeLoading] = useState(false)
-
-  const [quote, setQuote]               = useState(null)
-  const [quoteLoading, setQuoteLoading] = useState(false)
-  const [requesting, setRequesting]     = useState(false)
-  const [done, setDone]                 = useState(false)
-  const [error, setError]               = useState("")
-
+  const [quote, setQuote]                           = useState(null)
+  const [quoteLoading, setQuoteLoading]             = useState(false)
+  const [requesting, setRequesting]                 = useState(false)
+  const [done, setDone]                             = useState(false)
+  const [error, setError]                           = useState("")
   const token = localStorage.getItem("silkroad_token")
 
   const detectPickup = () => {
@@ -251,9 +250,8 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
     setQuoteLoading(true)
     try {
       const res  = await fetch(`${API_URL}/deliveries/quote`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ pickupLat: Number(pickupLat), pickupLng: Number(pickupLng), dropLat: Number(dropLat), dropLng: Number(dropLng) }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pickupLat: Number(pickupLat), pickupLng: Number(pickupLng), dropLat: Number(dropLat), dropLng: Number(dropLng) }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.message || "Could not calculate quote."); setQuoteLoading(false); return }
@@ -262,14 +260,13 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
     setQuoteLoading(false)
   }
 
-  // ── THE FIX: explicitly pass localOrderId as SR-XXXXX ────────────────────────
   const handleRequestRider = async () => {
     setRequesting(true); setError("")
     try {
       const res = await fetch(`${API_URL}/deliveries`, {
-        method:  "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({
+        body: JSON.stringify({
           orderId:       notification.orderId,
           localOrderId:  notification.orderId?.startsWith("SR-") ? notification.orderId : null,
           pickupLat:     Number(pickupLat), pickupLng: Number(pickupLng),
@@ -362,7 +359,6 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
 
               {error && <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "12px 14px", fontSize: "13px", color: "#fca5a5" }}>⚠️ {error}</div>}
 
-              {/* Status pills */}
               <div style={{ display: "flex", gap: "8px" }}>
                 <div style={{ flex: 1, background: pickupResolved ? "#064e3b18" : "#1a1a1a", border: `1px solid ${pickupResolved ? "#065f46" : "#222"}`, borderRadius: "10px", padding: "10px", textAlign: "center", fontSize: "12px", color: pickupResolved ? "#6ee7b7" : "#444" }}>
                   {pickupResolved ? "✅ Pickup Ready" : "⏳ Pickup Needed"}
@@ -372,7 +368,6 @@ function DeliveryRequestModal({ notification, user, onClose, onRequested }) {
                 </div>
               </div>
 
-              {/* Quote */}
               {quote && (
                 <div style={{ background: "#1a1a1a", border: "1px solid #c8a97e44", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px" }}>
                   <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em" }}>📋 DELIVERY QUOTE</div>
@@ -521,18 +516,42 @@ function SelfDeliveryModal({ notification, onClose }) {
 // ── Notifications Tab ──────────────────────────────────────────────────────────
 const NOTIFICATIONS_KEY = "silkroad_seller_notifications"
 
-function NotificationsTab({ user }) {
+function NotificationsTab({ user, onSaleComplete }) {
   const [notifications, setNotifications]     = useState([])
   const [expandedId, setExpandedId]           = useState(null)
   const [deliveryModal, setDeliveryModal]     = useState(null)
   const [selfDeliveryModal, setSelfDelivery]  = useState(null)
   const [requestedOrders, setRequestedOrders] = useState({})
   const [clearConfirm, setClearConfirm]       = useState(false)
+  const socketRef                             = useRef(null)
 
   useEffect(() => {
     if (user?._id) {
       setNotifications(getSellerNotifications(user._id))
       markAllNotificationsRead(user._id)
+    }
+  }, [user?._id])
+
+  // ── sale_completed socket listener ───────────────────────────────────────
+  // When rider confirms OTP on any device, backend pushes sale_completed
+  // to seller's socket. We catch it here and bubble it up to refresh stats.
+  useEffect(() => {
+    if (!user?._id) return
+    import("socket.io-client").then(({ io }) => {
+      if (socketRef.current) return
+      const s = io(SOCKET_URL, {
+        autoConnect: true, reconnection: true,
+        reconnectionDelay: 1000, reconnectionAttempts: Infinity,
+        transports: ["websocket", "polling"],
+      })
+      s.on("connect", () => s.emit("register_seller", String(user._id)))
+      s.on("sale_completed", (data) => {
+        if (onSaleComplete) onSaleComplete(data)
+      })
+      socketRef.current = s
+    }).catch(() => {})
+    return () => {
+      if (socketRef.current) { socketRef.current.disconnect(); socketRef.current = null }
     }
   }, [user?._id])
 
@@ -575,13 +594,9 @@ function NotificationsTab({ user }) {
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={{ fontSize: "12px", color: "#fca5a5" }}>Delete all {notifications.length} notifications?</span>
             <button onClick={() => setClearConfirm(false)}
-              style={{ background: "#161616", border: "1px solid #222", color: "#888", padding: "7px 12px", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>
-              Cancel
-            </button>
+              style={{ background: "#161616", border: "1px solid #222", color: "#888", padding: "7px 12px", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>Cancel</button>
             <button onClick={handleClearAll}
-              style={{ background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit" }}>
-              Yes, Clear All
-            </button>
+              style={{ background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit" }}>Yes, Clear All</button>
           </div>
         )}
       </div>
@@ -617,7 +632,7 @@ function NotificationsTab({ user }) {
                       ["Amount",   <span style={{ color: "#6ee7b7", fontWeight: "700" }}>₵{n.amount?.toLocaleString()}</span>],
                       ["Payment",  <span style={{ color: "#888" }}>{n.paymentMethod === "paystack" ? "⚡ Paystack" : "📱 Manual MoMo"}</span>],
                       n.paymentRef  && ["Ref",      <span style={{ color: "#444", fontSize: "11px", fontFamily: "monospace" }}>{n.paymentRef}</span>],
-                      ["Delivery",   <span style={{ color: "#888" }}>{n.deliveryMethod === "rider" ? "🛵 Rider" : "📍 Pickup"}</span>],
+                      ["Delivery",  <span style={{ color: "#888" }}>{n.deliveryMethod === "rider" ? "🛵 Rider" : "📍 Pickup"}</span>],
                       n.location    && ["Location", <span style={{ color: "#888", fontSize: "11px", fontFamily: "monospace" }}>{n.location}</span>],
                       n.landmark    && ["Landmark", <span style={{ color: "#888" }}>{n.landmark}</span>],
                       n.promoCode   && ["Promo",    <span style={{ color: "#6ee7b7" }}>🎟️ {n.promoCode} (-₵{n.discount})</span>],
@@ -712,6 +727,9 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
   const [loadingListings, setLoadingListings] = useState(false)
   const [notifCount, setNotifCount]       = useState(0)
 
+  // ── Sale completed flash state ─────────────────────────────────────────────
+  const [lastSale, setLastSale] = useState(null)
+
   useEffect(() => {
     if (user?._id) setNotifCount(getSellerNotifications(user._id).filter(n => n.status === "unread").length)
   }, [user?._id, tab, notifTick])
@@ -720,8 +738,12 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
     if (tab === "orders" || tab === "overview") {
       setLoadingOrders(true)
       Promise.all([getMyOrders(), getSellingOrders()])
-        .then(([my, sell]) => { setOrders(Array.isArray(my) ? my : []); setSellingOrders(Array.isArray(sell) ? sell : []) })
-        .catch(() => {}).finally(() => setLoadingOrders(false))
+        .then(([my, sell]) => {
+          setOrders(Array.isArray(my) ? my : [])
+          setSellingOrders(Array.isArray(sell) ? sell : [])
+        })
+        .catch(() => {})
+        .finally(() => setLoadingOrders(false))
     }
   }, [tab])
 
@@ -734,6 +756,18 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
         .finally(() => setLoadingListings(false))
     }
   }, [tab])
+
+  // ── Called by NotificationsTab when sale_completed fires ──────────────────
+  // Re-fetches selling orders from backend so stats update on seller's device
+  const handleSaleComplete = async (data) => {
+    setLastSale(data)
+    try {
+      const updated = await getSellingOrders()
+      if (Array.isArray(updated)) setSellingOrders(updated)
+    } catch {}
+    // Auto-clear the flash banner after 8s
+    setTimeout(() => setLastSale(null), 8000)
+  }
 
   const handleSaveProfile = async () => {
     const e = {}
@@ -770,8 +804,9 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
     setDeleteLoading(true); setDeleteError("")
     try {
       const data = await deleteAccount()
-      if (data.message === "Account deleted successfully.") { localStorage.removeItem("silkroad_token"); onSignOut() }
-      else { setDeleteError(data.message || "Something went wrong.") }
+      if (data.message === "Account deleted successfully.") {
+        localStorage.removeItem("silkroad_token"); onSignOut()
+      } else { setDeleteError(data.message || "Something went wrong.") }
     } catch { setDeleteError("Something went wrong.") }
     setDeleteLoading(false)
   }
@@ -808,7 +843,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
       )}
 
       {/* ── Sidebar ── */}
-      <div style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: "240px", background: "#0d0d0d", borderRight: "1px solid #1a1a1a", display: "flex", flexDirection: "column", zIndex: 20, transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)" }}>
+      <div style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: "240px", background: "#0d0d0d", borderRight: "1px solid #1a1a1a", display: "flex", flexDirection: "column", zIndex: 20, transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.25s cubic-bezier(0.4,0,0.2,1)" }}>
         <div style={{ padding: "16px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: "10px" }}>
           <button onClick={() => setSidebarOpen(false)}
             style={{ background: "transparent", border: "1px solid #222", color: "#888", width: "32px", height: "32px", borderRadius: "8px", cursor: "pointer", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, minHeight: "auto" }}>✕</button>
@@ -852,6 +887,8 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
 
       {/* ── Main area ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+        {/* Top bar */}
         <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1a1a1a", padding: "12px 18px", display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
           <button onClick={() => setSidebarOpen(true)}
             style={{ background: "transparent", border: "1px solid #222", color: "#c8a97e", width: "38px", height: "38px", borderRadius: "9px", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "5px", flexShrink: 0, minHeight: "auto" }}>
@@ -869,6 +906,24 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
           </button>
         </div>
 
+        {/* ── Sale completed flash banner ── */}
+        {lastSale && (
+          <div style={{ background: "#064e3b", borderBottom: "1px solid #065f46", padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "22px" }}>🎉</span>
+              <div>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: "#6ee7b7" }}>Sale Complete!</div>
+                <div style={{ fontSize: "12px", color: "#a7f3d0" }}>
+                  {lastSale.itemTitle && `${lastSale.itemTitle} · `}
+                  ₵{(lastSale.sellerAmount || lastSale.orderAmount || 0).toLocaleString()} added to your earnings
+                  {lastSale.deliveryFee ? ` · Rider fee ₵${lastSale.deliveryFee}` : ""}
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setLastSale(null)} style={{ background: "transparent", border: "none", color: "#6ee7b7", cursor: "pointer", fontSize: "18px", minHeight: "auto" }}>✕</button>
+          </div>
+        )}
+
         <div style={{ flex: 1, overflowY: "auto" }}>
           <div style={{ maxWidth: "860px", margin: "0 auto", padding: "28px 20px 80px" }}>
 
@@ -877,6 +932,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
               <>
                 <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>Welcome back, {user.name.split(" ")[0]} 👋</h1>
                 <p style={{ fontSize: "14px", color: "#555", marginBottom: "28px" }}>Here's what's happening with your account.</p>
+
                 <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "28px" }}>
                   <StatCard icon="💰" label="Total Earned"    value={`₵${totalRevenue.toLocaleString()}`} sub="Completed sales" accent="#6ee7b7" />
                   <StatCard icon="🔔" label="Notifications"   value={notifCount} sub="Unread alerts" accent={notifCount > 0 ? "#c8a97e" : undefined} />
@@ -927,7 +983,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
               <>
                 <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>🔔 Notifications</h1>
                 <p style={{ fontSize: "14px", color: "#555", marginBottom: "24px" }}>Every order for your listings — choose how to deliver each one.</p>
-                <NotificationsTab user={user} />
+                <NotificationsTab user={user} onSaleComplete={handleSaleComplete} />
               </>
             )}
 
@@ -977,6 +1033,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
                         </div>
                       </div>
                     )}
+
                     {orders.length > 0 && (
                       <div>
                         <div style={{ fontSize: "11px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "14px" }}>My Purchases ({orders.length})</div>
