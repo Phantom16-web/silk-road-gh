@@ -36,10 +36,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const [promoError, setPromoError]         = useState("")
   const [promoLoading, setPromoLoading]     = useState(false)
 
-  const [otp, setOtp]           = useState(null)
+  const [otp, setOtp]             = useState(null)
   const [otpExpiry, setOtpExpiry] = useState(null)
-  const pollRef                 = useRef(null)
-  const socketRef               = useRef(null)
+  const pollRef                   = useRef(null)
+  const socketRef                 = useRef(null)
 
   const deliveryFee = siteSettings?.deliveryFee || 10
   const subtotal    = initialOrder?.subtotal || cart.reduce((s, i) => s + (i.price || i.dailyRate || 0) * i.qty, 0)
@@ -49,12 +49,12 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const total       = Math.max(0, subtotal + (deliveryMethod === "rider" && promoApplied?.type !== "free_delivery" ? deliveryFee : 0) - (promoApplied?.type !== "free_delivery" ? discount : 0))
   const platformFee = Math.round(subtotal * 0.08)
 
-  // ── Connect buyer socket and listen on order-specific OTP channel ──────────
+  // ── Socket connection for OTP and completion events ───────────────────────
   useEffect(() => {
-    if (step !== 3 || deliveryMethod !== "rider" || delivered !== null || otp) return
+    if (step !== 3 || deliveryMethod !== "rider" || delivered !== null) return
 
     import("socket.io-client").then(({ io }) => {
-      if (socketRef.current) return // already connected
+      if (socketRef.current) return
 
       const s = io(SOCKET_URL, {
         autoConnect:          true,
@@ -64,12 +64,23 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
         transports:           ["websocket", "polling"],
       })
 
-      // Listen on order-specific OTP channel — only this buyer's order
+      // OTP from rider marking delivered
       s.on(`otp:${orderId}`, (d) => {
         if (d?.otp) {
           setOtp(d.otp)
           setOtpExpiry(d.expiresAt)
           if (pollRef.current) clearInterval(pollRef.current)
+        }
+      })
+
+      // ── Completion event — rider confirmed OTP → buyer sees success ────────
+      s.on(`completed:${orderId}`, () => {
+        setDelivered(true)
+        updateOrder(orderId, { delivered: true, status: "Completed" })
+        if (pollRef.current) clearInterval(pollRef.current)
+        if (socketRef.current) {
+          socketRef.current.disconnect()
+          socketRef.current = null
         }
       })
 
@@ -82,9 +93,9 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
         socketRef.current = null
       }
     }
-  }, [step, deliveryMethod, delivered, otp, orderId])
+  }, [step, deliveryMethod, delivered, orderId])
 
-  // ── Poll every 5s as backup ───────────────────────────────────────────────
+  // ── OTP polling — backup if socket misses ─────────────────────────────────
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current)
     if (step !== 3 || deliveryMethod !== "rider" || delivered !== null || otp) return
@@ -104,6 +115,32 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     poll()
     pollRef.current = setInterval(poll, 5000)
     return () => clearInterval(pollRef.current)
+  }, [step, deliveryMethod, delivered, otp, orderId])
+
+  // ── Completion poll — buyer polls to check if OTP was confirmed ───────────
+  // Backup for when the socket `completed:` event is missed
+  useEffect(() => {
+    if (step !== 3 || deliveryMethod !== "rider" || delivered !== null || !otp) return
+
+    const completionPoll = setInterval(async () => {
+      try {
+        const res  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(orderId)}`)
+        const data = await res.json()
+        // If delivery no longer has an OTP (it's been cleared after completion) or
+        // we can check delivery status by deliveryId
+        if (data.deliveryId) {
+          const deliveryRes = await fetch(`${API_URL}/deliveries/${data.deliveryId}`)
+          const deliveryData = await deliveryRes.json()
+          if (deliveryData.status === "completed") {
+            setDelivered(true)
+            updateOrder(orderId, { delivered: true, status: "Completed" })
+            clearInterval(completionPoll)
+          }
+        }
+      } catch {}
+    }, 5000)
+
+    return () => clearInterval(completionPoll)
   }, [step, deliveryMethod, delivered, otp, orderId])
 
   const detectLocation = () => {
@@ -488,7 +525,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                           </div>
                         )}
                         <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
-                          ⚠️ Only share this with the rider delivering your package.
+                          ⚠️ Read this code to the rider. Once they enter it, your delivery is confirmed automatically.
                         </div>
                       </div>
                     ) : (
@@ -518,7 +555,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     </>
                   )}
 
-                  {/* Cancel for rider before OTP arrives */}
+                  {/* Cancel for rider (only before OTP arrives) */}
                   {deliveryMethod === "rider" && !otp && (
                     <button onClick={handleCancelDelivery}
                       style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "13px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
@@ -534,12 +571,22 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 </>
               )}
 
+              {/* ── BUYER SUCCESS — auto-triggered when rider confirms OTP ── */}
               {delivered === true && (
                 <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <div style={{ fontSize: "56px" }}>🎉</div>
-                  <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#6ee7b7" }}>Order Complete!</h3>
-                  <p style={{ color: "#888", fontSize: "14px" }}>Payment released to seller.</p>
-                  <button className="btn-gold" onClick={onClose} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>Back to Marketplace</button>
+                  <div style={{ fontSize: "72px" }}>🎉</div>
+                  <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#6ee7b7" }}>Delivery Complete!</h3>
+                  <p style={{ color: "#888", fontSize: "14px", lineHeight: "1.7" }}>
+                    Your order has been delivered and confirmed. Payment has been released to the seller.
+                  </p>
+                  <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px", color: "#6ee7b7" }}>
+                    <div>✅ Order confirmed via OTP</div>
+                    <div>💰 Payment of ₵{total.toLocaleString()} released to seller</div>
+                    <div>📦 {cart.map(i => i.title).join(", ")}</div>
+                  </div>
+                  <button className="btn-gold" onClick={onClose} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>
+                    Back to Marketplace
+                  </button>
                 </div>
               )}
 
