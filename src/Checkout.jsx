@@ -1,612 +1,635 @@
 import { useState, useEffect, useRef } from "react"
-import { saveOrder, generateOrderId, updateOrder, OrderIdBanner } from "./OrderTracker"
 
-const API_URL        = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
-const SOCKET_URL     = import.meta.env.VITE_API_URL
+const API_URL    = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+const SOCKET_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace("/api", "")
   : "http://localhost:5000"
-const SILK_ROAD_MOMO = "0543883608"
-const SILK_ROAD_NAME = "Silk Road GH"
-const STEPS          = ["Location", "Confirm Order", "Payment", "Track"]
 
-function isMongoId(str) {
-  return str && /^[a-f\d]{24}$/i.test(String(str))
+const STORAGE_KEY = "silkroad_orders"
+const NOTIF_KEY   = "silkroad_seller_notifications"
+
+const socketRegistry = {}
+let   socketInstance = null
+let   registeredId   = null
+
+// ── Order storage helpers ─────────────────────────────────────────────────────
+export function generateOrderId() {
+  return `SR-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
 }
 
-export default function Checkout({ cart, rate, onClose, initialOrder, siteSettings }) {
-  const [step, setStep]                     = useState(initialOrder ? 3 : 0)
-  const [location, setLocation]             = useState(initialOrder?.location || null)
-  const [locLoading, setLocLoading]         = useState(false)
-  const [locBlocked, setLocBlocked]         = useState(false)
-  const [locError, setLocError]             = useState(null)
-  const [manualLocation, setManualLocation] = useState(initialOrder?.manualLocation || "")
-  const [landmark, setLandmark]             = useState(initialOrder?.landmark || "")
-  const [extraInfo, setExtraInfo]           = useState(initialOrder?.extraInfo || "")
-  const [contactInfo, setContactInfo]       = useState(initialOrder?.contactInfo || "")
-  const [payerName, setPayerName]           = useState(initialOrder?.payerName || "")
-  const [payerPhone, setPayerPhone]         = useState(initialOrder?.payerPhone || "")
-  const [delivered, setDelivered]           = useState(initialOrder?.delivered ?? null)
-  const [paymentRef, setPaymentRef]         = useState(initialOrder?.paymentRef || null)
-  const [orderId]                           = useState(initialOrder?.id || generateOrderId())
-  const [saving, setSaving]                 = useState(false)
-  const [copied, setCopied]                 = useState(false)
-  const [deliveryMethod, setDeliveryMethod] = useState(initialOrder?.deliveryMethod || "pickup")
-  const [promoCode, setPromoCode]           = useState("")
-  const [promoApplied, setPromoApplied]     = useState(null)
-  const [promoError, setPromoError]         = useState("")
-  const [promoLoading, setPromoLoading]     = useState(false)
+export function saveOrder(order) {
+  try {
+    const orders = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
+    orders[order.id] = { ...order, updatedAt: Date.now() }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(orders))
+  } catch {}
+}
 
-  const [otp, setOtp]             = useState(null)
-  const [otpExpiry, setOtpExpiry] = useState(null)
-  const pollRef                   = useRef(null)
-  const completionPollRef         = useRef(null)
-  const socketRef                 = useRef(null)
+export function getOrder(id) {
+  try {
+    const orders = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
+    return orders[id] || null
+  } catch { return null }
+}
 
-  const deliveryFee = siteSettings?.deliveryFee || 10
-  const subtotal    = initialOrder?.subtotal || cart.reduce((s, i) => s + (i.price || i.dailyRate || 0) * i.qty, 0)
-  const discount    = promoApplied?.type === "percentage"    ? Math.round(subtotal * promoApplied.value / 100)
-                    : promoApplied?.type === "fixed"         ? promoApplied.value
-                    : promoApplied?.type === "free_delivery" ? deliveryFee : 0
-  const total       = Math.max(0, subtotal + (deliveryMethod === "rider" && promoApplied?.type !== "free_delivery" ? deliveryFee : 0) - (promoApplied?.type !== "free_delivery" ? discount : 0))
-  const platformFee = Math.round(subtotal * 0.08)
+export function getOrders() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") }
+  catch { return {} }
+}
 
-  // ── Single socket connection for the entire tracking phase ───────────────
-  // Connects when buyer reaches step 3 with rider delivery
-  // Stays connected until delivered=true (don't disconnect when OTP arrives)
-  // Listens for both otp:SR-XXXXX and completed:SR-XXXXX
-  useEffect(() => {
-    if (step !== 3 || deliveryMethod !== "rider" || delivered !== null) {
-      // Clean up socket if delivery is done or method changed
-      if (socketRef.current) {
-        socketRef.current.disconnect()
-        socketRef.current = null
+export function updateOrder(id, patch) {
+  try {
+    const orders = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
+    if (orders[id]) {
+      orders[id] = { ...orders[id], ...patch, updatedAt: Date.now() }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(orders))
+    }
+  } catch {}
+}
+
+// ── Notification helpers ──────────────────────────────────────────────────────
+export function getSellerNotifications(sellerId) {
+  try {
+    const all = JSON.parse(localStorage.getItem(NOTIF_KEY) || "[]")
+    return all.filter(n => n.sellerId === String(sellerId)).sort((a, b) => b.createdAt - a.createdAt)
+  } catch { return [] }
+}
+
+export function markAllNotificationsRead(sellerId) {
+  try {
+    const all     = JSON.parse(localStorage.getItem(NOTIF_KEY) || "[]")
+    const updated = all.map(n => n.sellerId === String(sellerId) ? { ...n, status: "read" } : n)
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(updated))
+  } catch {}
+}
+
+function saveNotification(notif) {
+  try {
+    const all    = JSON.parse(localStorage.getItem(NOTIF_KEY) || "[]")
+    const exists = all.find(n => n.id === notif.id)
+    if (!exists) {
+      all.unshift(notif)
+      if (all.length > 200) all.splice(200)
+      localStorage.setItem(NOTIF_KEY, JSON.stringify(all))
+    }
+  } catch {}
+}
+
+// ── Toast store ───────────────────────────────────────────────────────────────
+const toastListeners = new Set()
+let   toastQueue     = []
+
+function fireToast(toast) {
+  toastQueue = [...toastQueue, { ...toast, id: Date.now() + Math.random() }]
+  toastListeners.forEach(cb => cb([...toastQueue]))
+}
+
+function dismissToast(id) {
+  toastQueue = toastQueue.filter(t => t.id !== id)
+  toastListeners.forEach(cb => cb([...toastQueue]))
+}
+
+// ── Socket singleton ──────────────────────────────────────────────────────────
+export function connectSellerSocket(sellerId) {
+  if (!sellerId) return
+  const id = String(sellerId)
+
+  if (socketInstance?.connected && registeredId === id) {
+    socketInstance.emit("register_seller", id)
+    return
+  }
+
+  if (socketInstance) {
+    socketInstance.disconnect()
+    socketInstance = null
+    registeredId   = null
+  }
+
+  import("socket.io-client").then(({ io }) => {
+    const s = io(SOCKET_URL, {
+      autoConnect:          true,
+      reconnection:         true,
+      reconnectionDelay:    1000,
+      reconnectionAttempts: Infinity,
+      transports:           ["websocket", "polling"],
+    })
+
+    s.on("connect", () => {
+      console.log(`🔌 Socket connected: ${s.id} — registering seller ${id}`)
+      s.emit("register_seller", id)
+      registeredId = id
+    })
+
+    s.on("seller_registered", (data) => {
+      console.log(`✅ Registered as seller ${data.sellerId}`)
+    })
+
+    s.on("reconnect", (attempt) => {
+      console.log(`🔄 Reconnected after ${attempt} attempt(s) — re-registering seller ${id}`)
+      s.emit("register_seller", id)
+    })
+
+    s.on("disconnect", (reason) => {
+      console.log(`🔌 Socket disconnected: ${reason}`)
+      if (reason === "io server disconnect") s.connect()
+    })
+
+    s.on("new_order", (data) => {
+      const notif = {
+        id:             data.orderId || `notif-${Date.now()}`,
+        sellerId:       id,
+        orderId:        data.orderId,
+        itemTitle:      data.itemTitle     || "New Order",
+        itemImage:      data.itemImage     || null,
+        amount:         data.amount        || 0,
+        buyerName:      data.buyerName     || "A buyer",
+        buyerContact:   data.buyerContact  || "",
+        location:       data.location      || "",
+        landmark:       data.landmark      || "",
+        paymentRef:     data.paymentRef    || "",
+        paymentMethod:  data.paymentMethod || "manual_momo",
+        deliveryMethod: data.deliveryMethod|| "pickup",
+        discount:       data.discount      || 0,
+        promoCode:      data.promoCode     || null,
+        status:         "unread",
+        createdAt:      Date.now(),
       }
+      saveNotification(notif)
+      Object.values(socketRegistry).forEach(cb => cb(notif))
+      window.dispatchEvent(new CustomEvent("silkroad_new_order", { detail: notif }))
+      fireToast({
+        type:       "order",
+        title:      "🛒 New Order!",
+        message:    `${data.buyerName || "Someone"} ordered ${data.itemTitle || "your item"} · ₵${data.amount || 0}`,
+        persistent: false,
+      })
+    })
+
+    s.on("delivery_accepted", (d) => {
+      window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
+      fireToast({ type: "delivery", title: "✅ Rider Accepted!", message: d.message || "A rider accepted your delivery job.", persistent: false })
+    })
+
+    s.on("delivery_picked_up", (d) => {
+      window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
+      fireToast({ type: "delivery", title: "📦 Package Picked Up", message: d.message || "Rider picked up the package.", persistent: false })
+    })
+
+    s.on("delivery_at_door", (d) => {
+      window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
+      fireToast({ type: "otp", title: "🚪 Package at Door!", message: "Package delivered. Waiting for buyer OTP confirmation.", persistent: true })
+    })
+
+    s.on("sale_completed", (d) => {
+      window.dispatchEvent(new CustomEvent("silkroad_sale_completed", { detail: d }))
+      fireToast({
+        type: "success", title: "🎉 Sale Complete!",
+        message: `₵${(d.sellerAmount || d.orderAmount || 0).toLocaleString()} added to your earnings.`,
+        persistent: false,
+      })
+    })
+
+    s.on("delivery_completed", (d) => {
+      window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
+      fireToast({ type: "success", title: "✅ Delivery Confirmed!", message: d.message || "OTP confirmed. Payment released.", persistent: false })
+    })
+
+    s.on("delivery_cancelled_by_rider", (d) => {
+      window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
+      fireToast({ type: "warning", title: "⚠️ Rider Cancelled", message: d.message || "Rider cancelled. Job is back on the board.", persistent: false })
+    })
+
+    s.on("delivery_otp", (d) => {
+      window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
+    })
+
+    socketInstance = s
+  }).catch(() => {})
+}
+
+export function disconnectSocket() {
+  if (socketInstance) {
+    socketInstance.disconnect()
+    socketInstance = null
+    registeredId   = null
+  }
+}
+
+// ── Toast container ───────────────────────────────────────────────────────────
+export function ToastContainer() {
+  const [toasts, setToasts] = useState([])
+
+  useEffect(() => {
+    toastListeners.add(setToasts)
+    return () => toastListeners.delete(setToasts)
+  }, [])
+
+  useEffect(() => {
+    const nonPersistent = toasts.filter(t => !t.persistent)
+    if (nonPersistent.length === 0) return
+    const timer = setTimeout(() => dismissToast(nonPersistent[0].id), 5000)
+    return () => clearTimeout(timer)
+  }, [toasts])
+
+  if (toasts.length === 0) return null
+
+  const STYLES = {
+    order:    { bg: "#161a1e", border: "#c8a97e", accent: "#c8a97e" },
+    delivery: { bg: "#0d1a2e", border: "#1d4ed8", accent: "#93c5fd" },
+    otp:      { bg: "#064e3b", border: "#065f46", accent: "#6ee7b7" },
+    success:  { bg: "#064e3b18", border: "#065f46", accent: "#6ee7b7" },
+    warning:  { bg: "#78350f18", border: "#92400e", accent: "#fcd34d" },
+  }
+
+  return (
+    <div style={{ position: "fixed", top: "16px", right: "16px", zIndex: 9999, display: "flex", flexDirection: "column", gap: "10px", maxWidth: "320px", pointerEvents: "none" }}>
+      <style>{`@keyframes slideInToast { from { transform: translateX(110%); opacity: 0 } to { transform: translateX(0); opacity: 1 } }`}</style>
+      {toasts.map(toast => {
+        const s = STYLES[toast.type] || STYLES.order
+        return (
+          <div key={toast.id}
+            style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: "14px", padding: "14px 16px", display: "flex", gap: "12px", alignItems: "flex-start", boxShadow: "0 8px 32px rgba(0,0,0,.6)", pointerEvents: "all", animation: "slideInToast .25s ease" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "13px", fontWeight: "700", color: s.accent, marginBottom: "4px" }}>
+                {toast.title}
+                {toast.persistent && (
+                  <span style={{ marginLeft: "8px", fontSize: "10px", fontWeight: "600", background: s.border + "44", color: s.accent, padding: "2px 7px", borderRadius: "20px", letterSpacing: ".04em" }}>STAY</span>
+                )}
+              </div>
+              <div style={{ fontSize: "12px", color: toast.type === "otp" ? "#a7f3d0" : "#888", lineHeight: "1.5", fontWeight: toast.type === "otp" ? "600" : "400" }}>
+                {toast.message}
+              </div>
+            </div>
+            <button onClick={() => dismissToast(toast.id)}
+              style={{ background: "transparent", border: "none", color: "#aaa", cursor: "pointer", fontSize: "18px", minHeight: "auto", padding: "0", flexShrink: 0, lineHeight: 1, fontWeight: "700" }}>✕</button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Notification bell ─────────────────────────────────────────────────────────
+export function NotificationBell({ sellerId, onClick }) {
+  const [count, setCount] = useState(0)
+
+  const refresh = () => {
+    if (!sellerId) return
+    setCount(getSellerNotifications(sellerId).filter(n => n.status === "unread").length)
+  }
+
+  useEffect(() => {
+    refresh()
+    const key = String(sellerId || "bell")
+    socketRegistry[key] = refresh
+    window.addEventListener("silkroad_new_order", refresh)
+    window.addEventListener("storage", refresh)
+    return () => {
+      delete socketRegistry[key]
+      window.removeEventListener("silkroad_new_order", refresh)
+      window.removeEventListener("storage", refresh)
+    }
+  }, [sellerId])
+
+  return (
+    <button onClick={onClick}
+      style={{ position: "relative", background: "transparent", border: "none", color: "#aaa", fontSize: "22px", cursor: "pointer", padding: "4px" }}>
+      🔔
+      {count > 0 && (
+        <span style={{ position: "absolute", top: "-2px", right: "-2px", background: "#c8a97e", color: "#000", fontSize: "9px", fontWeight: "800", borderRadius: "50%", width: "16px", height: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {count > 9 ? "9+" : count}
+        </span>
+      )}
+    </button>
+  )
+}
+
+// ── Order ID banner ───────────────────────────────────────────────────────────
+export function OrderIdBanner({ orderId }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => {
+    navigator.clipboard.writeText(orderId)
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+  }
+  return (
+    <div style={{ background: "#161616", border: "1px solid #c8a97e44", borderRadius: "14px", padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
+      <div>
+        <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "4px" }}>YOUR ORDER ID</div>
+        <div style={{ fontSize: "16px", fontWeight: "800", color: "#f0ede8", fontFamily: "monospace", letterSpacing: ".04em" }}>{orderId}</div>
+        <div style={{ fontSize: "11px", color: "#444", marginTop: "3px" }}>Save this to track your order anytime</div>
+      </div>
+      <button onClick={copy}
+        style={{ background: copied ? "#064e3b" : "#1a1a1a", border: `1px solid ${copied ? "#065f46" : "#222"}`, color: copied ? "#6ee7b7" : "#c8a97e", padding: "8px 14px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+        {copied ? "✅ Copied!" : "📋 Copy"}
+      </button>
+    </div>
+  )
+}
+
+// ── Main OrderTracker modal ───────────────────────────────────────────────────
+export default function OrderTracker({ onClose, onOpenOrder }) {
+  const [input, setInput]             = useState("")
+  const [order, setOrder]             = useState(null)
+  const [notFound, setNotFound]       = useState(false)
+  const [searching, setSearching]     = useState(false)
+  const [deliveryOtp, setDeliveryOtp] = useState(null)
+  const [completed, setCompleted]     = useState(false)
+  const pollRef                       = useRef(null)
+  const completionPollRef             = useRef(null)
+
+  // ── Search — localStorage first, then backend fallback ───────────────────
+  // This is the incognito fix. When localStorage is wiped (tab close in
+  // incognito, private browsing, etc.), we look up the order from MongoDB
+  // using the localOrderId. We also check the delivery status so the buyer
+  // can still see their OTP if the rider has already delivered.
+  const search = async () => {
+    const id = input.trim().toUpperCase()
+    if (!id) return
+
+    setSearching(true)
+    setNotFound(false)
+    setDeliveryOtp(null)
+    setCompleted(false)
+
+    // 1. Try localStorage first (fast path, works when tab is still alive)
+    const local = getOrder(id)
+    if (local) {
+      setOrder(local)
+      setSearching(false)
       return
     }
 
-    // Already connected — don't reconnect
-    if (socketRef.current) return
+    // 2. Fallback to backend — query order + delivery by localOrderId
+    try {
+      // Check the order in MongoDB
+      const orderRes  = await fetch(`${API_URL}/orders/by-local-id/${encodeURIComponent(id)}`)
+      const orderData = await res.ok ? await orderRes.json() : null
 
-    import("socket.io-client").then(({ io }) => {
-      const s = io(SOCKET_URL, {
-        autoConnect:          true,
-        reconnection:         true,
-        reconnectionDelay:    1000,
-        reconnectionAttempts: Infinity,
-        transports:           ["websocket", "polling"],
-      })
+      // Check delivery status (for OTP and completion)
+      const deliveryRes  = await fetch(`${API_URL}/deliveries/by-order/${encodeURIComponent(id)}`)
+      const deliveryData = await deliveryRes.json()
 
-      // OTP — rider marked delivered, backend generated OTP
-      s.on(`otp:${orderId}`, (d) => {
-        if (d?.otp) {
-          setOtp(d.otp)
-          setOtpExpiry(d.expiresAt)
-          // Stop the OTP poll — we have it
-          if (pollRef.current) {
-            clearInterval(pollRef.current)
-            pollRef.current = null
-          }
-          // DO NOT disconnect here — we still need to receive completed:
-        }
-      })
-
-      // Completion — rider entered OTP successfully, order done
-      s.on(`completed:${orderId}`, () => {
-        setDelivered(true)
-        updateOrder(orderId, { delivered: true, status: "Completed" })
-        // Clean up everything
-        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
-        if (completionPollRef.current) { clearInterval(completionPollRef.current); completionPollRef.current = null }
-        s.disconnect()
-        socketRef.current = null
-      })
-
-      socketRef.current = s
-    }).catch(() => {})
-
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect()
-        socketRef.current = null
+      if (!orderData && !deliveryData?.delivery) {
+        setOrder(null)
+        setNotFound(true)
+        setSearching(false)
+        return
       }
-    }
-  }, [step, deliveryMethod, delivered, orderId])
 
-  // ── OTP poll — backup for when socket misses ──────────────────────────────
+      // Rebuild a minimal order object from backend data
+      const o = orderData || {}
+      const d = deliveryData?.delivery || {}
+
+      const rebuilt = {
+        id:             id,
+        total:          o.amount        || 0,
+        subtotal:       o.amount        || 0,
+        deliveryMethod: o.deliveryMethod || d.status ? "rider" : "pickup",
+        location:       o.location      || null,
+        manualLocation: o.location      || null,
+        landmark:       o.landmark      || null,
+        paymentRef:     o.paystackRef   || null,
+        status:         o.status        || "Pending Confirmation",
+        delivered:      o.status === "Completed" ? true
+                      : o.status === "Refunded"  ? false
+                      : null,
+        createdAt:      o.createdAt ? new Date(o.createdAt).getTime() : Date.now(),
+        cart:           [],
+        // Store delivery info for OTP display
+        _deliveryId:    d._id           || null,
+        _deliveryStatus: d.status       || null,
+        _fromBackend:   true,
+      }
+
+      // Save to localStorage so subsequent searches are instant
+      saveOrder(rebuilt)
+      setOrder(rebuilt)
+
+      // If delivery is already in "delivered" state, fetch OTP immediately
+      if (d.status === "delivered" && d._id) {
+        const otpRes  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(id)}`)
+        const otpData = await otpRes.json()
+        if (otpData.otp) setDeliveryOtp(otpData)
+      }
+
+      // If already completed
+      if (d.status === "completed" || o.status === "Completed") {
+        setCompleted(true)
+      }
+
+    } catch (err) {
+      console.warn("Backend order lookup failed:", err.message)
+      setOrder(null)
+      setNotFound(true)
+    }
+
+    setSearching(false)
+  }
+
+  // ── OTP poll ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
-    if (step !== 3 || deliveryMethod !== "rider" || delivered !== null || otp) return
+    if (pollRef.current) clearInterval(pollRef.current)
+    if (!order || order.deliveryMethod !== "rider" || order.delivered !== null || completed) return
 
     const poll = async () => {
       try {
-        const res  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(orderId)}`)
+        const res  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(order.id)}`)
         const data = await res.json()
         if (data.otp) {
-          setOtp(data.otp)
-          setOtpExpiry(data.expiresAt)
+          setDeliveryOtp(data)
           clearInterval(pollRef.current)
-          pollRef.current = null
         }
       } catch {}
     }
 
     poll()
     pollRef.current = setInterval(poll, 5000)
-    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
-  }, [step, deliveryMethod, delivered, otp, orderId])
+    return () => clearInterval(pollRef.current)
+  }, [order, completed])
 
-  // ── Completion poll — backup after OTP received ───────────────────────────
-  // Polls the delivery status every 5s to catch completion
-  // in case the completed: socket event was missed
+  // ── Completion poll — after OTP shown ────────────────────────────────────
   useEffect(() => {
-    if (completionPollRef.current) { clearInterval(completionPollRef.current); completionPollRef.current = null }
-    if (step !== 3 || deliveryMethod !== "rider" || delivered !== null || !otp) return
+    if (completionPollRef.current) clearInterval(completionPollRef.current)
+    if (!order || order.deliveryMethod !== "rider" || !deliveryOtp || completed) return
 
     const poll = async () => {
       try {
-        const res  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(orderId)}`)
-        const data = await res.json()
-        // If OTP is gone from the response but we had it, delivery completed
-        if (data.deliveryId) {
-          const dr   = await fetch(`${API_URL}/deliveries/${data.deliveryId}`)
-          const ddata = await dr.json()
-          if (ddata.status === "completed") {
-            setDelivered(true)
-            updateOrder(orderId, { delivered: true, status: "Completed" })
+        if (deliveryOtp.deliveryId) {
+          const res  = await fetch(`${API_URL}/deliveries/${deliveryOtp.deliveryId}`)
+          const data = await res.json()
+          if (data.status === "completed") {
+            setCompleted(true)
+            updateOrder(order.id, { delivered: true, status: "Completed" })
             clearInterval(completionPollRef.current)
-            completionPollRef.current = null
           }
         }
       } catch {}
     }
 
     completionPollRef.current = setInterval(poll, 5000)
-    return () => { if (completionPollRef.current) { clearInterval(completionPollRef.current); completionPollRef.current = null } }
-  }, [step, deliveryMethod, delivered, otp, orderId])
+    return () => clearInterval(completionPollRef.current)
+  }, [order, deliveryOtp, completed])
 
-  const detectLocation = () => {
-    setLocLoading(true); setLocError(null); setLocBlocked(false)
-    if (!navigator.geolocation) { setLocLoading(false); setLocError("unsupported"); return }
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        setLocation({ lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6) })
-        setLocLoading(false)
-      },
-      err => {
-        setLocLoading(false)
-        if (err.code === 1) setLocBlocked(true)
-        setLocError(err.code === 1 ? "blocked" : "unavailable")
-      },
-      { timeout: 10000 }
-    )
-  }
+  // ── Socket listeners ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!order || order.deliveryMethod !== "rider") return
 
-  const handleApplyPromo = async () => {
-    if (!promoCode.trim()) return
-    setPromoLoading(true); setPromoError(""); setPromoApplied(null)
-    try {
-      const res  = await fetch(`${API_URL}/promos/validate`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: promoCode.trim().toUpperCase() }),
-      })
-      const data = await res.json()
-      if (data.valid) setPromoApplied(data.promo || data)
-      else setPromoError(data.message || "Invalid promo code.")
-    } catch { setPromoError("Could not validate code.") }
-    setPromoLoading(false)
-  }
-
-  const handlePay = async () => {
-    if (!payerName.trim())  { alert("Please enter your name."); return }
-    if (!payerPhone.trim()) { alert("Please enter your MoMo number."); return }
-    setSaving(true)
-
-    const ref = `MOMO-${orderId}`
-    const order = {
-      id: orderId, type: "buy", cart, total, subtotal, platformFee,
-      deliveryFee:   deliveryMethod === "rider" ? deliveryFee : 0,
-      discount,
-      promoCode:     promoApplied?.code || null,
-      location, manualLocation, landmark, extraInfo,
-      contactInfo, payerName, payerPhone,
-      deliveryMethod,
-      paymentMethod: "manual_momo",
-      paymentRef:    ref,
-      status:        "Pending Confirmation",
-      delivered:     null,
-      createdAt:     Date.now(),
-      expiresAt:     Date.now() + 48 * 60 * 60 * 1000,
-    }
-    saveOrder(order)
-
-    try {
-      const firstItem   = cart[0]
-      const listingId   = firstItem?._id && isMongoId(firstItem._id) ? firstItem._id : null
-      const rawSellerId = firstItem?.seller?._id || firstItem?.seller
-      const sellerId    = rawSellerId && isMongoId(String(rawSellerId)) ? String(rawSellerId) : null
-
-      if (listingId || sellerId) {
-        const res = await fetch(`${API_URL}/orders`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            listingId, sellerId,
-            localOrderId:  orderId,
-            type:          "product",
-            amount:        total,
-            paystackRef:   ref,
-            location:      location ? `${location.lat},${location.lng}` : manualLocation,
-            landmark, extraInfo, contactInfo, payerName, payerPhone,
-            promoCode:     promoApplied?.code || null,
-            discount, deliveryMethod,
-            paymentMethod: "manual_momo",
-          }),
-        })
-        const data = await res.json()
-        if (data.orderId || data._id)
-          updateOrder(orderId, { backendOrderId: data.orderId || data._id })
+    const otpHandler = (e) => {
+      const d = e.detail
+      if (d?.otp) {
+        setDeliveryOtp(d)
+        if (pollRef.current) clearInterval(pollRef.current)
       }
-    } catch (err) { console.warn("Backend save failed:", err.message) }
+    }
 
-    setSaving(false)
-    setPaymentRef(ref)
-    setStep(3)
-  }
+    const completedHandler = (e) => {
+      const d = e.detail
+      if (
+        d?.localOrderId === order.id ||
+        d?.orderId      === order.id
+      ) {
+        setCompleted(true)
+        updateOrder(order.id, { delivered: true, status: "Completed" })
+        if (completionPollRef.current) clearInterval(completionPollRef.current)
+      }
+    }
 
-  const handleConfirmDelivery = () => {
-    setDelivered(true)
-    updateOrder(orderId, { delivered: true, status: "Completed" })
-  }
+    window.addEventListener("silkroad_delivery_otp",    otpHandler)
+    window.addEventListener("silkroad_sale_completed",  completedHandler)
+    return () => {
+      window.removeEventListener("silkroad_delivery_otp",   otpHandler)
+      window.removeEventListener("silkroad_sale_completed", completedHandler)
+    }
+  }, [order])
 
-  const handleCancelDelivery = () => {
-    setDelivered(false)
-    updateOrder(orderId, { delivered: false, status: "Cancelled" })
-  }
-
-  const copyMomo = () => {
-    navigator.clipboard.writeText(SILK_ROAD_MOMO)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
-  }
-
-  const mapEmbedUrl = location
-    ? `https://www.google.com/maps?q=${location.lat},${location.lng}&z=17&output=embed`
-    : manualLocation
-      ? `https://www.google.com/maps?q=${encodeURIComponent(manualLocation + " " + landmark)}&output=embed`
-      : null
-
-  const inp = {
-    width: "100%", background: "#161616", border: "1px solid #1e1e1e",
-    color: "#fff", padding: "12px 16px", borderRadius: "10px",
-    fontSize: "14px", outline: "none", boxSizing: "border-box", fontFamily: "inherit",
-  }
+  const fmt          = (ts) => new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  const isRiderOrder = order?.deliveryMethod === "rider"
+  const isCompleted  = completed || order?.delivered === true
 
   return (
     <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-      <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "540px", maxHeight: "92vh", overflowY: "auto", border: "1px solid #1e1e1e" }}>
+      <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "480px", maxHeight: "92vh", overflowY: "auto", border: "1px solid #1e1e1e" }}>
 
-        {/* Header */}
         <div style={{ padding: "18px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: "18px", fontWeight: "700" }}>
-            {step === 0 ? "📍 Your Location" : step === 1 ? "✅ Confirm Order" : step === 2 ? "💳 Payment" : "📦 Track Order"}
-          </span>
-          {step < 3 && <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>}
+          <span style={{ fontSize: "17px", fontWeight: "700" }}>📦 Track Your Order</span>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>
         </div>
 
-        {/* Steps */}
-        <div style={{ padding: "12px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", gap: "4px" }}>
-          {STEPS.map((s, i) => (
-            <div key={s} style={{ flex: 1, textAlign: "center" }}>
-              <div style={{ width: "26px", height: "26px", borderRadius: "50%", margin: "0 auto 4px", background: step >= i ? "#c8a97e" : "#1a1a1a", border: `2px solid ${step >= i ? "#c8a97e" : "#222"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: "700", color: step >= i ? "#000" : "#444" }}>
-                {step > i ? "✓" : i + 1}
-              </div>
-              <div style={{ fontSize: "10px", color: step === i ? "#c8a97e" : "#444", fontWeight: step === i ? "700" : "400" }}>{s}</div>
-            </div>
-          ))}
-        </div>
+        <div style={{ padding: "22px", display: "flex", flexDirection: "column", gap: "16px" }}>
 
-        <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-
-          {/* ── STEP 0 — Location ── */}
-          {step === 0 && (
-            <>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button onClick={detectLocation}
-                  style={{ flex: 1, background: location ? "#064e3b" : "#161616", border: `1px solid ${location ? "#065f46" : "#1e1e1e"}`, color: location ? "#6ee7b7" : "#c8a97e", padding: "13px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit" }}>
-                  {locLoading ? "⏳ Detecting..." : location ? "✅ GPS Detected" : "📍 Auto-Detect GPS"}
-                </button>
-                <button onClick={() => { setLocation(null); setLocBlocked(true); setLocError(null) }}
-                  style={{ flex: 1, background: locBlocked ? "#1e3a5f" : "#161616", border: `1px solid ${locBlocked ? "#1d4ed8" : "#1e1e1e"}`, color: locBlocked ? "#93c5fd" : "#888", padding: "13px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit" }}>
-                  ✏️ Enter Manually
-                </button>
-              </div>
-
-              {locError && locError !== "blocked" && (
-                <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#fcd34d" }}>
-                  ⚠️ Could not get location. Enter manually below.
-                </div>
-              )}
-
-              {locBlocked && (
-                <>
-                  <div>
-                    <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR LOCATION</div>
-                    <textarea placeholder="e.g. Mensah Sarbah Hall, UG Legon" value={manualLocation} onChange={e => setManualLocation(e.target.value)} rows={3} style={{ ...inp, resize: "vertical" }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>NEAREST LANDMARK</div>
-                    <input placeholder="e.g. Opposite the main library" value={landmark} onChange={e => setLandmark(e.target.value)} style={inp} />
-                  </div>
-                </>
-              )}
-
-              {mapEmbedUrl && (
-                <div style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e" }}>
-                  <iframe src={mapEmbedUrl} width="100%" height="180" style={{ border: "none", display: "block" }} allowFullScreen loading="lazy" title="Location" />
-                </div>
-              )}
-
-              <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>DELIVERY METHOD</div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  {[["pickup", "📍 Pickup (Free)"], ["rider", `🛵 Rider (₵${deliveryFee})`]].map(([val, label]) => (
-                    <button key={val} onClick={() => setDeliveryMethod(val)}
-                      style={{ flex: 1, background: deliveryMethod === val ? "#c8a97e18" : "#161616", border: `1.5px solid ${deliveryMethod === val ? "#c8a97e" : "#1e1e1e"}`, color: deliveryMethod === val ? "#c8a97e" : "#888", padding: "12px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>EXTRA DETAILS FOR SELLER</div>
-                <textarea placeholder="e.g. Call when you arrive..." value={extraInfo} onChange={e => setExtraInfo(e.target.value)} rows={2} style={{ ...inp, resize: "none" }} />
-              </div>
-
-              <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR CONTACT (for seller)</div>
-                <input placeholder="Phone or Instagram the seller can reach you" value={contactInfo} onChange={e => setContactInfo(e.target.value)} style={inp} />
-              </div>
-
-              <button className="btn-gold" onClick={() => {
-                if (!location && !manualLocation.trim()) { setLocError("blocked"); setLocBlocked(true); return }
-                setLocError(null); setStep(1)
-              }} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>
-                Continue →
+          <div>
+            <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>ENTER YOUR ORDER ID</div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <input
+                placeholder="e.g. SR-M5X3K2-AB12"
+                value={input}
+                onChange={e => setInput(e.target.value.toUpperCase())}
+                onKeyDown={e => e.key === "Enter" && search()}
+                style={{ flex: 1, background: "#161616", border: "1px solid #1e1e1e", color: "#f0ede8", padding: "12px 16px", borderRadius: "10px", fontSize: "15px", fontFamily: "monospace", letterSpacing: ".04em", outline: "none" }}
+              />
+              <button onClick={search} disabled={searching}
+                style={{ background: "#c8a97e", border: "none", padding: "12px 20px", borderRadius: "10px", fontWeight: "700", cursor: searching ? "not-allowed" : "pointer", fontSize: "14px", fontFamily: "inherit", color: "#000", whiteSpace: "nowrap", opacity: searching ? 0.7 : 1 }}>
+                {searching ? "⏳" : "Track →"}
               </button>
-            </>
+            </div>
+            {searching && (
+              <div style={{ fontSize: "12px", color: "#555", marginTop: "8px", textAlign: "center" }}>
+                Looking up your order...
+              </div>
+            )}
+          </div>
+
+          {notFound && (
+            <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "14px 16px", fontSize: "13px", color: "#fca5a5" }}>
+              ⚠️ Order not found. Check the ID and try again. Make sure you're using the exact SR-XXXXX code from your receipt.
+            </div>
           )}
 
-          {/* ── STEP 1 — Confirm ── */}
-          {step === 1 && (
-            <>
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em" }}>ORDER SUMMARY</div>
-                {cart.map((item, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontSize: "13px", fontWeight: "600", color: "#f0ede8" }}>{item.title}</div>
-                      <div style={{ fontSize: "11px", color: "#555" }}>Qty: {item.qty}</div>
-                    </div>
-                    <div style={{ fontSize: "14px", fontWeight: "700", color: "#c8a97e" }}>₵{((item.price || item.dailyRate || 0) * item.qty).toLocaleString()}</div>
-                  </div>
-                ))}
+          {order && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+
+              <div style={{ background: isCompleted ? "#064e3b18" : "#1e3a5f18", border: `1px solid ${isCompleted ? "#065f46" : "#1d4ed8"}`, borderRadius: "14px", padding: "16px 18px" }}>
+                <div style={{ fontSize: "11px", color: isCompleted ? "#6ee7b7" : "#93c5fd", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "6px" }}>STATUS</div>
+                <div style={{ fontSize: "17px", fontWeight: "800", color: isCompleted ? "#6ee7b7" : "#93c5fd" }}>
+                  {isCompleted               ? "✅ Delivered & Complete"
+                  : order.delivered === false ? "❌ Cancelled / Refund Pending"
+                  : isRiderOrder             ? "🛵 Rider Delivery in Progress"
+                  :                            "⏳ Awaiting Delivery"}
+                </div>
               </div>
 
-              <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>PROMO CODE</div>
-                {promoApplied ? (
-                  <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "10px", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ background: "#161616", borderRadius: "14px", padding: "16px 18px", fontSize: "13px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "4px" }}>ORDER DETAILS</div>
+                <div>🏷️ ID: <span style={{ color: "#c8a97e", fontFamily: "monospace", fontWeight: "700" }}>{order.id}</span></div>
+                {order.total > 0 && <div>💰 Total: <span style={{ color: "#aaa" }}>₵{order.total?.toLocaleString()}</span></div>}
+                <div>🚚 Delivery: <span style={{ color: "#aaa" }}>{isRiderOrder ? "🛵 Rider" : "📍 Pickup"}</span></div>
+                {order.location
+                  ? <div>📍 GPS: <span style={{ color: "#aaa", fontFamily: "monospace", fontSize: "11px" }}>{typeof order.location === "object" ? `${order.location.lat}, ${order.location.lng}` : order.location}</span></div>
+                  : order.manualLocation ? <div>📍 <span style={{ color: "#aaa" }}>{order.manualLocation}</span></div> : null}
+                {order.landmark && <div>🗺️ <span style={{ color: "#aaa" }}>{order.landmark}</span></div>}
+                <div>📅 Placed: <span style={{ color: "#aaa" }}>{fmt(order.createdAt)}</span></div>
+                {order._fromBackend && (
+                  <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>ℹ️ Retrieved from server</div>
+                )}
+              </div>
+
+              {/* OTP section */}
+              {isRiderOrder && !isCompleted && order.delivered !== false && (
+                deliveryOtp ? (
+                  <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
+                    <div style={{ fontSize: "28px" }}>🚪</div>
                     <div>
-                      <div style={{ fontSize: "13px", fontWeight: "700", color: "#6ee7b7" }}>🎟️ {promoApplied.code}</div>
-                      <div style={{ fontSize: "12px", color: "#555" }}>Saving ₵{discount}</div>
+                      <div style={{ fontSize: "15px", fontWeight: "700", color: "#6ee7b7", marginBottom: "6px" }}>Your Package Has Arrived!</div>
+                      <div style={{ fontSize: "13px", color: "#888" }}>Read this 6-digit code to the rider to confirm delivery</div>
                     </div>
-                    <button onClick={() => { setPromoApplied(null); setPromoCode("") }} style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "18px", minHeight: "auto" }}>✕</button>
+                    <div style={{ fontSize: "52px", fontWeight: "900", color: "#c8a97e", fontFamily: "monospace", letterSpacing: ".2em", background: "#161616", borderRadius: "14px", padding: "20px 12px", border: "2px solid #c8a97e44" }}>
+                      {deliveryOtp.otp}
+                    </div>
+                    {deliveryOtp.expiresAt && (
+                      <div style={{ fontSize: "12px", color: "#555" }}>
+                        ⏰ Expires at {new Date(deliveryOtp.expiresAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    )}
+                    <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
+                      ⚠️ Only share this with the rider delivering your package.
+                    </div>
                   </div>
                 ) : (
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <input placeholder="Enter promo code" value={promoCode} onChange={e => setPromoCode(e.target.value.toUpperCase())}
-                      onKeyDown={e => e.key === "Enter" && handleApplyPromo()}
-                      style={{ ...inp, flex: 1, fontFamily: "monospace" }} />
-                    <button onClick={handleApplyPromo} disabled={promoLoading}
-                      style={{ background: "#c8a97e", border: "none", padding: "12px 18px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "13px", color: "#000", fontFamily: "inherit" }}>
-                      {promoLoading ? "..." : "Apply"}
-                    </button>
-                  </div>
-                )}
-                {promoError && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "6px" }}>⚠️ {promoError}</div>}
-              </div>
-
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}><span>Subtotal</span><span>₵{subtotal.toLocaleString()}</span></div>
-                {deliveryMethod === "rider" && promoApplied?.type !== "free_delivery" && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}><span>Rider delivery</span><span>₵{deliveryFee}</span></div>
-                )}
-                {discount > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#6ee7b7" }}><span>🎟️ Discount</span><span>−₵{discount}</span></div>
-                )}
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "19px", fontWeight: "800", color: "#c8a97e", borderTop: "1px solid #222", paddingTop: "10px" }}>
-                  <span>Total</span>
-                  <span>₵{total.toLocaleString()} <span style={{ fontSize: "12px", color: "#333", fontWeight: "400" }}>(${(total / (rate || 1)).toFixed(2)})</span></span>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button className="btn-ghost" onClick={() => setStep(0)} style={{ flex: 1, padding: "13px", borderRadius: "12px" }}>← Back</button>
-                <button className="btn-gold" onClick={() => setStep(2)} style={{ flex: 2, padding: "13px", borderRadius: "12px", fontSize: "15px" }}>Proceed to Payment →</button>
-              </div>
-            </>
-          )}
-
-          {/* ── STEP 2 — Payment ── */}
-          {step === 2 && (
-            <>
-              <div style={{ background: "#ffd700", borderRadius: "14px", padding: "20px", textAlign: "center" }}>
-                <div style={{ fontSize: "13px", fontWeight: "600", color: "#554400", marginBottom: "6px" }}>SEND THIS EXACT AMOUNT VIA MTN MOMO</div>
-                <div style={{ fontSize: "40px", fontWeight: "900", color: "#1a1a00" }}>₵{total.toLocaleString()}</div>
-              </div>
-
-              <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#fcd34d", display: "flex", flexDirection: "column", gap: "6px" }}>
-                <div style={{ fontWeight: "700", fontSize: "14px" }}>⚠️ How to pay:</div>
-                <div>1. Dial <strong>*170#</strong> → Send Money → MoMo User</div>
-                <div>2. Enter number: <strong style={{ fontSize: "15px" }}>{SILK_ROAD_MOMO}</strong> ({SILK_ROAD_NAME})</div>
-                <div>3. Amount: <strong>₵{total}</strong></div>
-                <div>4. Reference: <strong style={{ fontFamily: "monospace" }}>{orderId}</strong></div>
-                <div>5. Enter your name and number below, then confirm</div>
-              </div>
-
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", letterSpacing: ".04em" }}>{SILK_ROAD_MOMO}</div>
-                  <div style={{ fontSize: "12px", color: "#555", marginTop: "3px" }}>{SILK_ROAD_NAME}</div>
-                </div>
-                <button onClick={copyMomo}
-                  style={{ background: copied ? "#064e3b" : "#1a1a1a", border: `1px solid ${copied ? "#065f46" : "#222"}`, color: copied ? "#6ee7b7" : "#c8a97e", padding: "8px 14px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit" }}>
-                  {copied ? "✅ Copied!" : "📋 Copy"}
-                </button>
-              </div>
-
-              <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR NAME (as paid on MoMo)</div>
-                <input placeholder="Full name" value={payerName} onChange={e => setPayerName(e.target.value)} style={inp} />
-              </div>
-              <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR MOMO NUMBER</div>
-                <input placeholder="e.g. 0241234567" value={payerPhone} onChange={e => setPayerPhone(e.target.value)} style={inp} />
-              </div>
-
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button className="btn-ghost" onClick={() => setStep(1)} style={{ flex: 1, padding: "13px", borderRadius: "12px" }}>← Back</button>
-                <button onClick={handlePay} disabled={saving}
-                  style={{ flex: 2, background: "#c8a97e", border: "none", padding: "13px", borderRadius: "12px", fontWeight: "700", cursor: saving ? "not-allowed" : "pointer", fontSize: "15px", color: "#000", opacity: saving ? 0.7 : 1, fontFamily: "inherit" }}>
-                  {saving ? "⏳ Saving..." : "✅ I've Sent the Money"}
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* ── STEP 3 — Track ── */}
-          {step === 3 && (
-            <>
-              {/* ── WAITING / OTP state ── */}
-              {delivered === null && (
-                <>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: "56px", marginBottom: "10px" }}>✅</div>
-                    <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", marginBottom: "8px" }}>Payment Submitted!</h3>
-                    <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.7" }}>
-                      Your order is with the seller.{" "}
-                      {deliveryMethod === "rider"
-                        ? "When the rider delivers your package, a 6-digit OTP will appear below. Read it to the rider to complete delivery."
-                        : "Contact the seller to arrange pickup."}
-                    </p>
-                  </div>
-
-                  <OrderIdBanner orderId={orderId} />
-
-                  <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", fontSize: "13px", color: "#666", display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {cart.length > 0 && <div>📦 <span style={{ color: "#c8a97e", fontWeight: "700" }}>{cart.map(i => i.title).join(", ")}</span></div>}
-                    <div>💰 Total: <span style={{ color: "#aaa" }}>₵{total.toLocaleString()}</span></div>
-                    {location ? <div>📍 GPS: <span style={{ color: "#aaa" }}>{location.lat}, {location.lng}</span></div>
-                      : manualLocation ? <div>📍 <span style={{ color: "#aaa" }}>{manualLocation}</span></div> : null}
-                    {landmark  && <div>🗺️ {landmark}</div>}
-                    <div>🚚 <span style={{ color: "#aaa" }}>{deliveryMethod === "rider" ? "Rider delivery" : "Campus pickup"}</span></div>
-                    {paymentRef && <div style={{ fontSize: "10px", color: "#444", fontFamily: "monospace", marginTop: "4px" }}>Ref: {paymentRef}</div>}
-                  </div>
-
-                  {/* ── RIDER — OTP section ── */}
-                  {deliveryMethod === "rider" && (
-                    otp ? (
-                      <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "24px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
-                        <div style={{ fontSize: "28px" }}>🚪</div>
-                        <div>
-                          <div style={{ fontSize: "16px", fontWeight: "700", color: "#6ee7b7", marginBottom: "6px" }}>Your Package Has Arrived!</div>
-                          <div style={{ fontSize: "13px", color: "#888" }}>Read this code to the rider to confirm delivery</div>
-                        </div>
-                        <div style={{ fontSize: "56px", fontWeight: "900", color: "#c8a97e", fontFamily: "monospace", letterSpacing: ".2em", background: "#161616", borderRadius: "14px", padding: "20px 12px", border: "2px solid #c8a97e44" }}>
-                          {otp}
-                        </div>
-                        {otpExpiry && (
-                          <div style={{ fontSize: "12px", color: "#555" }}>
-                            ⏰ Expires at {new Date(otpExpiry).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                          </div>
-                        )}
-                        <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
-                          ⚠️ Read this code to the rider. Once they enter it, your delivery confirms automatically.
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#c8a97e", flexShrink: 0 }} />
-                          <div style={{ fontSize: "13px", color: "#888" }}>Waiting for rider to deliver your package...</div>
-                        </div>
-                        <div style={{ fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
-                          Keep this screen open. When the rider arrives and marks your package delivered, a 6-digit OTP will appear here automatically.
-                        </div>
-                      </div>
-                    )
-                  )}
-
-                  {/* Pickup confirm */}
-                  {deliveryMethod !== "rider" && (
-                    <>
-                      <button onClick={handleConfirmDelivery}
-                        style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "15px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "15px", fontFamily: "inherit" }}>
-                        ✅ I've Received My Order — Release Payment
-                      </button>
-                      <button onClick={handleCancelDelivery}
-                        style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "13px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-                        ❌ Cancel — Refund Me
-                      </button>
-                    </>
-                  )}
-
-                  {/* Cancel for rider before OTP arrives */}
-                  {deliveryMethod === "rider" && !otp && (
-                    <button onClick={handleCancelDelivery}
-                      style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "13px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-                      ❌ Cancel Order — Refund Me
-                    </button>
-                  )}
-
-                  {mapEmbedUrl && (
-                    <div style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e" }}>
-                      <iframe src={mapEmbedUrl} width="100%" height="160" style={{ border: "none", display: "block" }} allowFullScreen loading="lazy" title="Location" />
+                  <div style={{ background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#c8a97e", flexShrink: 0 }} />
+                      <div style={{ fontSize: "13px", color: "#888" }}>Waiting for rider to deliver...</div>
                     </div>
-                  )}
-                </>
-              )}
-
-              {/* ── BUYER SUCCESS — auto-triggered by completed: socket event ── */}
-              {delivered === true && (
-                <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <div style={{ fontSize: "72px" }}>🎉</div>
-                  <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#6ee7b7" }}>Delivery Complete!</h3>
-                  <p style={{ color: "#888", fontSize: "14px", lineHeight: "1.7" }}>
-                    Your order has been delivered and confirmed. Payment has been released to the seller.
-                  </p>
-                  <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px", color: "#6ee7b7" }}>
-                    <div>✅ Delivery confirmed via OTP</div>
-                    <div>💰 Payment of ₵{total.toLocaleString()} released to seller</div>
-                    {cart.length > 0 && <div>📦 {cart.map(i => i.title).join(", ")}</div>}
+                    <div style={{ fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
+                      When the rider arrives and marks your package delivered, a 6-digit OTP will appear here automatically.
+                    </div>
                   </div>
-                  <button className="btn-gold" onClick={onClose} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>
-                    Back to Marketplace
-                  </button>
+                )
+              )}
+
+              {!isCompleted && order.delivered !== false && (
+                <button onClick={() => { onOpenOrder(order); onClose() }}
+                  style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "14px", borderRadius: "12px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
+                  📂 Open Full Order View
+                </button>
+              )}
+
+              {isCompleted && (
+                <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "20px", textAlign: "center", display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ fontSize: "40px" }}>🎉</div>
+                  <div style={{ fontSize: "16px", fontWeight: "800", color: "#6ee7b7" }}>Order Complete!</div>
+                  <div style={{ fontSize: "13px", color: "#888" }}>Payment has been released to the seller.</div>
                 </div>
               )}
 
-              {/* ── CANCELLED ── */}
-              {delivered === false && (
-                <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <div style={{ fontSize: "56px" }}>💸</div>
-                  <h3 style={{ fontSize: "22px", fontWeight: "700", color: "#fca5a5" }}>Order Cancelled</h3>
-                  <p style={{ color: "#888", fontSize: "14px" }}>Your refund of ₵{total.toLocaleString()} will be processed within 24 hours.</p>
-                  <button className="btn-gold" onClick={onClose} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>Back to Marketplace</button>
+              {order.delivered === false && (
+                <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#fca5a5", textAlign: "center" }}>
+                  Your refund of ₵{order.total?.toLocaleString()} is being processed.
                 </div>
               )}
-            </>
+
+            </div>
           )}
-
         </div>
       </div>
     </div>
