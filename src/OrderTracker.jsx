@@ -94,13 +94,11 @@ export function connectSellerSocket(sellerId) {
   if (!sellerId) return
   const id = String(sellerId)
 
-  // Already connected as this seller — just re-register
   if (socketInstance?.connected && registeredId === id) {
     socketInstance.emit("register_seller", id)
     return
   }
 
-  // Connected as a different seller — disconnect first
   if (socketInstance) {
     socketInstance.disconnect()
     socketInstance = null
@@ -116,7 +114,6 @@ export function connectSellerSocket(sellerId) {
       transports:           ["websocket", "polling"],
     })
 
-    // Re-register on EVERY connect and reconnect — this is the cross-device fix
     s.on("connect", () => {
       console.log(`🔌 Socket connected: ${s.id} — registering seller ${id}`)
       s.emit("register_seller", id)
@@ -137,7 +134,6 @@ export function connectSellerSocket(sellerId) {
       if (reason === "io server disconnect") s.connect()
     })
 
-    // ── New order ─────────────────────────────────────────────────────────────
     s.on("new_order", (data) => {
       const notif = {
         id:             data.orderId || `notif-${Date.now()}`,
@@ -169,38 +165,21 @@ export function connectSellerSocket(sellerId) {
       })
     })
 
-    // ── Delivery status events ────────────────────────────────────────────────
     s.on("delivery_accepted", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({
-        type: "delivery", title: "✅ Rider Accepted!",
-        message: d.message || "A rider accepted your delivery job.",
-        persistent: false,
-      })
+      fireToast({ type: "delivery", title: "✅ Rider Accepted!", message: d.message || "A rider accepted your delivery job.", persistent: false })
     })
 
     s.on("delivery_picked_up", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({
-        type: "delivery", title: "📦 Package Picked Up",
-        message: d.message || "Rider picked up the package.",
-        persistent: false,
-      })
+      fireToast({ type: "delivery", title: "📦 Package Picked Up", message: d.message || "Rider picked up the package.", persistent: false })
     })
 
-    // delivery_at_door — persistent toast, stays until seller dismisses
-    // OTP is NOT included here — security, buyer-only
     s.on("delivery_at_door", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({
-        type: "otp", title: "🚪 Package at Door!",
-        message: "Package delivered. Waiting for buyer OTP confirmation.",
-        persistent: true,
-      })
+      fireToast({ type: "otp", title: "🚪 Package at Door!", message: "Package delivered. Waiting for buyer OTP confirmation.", persistent: true })
     })
 
-    // ── Sale completed — seller's payment released ────────────────────────────
-    // This fires when rider confirms OTP on any device
     s.on("sale_completed", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_sale_completed", { detail: d }))
       fireToast({
@@ -212,23 +191,14 @@ export function connectSellerSocket(sellerId) {
 
     s.on("delivery_completed", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({
-        type: "success", title: "✅ Delivery Confirmed!",
-        message: d.message || "OTP confirmed. Payment released.",
-        persistent: false,
-      })
+      fireToast({ type: "success", title: "✅ Delivery Confirmed!", message: d.message || "OTP confirmed. Payment released.", persistent: false })
     })
 
     s.on("delivery_cancelled_by_rider", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({
-        type: "warning", title: "⚠ Rider Cancelled",
-        message: d.message || "Rider cancelled. Job is back on the board.",
-        persistent: false,
-      })
+      fireToast({ type: "warning", title: "⚠️ Rider Cancelled", message: d.message || "Rider cancelled. Job is back on the board.", persistent: false })
     })
 
-    // Direct OTP push to buyer via order-specific channel
     s.on("delivery_otp", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
     })
@@ -245,7 +215,7 @@ export function disconnectSocket() {
   }
 }
 
-// ── Toast container — mount once in App.jsx ───────────────────────────────────
+// ── Toast container ───────────────────────────────────────────────────────────
 export function ToastContainer() {
   const [toasts, setToasts] = useState([])
 
@@ -254,7 +224,6 @@ export function ToastContainer() {
     return () => toastListeners.delete(setToasts)
   }, [])
 
-  // Auto-dismiss non-persistent toasts after 5s
   useEffect(() => {
     const nonPersistent = toasts.filter(t => !t.persistent)
     if (nonPersistent.length === 0) return
@@ -362,22 +331,105 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
   const [input, setInput]             = useState("")
   const [order, setOrder]             = useState(null)
   const [notFound, setNotFound]       = useState(false)
+  const [searching, setSearching]     = useState(false)
   const [deliveryOtp, setDeliveryOtp] = useState(null)
   const [completed, setCompleted]     = useState(false)
   const pollRef                       = useRef(null)
+  const completionPollRef             = useRef(null)
 
-  const search = () => {
+  // ── Search — localStorage first, then backend fallback ───────────────────
+  // This is the incognito fix. When localStorage is wiped (tab close in
+  // incognito, private browsing, etc.), we look up the order from MongoDB
+  // using the localOrderId. We also check the delivery status so the buyer
+  // can still see their OTP if the rider has already delivered.
+  const search = async () => {
     const id = input.trim().toUpperCase()
     if (!id) return
-    const found = getOrder(id)
-    if (found) { setOrder(found); setNotFound(false); setDeliveryOtp(null); setCompleted(false) }
-    else        { setOrder(null);  setNotFound(true) }
+
+    setSearching(true)
+    setNotFound(false)
+    setDeliveryOtp(null)
+    setCompleted(false)
+
+    // 1. Try localStorage first (fast path, works when tab is still alive)
+    const local = getOrder(id)
+    if (local) {
+      setOrder(local)
+      setSearching(false)
+      return
+    }
+
+    // 2. Fallback to backend — query order + delivery by localOrderId
+    try {
+      // Check the order in MongoDB
+      const orderRes  = await fetch(`${API_URL}/orders/by-local-id/${encodeURIComponent(id)}`)
+      const orderData = await res.ok ? await orderRes.json() : null
+
+      // Check delivery status (for OTP and completion)
+      const deliveryRes  = await fetch(`${API_URL}/deliveries/by-order/${encodeURIComponent(id)}`)
+      const deliveryData = await deliveryRes.json()
+
+      if (!orderData && !deliveryData?.delivery) {
+        setOrder(null)
+        setNotFound(true)
+        setSearching(false)
+        return
+      }
+
+      // Rebuild a minimal order object from backend data
+      const o = orderData || {}
+      const d = deliveryData?.delivery || {}
+
+      const rebuilt = {
+        id:             id,
+        total:          o.amount        || 0,
+        subtotal:       o.amount        || 0,
+        deliveryMethod: o.deliveryMethod || d.status ? "rider" : "pickup",
+        location:       o.location      || null,
+        manualLocation: o.location      || null,
+        landmark:       o.landmark      || null,
+        paymentRef:     o.paystackRef   || null,
+        status:         o.status        || "Pending Confirmation",
+        delivered:      o.status === "Completed" ? true
+                      : o.status === "Refunded"  ? false
+                      : null,
+        createdAt:      o.createdAt ? new Date(o.createdAt).getTime() : Date.now(),
+        cart:           [],
+        // Store delivery info for OTP display
+        _deliveryId:    d._id           || null,
+        _deliveryStatus: d.status       || null,
+        _fromBackend:   true,
+      }
+
+      // Save to localStorage so subsequent searches are instant
+      saveOrder(rebuilt)
+      setOrder(rebuilt)
+
+      // If delivery is already in "delivered" state, fetch OTP immediately
+      if (d.status === "delivered" && d._id) {
+        const otpRes  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(id)}`)
+        const otpData = await otpRes.json()
+        if (otpData.otp) setDeliveryOtp(otpData)
+      }
+
+      // If already completed
+      if (d.status === "completed" || o.status === "Completed") {
+        setCompleted(true)
+      }
+
+    } catch (err) {
+      console.warn("Backend order lookup failed:", err.message)
+      setOrder(null)
+      setNotFound(true)
+    }
+
+    setSearching(false)
   }
 
-  // Poll for OTP when viewing a rider order
+  // ── OTP poll ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current)
-    if (!order || order.deliveryMethod !== "rider" || order.delivered !== null) return
+    if (!order || order.deliveryMethod !== "rider" || order.delivered !== null || completed) return
 
     const poll = async () => {
       try {
@@ -393,13 +445,14 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
     poll()
     pollRef.current = setInterval(poll, 5000)
     return () => clearInterval(pollRef.current)
-  }, [order])
+  }, [order, completed])
 
-  // Poll for completion after OTP shown
+  // ── Completion poll — after OTP shown ────────────────────────────────────
   useEffect(() => {
+    if (completionPollRef.current) clearInterval(completionPollRef.current)
     if (!order || order.deliveryMethod !== "rider" || !deliveryOtp || completed) return
 
-    const completionPoll = setInterval(async () => {
+    const poll = async () => {
       try {
         if (deliveryOtp.deliveryId) {
           const res  = await fetch(`${API_URL}/deliveries/${deliveryOtp.deliveryId}`)
@@ -407,18 +460,20 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
           if (data.status === "completed") {
             setCompleted(true)
             updateOrder(order.id, { delivered: true, status: "Completed" })
-            clearInterval(completionPoll)
+            clearInterval(completionPollRef.current)
           }
         }
       } catch {}
-    }, 5000)
+    }
 
-    return () => clearInterval(completionPoll)
+    completionPollRef.current = setInterval(poll, 5000)
+    return () => clearInterval(completionPollRef.current)
   }, [order, deliveryOtp, completed])
 
-  // Socket listener for instant OTP
+  // ── Socket listeners ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!order || order.deliveryMethod !== "rider") return
+
     const otpHandler = (e) => {
       const d = e.detail
       if (d?.otp) {
@@ -426,28 +481,28 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
         if (pollRef.current) clearInterval(pollRef.current)
       }
     }
-    window.addEventListener("silkroad_delivery_otp", otpHandler)
-    return () => window.removeEventListener("silkroad_delivery_otp", otpHandler)
-  }, [order])
 
-  // Socket listener for instant completion
-  useEffect(() => {
-    if (!order || order.deliveryMethod !== "rider") return
-    const completedHandler = () => {
-      setCompleted(true)
-      updateOrder(order.id, { delivered: true, status: "Completed" })
-    }
-    // Listen for the order-specific completed event via window
-    const handler = (e) => {
-      if (e.detail?.localOrderId === order.id || e.detail?.orderId === order.id) {
-        completedHandler()
+    const completedHandler = (e) => {
+      const d = e.detail
+      if (
+        d?.localOrderId === order.id ||
+        d?.orderId      === order.id
+      ) {
+        setCompleted(true)
+        updateOrder(order.id, { delivered: true, status: "Completed" })
+        if (completionPollRef.current) clearInterval(completionPollRef.current)
       }
     }
-    window.addEventListener("silkroad_sale_completed", handler)
-    return () => window.removeEventListener("silkroad_sale_completed", handler)
+
+    window.addEventListener("silkroad_delivery_otp",    otpHandler)
+    window.addEventListener("silkroad_sale_completed",  completedHandler)
+    return () => {
+      window.removeEventListener("silkroad_delivery_otp",   otpHandler)
+      window.removeEventListener("silkroad_sale_completed", completedHandler)
+    }
   }, [order])
 
-  const fmt = (ts) => new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  const fmt          = (ts) => new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
   const isRiderOrder = order?.deliveryMethod === "rider"
   const isCompleted  = completed || order?.delivered === true
 
@@ -472,16 +527,21 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                 onKeyDown={e => e.key === "Enter" && search()}
                 style={{ flex: 1, background: "#161616", border: "1px solid #1e1e1e", color: "#f0ede8", padding: "12px 16px", borderRadius: "10px", fontSize: "15px", fontFamily: "monospace", letterSpacing: ".04em", outline: "none" }}
               />
-              <button onClick={search}
-                style={{ background: "#c8a97e", border: "none", padding: "12px 20px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", color: "#000", whiteSpace: "nowrap" }}>
-                Track →
+              <button onClick={search} disabled={searching}
+                style={{ background: "#c8a97e", border: "none", padding: "12px 20px", borderRadius: "10px", fontWeight: "700", cursor: searching ? "not-allowed" : "pointer", fontSize: "14px", fontFamily: "inherit", color: "#000", whiteSpace: "nowrap", opacity: searching ? 0.7 : 1 }}>
+                {searching ? "⏳" : "Track →"}
               </button>
             </div>
+            {searching && (
+              <div style={{ fontSize: "12px", color: "#555", marginTop: "8px", textAlign: "center" }}>
+                Looking up your order...
+              </div>
+            )}
           </div>
 
           {notFound && (
             <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "14px 16px", fontSize: "13px", color: "#fca5a5" }}>
-              ⚠️ Order not found. Check the ID and try again.
+              ⚠️ Order not found. Check the ID and try again. Make sure you're using the exact SR-XXXXX code from your receipt.
             </div>
           )}
 
@@ -491,7 +551,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
               <div style={{ background: isCompleted ? "#064e3b18" : "#1e3a5f18", border: `1px solid ${isCompleted ? "#065f46" : "#1d4ed8"}`, borderRadius: "14px", padding: "16px 18px" }}>
                 <div style={{ fontSize: "11px", color: isCompleted ? "#6ee7b7" : "#93c5fd", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "6px" }}>STATUS</div>
                 <div style={{ fontSize: "17px", fontWeight: "800", color: isCompleted ? "#6ee7b7" : "#93c5fd" }}>
-                  {isCompleted              ? "✅ Delivered & Complete"
+                  {isCompleted               ? "✅ Delivered & Complete"
                   : order.delivered === false ? "❌ Cancelled / Refund Pending"
                   : isRiderOrder             ? "🛵 Rider Delivery in Progress"
                   :                            "⏳ Awaiting Delivery"}
@@ -501,16 +561,19 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
               <div style={{ background: "#161616", borderRadius: "14px", padding: "16px 18px", fontSize: "13px", display: "flex", flexDirection: "column", gap: "8px" }}>
                 <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "4px" }}>ORDER DETAILS</div>
                 <div>🏷️ ID: <span style={{ color: "#c8a97e", fontFamily: "monospace", fontWeight: "700" }}>{order.id}</span></div>
-                <div>💰 Total: <span style={{ color: "#aaa" }}>₵{order.total?.toLocaleString()}</span></div>
-                <div>🚚 Delivery: <span style={{ color: "#aaa" }}>{order.deliveryMethod === "rider" ? "🛵 Rider" : "📍 Pickup"}</span></div>
+                {order.total > 0 && <div>💰 Total: <span style={{ color: "#aaa" }}>₵{order.total?.toLocaleString()}</span></div>}
+                <div>🚚 Delivery: <span style={{ color: "#aaa" }}>{isRiderOrder ? "🛵 Rider" : "📍 Pickup"}</span></div>
                 {order.location
                   ? <div>📍 GPS: <span style={{ color: "#aaa", fontFamily: "monospace", fontSize: "11px" }}>{typeof order.location === "object" ? `${order.location.lat}, ${order.location.lng}` : order.location}</span></div>
                   : order.manualLocation ? <div>📍 <span style={{ color: "#aaa" }}>{order.manualLocation}</span></div> : null}
                 {order.landmark && <div>🗺️ <span style={{ color: "#aaa" }}>{order.landmark}</span></div>}
                 <div>📅 Placed: <span style={{ color: "#aaa" }}>{fmt(order.createdAt)}</span></div>
+                {order._fromBackend && (
+                  <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>ℹ️ Retrieved from server</div>
+                )}
               </div>
 
-              {/* OTP section — rider orders only, before completion */}
+              {/* OTP section */}
               {isRiderOrder && !isCompleted && order.delivered !== false && (
                 deliveryOtp ? (
                   <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
@@ -528,7 +591,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                       </div>
                     )}
                     <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
-                      ⚠️ Only share this with the rider delivering your package. Once they enter it, your delivery completes automatically.
+                      ⚠️ Only share this with the rider delivering your package.
                     </div>
                   </div>
                 ) : (
@@ -544,7 +607,6 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                 )
               )}
 
-              {/* Open full order view */}
               {!isCompleted && order.delivered !== false && (
                 <button onClick={() => { onOpenOrder(order); onClose() }}
                   style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "14px", borderRadius: "12px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
@@ -552,7 +614,6 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                 </button>
               )}
 
-              {/* Completion state */}
               {isCompleted && (
                 <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "20px", textAlign: "center", display: "flex", flexDirection: "column", gap: "10px" }}>
                   <div style={{ fontSize: "40px" }}>🎉</div>
@@ -566,6 +627,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                   Your refund of ₵{order.total?.toLocaleString()} is being processed.
                 </div>
               )}
+
             </div>
           )}
         </div>
