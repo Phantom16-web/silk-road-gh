@@ -599,4 +599,6 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
               {!isCompleted && order.delivered !== false && (
                 <button onClick={() => { onOpenOrder(order); onClose() }}
                   style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "14px", borderRadius: "12px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-                  📂
+                  {"📂"} Open Full Order View
+                </button>
+              )}
