@@ -183,8 +183,9 @@ export function connectSellerSocket(sellerId) {
     s.on("sale_completed", (d) => {
       window.dispatchEvent(new CustomEvent("silkroad_sale_completed", { detail: d }))
       fireToast({
-        type: "success", title: "🎉 Sale Complete!",
-        message: `₵${(d.sellerAmount || d.orderAmount || 0).toLocaleString()} added to your earnings.`,
+        type:      "success",
+        title:     "🎉 Sale Complete!",
+        message:   `₵${(d.sellerAmount || d.orderAmount || 0).toLocaleString()} added to your earnings.`,
         persistent: false,
       })
     })
@@ -261,7 +262,9 @@ export function ToastContainer() {
               </div>
             </div>
             <button onClick={() => dismissToast(toast.id)}
-              style={{ background: "transparent", border: "none", color: "#aaa", cursor: "pointer", fontSize: "18px", minHeight: "auto", padding: "0", flexShrink: 0, lineHeight: 1, fontWeight: "700" }}>✕</button>
+              style={{ background: "transparent", border: "none", color: "#aaa", cursor: "pointer", fontSize: "18px", minHeight: "auto", padding: "0", flexShrink: 0, lineHeight: 1, fontWeight: "700" }}>
+              {"✕"}
+            </button>
           </div>
         )
       })}
@@ -294,7 +297,7 @@ export function NotificationBell({ sellerId, onClick }) {
   return (
     <button onClick={onClick}
       style={{ position: "relative", background: "transparent", border: "none", color: "#aaa", fontSize: "22px", cursor: "pointer", padding: "4px" }}>
-      🔔
+      {"🔔"}
       {count > 0 && (
         <span style={{ position: "absolute", top: "-2px", right: "-2px", background: "#c8a97e", color: "#000", fontSize: "9px", fontWeight: "800", borderRadius: "50%", width: "16px", height: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {count > 9 ? "9+" : count}
@@ -337,7 +340,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
   const pollRef                       = useRef(null)
   const completionPollRef             = useRef(null)
 
-  // ── Search — localStorage first, then backend fallback ───────────────────
+  // ── Search — localStorage first, backend fallback for incognito ───────────
   const search = async () => {
     const id = input.trim().toUpperCase()
     if (!id) return
@@ -348,7 +351,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
     setDeliveryOtp(null)
     setCompleted(false)
 
-    // 1. Try localStorage first (fast, works while tab is alive)
+    // 1. localStorage fast path
     const local = getOrder(id)
     if (local) {
       setOrder(local)
@@ -356,13 +359,11 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
       return
     }
 
-    // 2. Backend fallback — for incognito / tab closed / localStorage cleared
+    // 2. Backend fallback — incognito / tab closed / storage cleared
     try {
-      // Fetch order from MongoDB by localOrderId
-      const orderRes  = await fetch(`${API_URL}/orders/by-local-id/${encodeURIComponent(id)}`)
-      const orderData = orderRes.ok ? await orderRes.json() : null
+      const orderRes   = await fetch(`${API_URL}/orders/by-local-id/${encodeURIComponent(id)}`)
+      const orderData  = orderRes.ok ? await orderRes.json() : null
 
-      // Fetch delivery status
       const deliveryRes  = await fetch(`${API_URL}/deliveries/by-order/${encodeURIComponent(id)}`)
       const deliveryData = deliveryRes.ok ? await deliveryRes.json() : null
       const delivery     = deliveryData?.delivery || null
@@ -373,17 +374,16 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
         return
       }
 
-      // Rebuild order object from backend data
       const rebuilt = {
-        id:             id,
-        total:          orderData?.amount        || 0,
-        subtotal:       orderData?.amount        || 0,
+        id,
+        total:          orderData?.amount         || 0,
+        subtotal:       orderData?.amount         || 0,
         deliveryMethod: orderData?.deliveryMethod || (delivery ? "rider" : "pickup"),
-        location:       orderData?.location      || null,
-        manualLocation: orderData?.location      || null,
-        landmark:       orderData?.landmark      || null,
-        paymentRef:     orderData?.paystackRef   || null,
-        status:         orderData?.status        || "Pending Confirmation",
+        location:       orderData?.location       || null,
+        manualLocation: orderData?.location       || null,
+        landmark:       orderData?.landmark       || null,
+        paymentRef:     orderData?.paystackRef    || null,
+        status:         orderData?.status         || "Pending Confirmation",
         delivered:      orderData?.status === "Completed" ? true
                       : orderData?.status === "Refunded"  ? false
                       : null,
@@ -394,11 +394,10 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
         _fromBackend:   true,
       }
 
-      // Save to localStorage for this session
       saveOrder(rebuilt)
       setOrder(rebuilt)
 
-      // If delivery already has OTP waiting, fetch it
+      // If rider already delivered, fetch OTP
       if (delivery?.status === "delivered") {
         const otpRes  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(id)}`)
         const otpData = otpRes.ok ? await otpRes.json() : null
@@ -500,8 +499,8 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
       <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "480px", maxHeight: "92vh", overflowY: "auto", border: "1px solid #1e1e1e" }}>
 
         <div style={{ padding: "18px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: "17px", fontWeight: "700" }}>📦 Track Your Order</span>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>
+          <span style={{ fontSize: "17px", fontWeight: "700" }}>{"📦"} Track Your Order</span>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>{"✕"}</button>
         </div>
 
         <div style={{ padding: "22px", display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -530,7 +529,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
 
           {notFound && (
             <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "14px 16px", fontSize: "13px", color: "#fca5a5" }}>
-              ⚠️ Order not found. Check the ID and try again. Make sure you're using the exact SR-XXXXX code from your receipt.
+              {"⚠️"} Order not found. Check the ID and try again. Make sure you have the exact SR-XXXXX code from your receipt.
             </div>
           )}
 
@@ -549,16 +548,16 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
 
               <div style={{ background: "#161616", borderRadius: "14px", padding: "16px 18px", fontSize: "13px", display: "flex", flexDirection: "column", gap: "8px" }}>
                 <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "4px" }}>ORDER DETAILS</div>
-                <div>🏷️ ID: <span style={{ color: "#c8a97e", fontFamily: "monospace", fontWeight: "700" }}>{order.id}</span></div>
-                {order.total > 0 && <div>💰 Total: <span style={{ color: "#aaa" }}>₵{order.total?.toLocaleString()}</span></div>}
-                <div>🚚 Delivery: <span style={{ color: "#aaa" }}>{isRiderOrder ? "🛵 Rider" : "📍 Pickup"}</span></div>
+                <div>{"🏷️"} ID: <span style={{ color: "#c8a97e", fontFamily: "monospace", fontWeight: "700" }}>{order.id}</span></div>
+                {order.total > 0 && <div>{"💰"} Total: <span style={{ color: "#aaa" }}>{"₵"}{order.total?.toLocaleString()}</span></div>}
+                <div>{"🚚"} Delivery: <span style={{ color: "#aaa" }}>{isRiderOrder ? "🛵 Rider" : "📍 Pickup"}</span></div>
                 {order.location
-                  ? <div>📍 GPS: <span style={{ color: "#aaa", fontFamily: "monospace", fontSize: "11px" }}>{typeof order.location === "object" ? `${order.location.lat}, ${order.location.lng}` : order.location}</span></div>
-                  : order.manualLocation ? <div>📍 <span style={{ color: "#aaa" }}>{order.manualLocation}</span></div> : null}
-                {order.landmark && <div>🗺️ <span style={{ color: "#aaa" }}>{order.landmark}</span></div>}
-                <div>📅 Placed: <span style={{ color: "#aaa" }}>{fmt(order.createdAt)}</span></div>
+                  ? <div>{"📍"} GPS: <span style={{ color: "#aaa", fontFamily: "monospace", fontSize: "11px" }}>{typeof order.location === "object" ? `${order.location.lat}, ${order.location.lng}` : order.location}</span></div>
+                  : order.manualLocation ? <div>{"📍"} <span style={{ color: "#aaa" }}>{order.manualLocation}</span></div> : null}
+                {order.landmark && <div>{"🗺️"} <span style={{ color: "#aaa" }}>{order.landmark}</span></div>}
+                <div>{"📅"} Placed: <span style={{ color: "#aaa" }}>{fmt(order.createdAt)}</span></div>
                 {order._fromBackend && (
-                  <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>ℹ️ Retrieved from server</div>
+                  <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>{"ℹ️"} Retrieved from server</div>
                 )}
               </div>
 
@@ -566,7 +565,7 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
               {isRiderOrder && !isCompleted && order.delivered !== false && (
                 deliveryOtp ? (
                   <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
-                    <div style={{ fontSize: "28px" }}>🚪</div>
+                    <div style={{ fontSize: "28px" }}>{"🚪"}</div>
                     <div>
                       <div style={{ fontSize: "15px", fontWeight: "700", color: "#6ee7b7", marginBottom: "6px" }}>Your Package Has Arrived!</div>
                       <div style={{ fontSize: "13px", color: "#888" }}>Read this 6-digit code to the rider to confirm delivery</div>
@@ -576,11 +575,11 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                     </div>
                     {deliveryOtp.expiresAt && (
                       <div style={{ fontSize: "12px", color: "#555" }}>
-                        ⏰ Expires at {new Date(deliveryOtp.expiresAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                        {"⏰"} Expires at {new Date(deliveryOtp.expiresAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
                       </div>
                     )}
                     <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
-                      ⚠️ Only share this with the rider delivering your package.
+                      {"⚠️"} Only share this with the rider delivering your package.
                     </div>
                   </div>
                 ) : (
@@ -602,3 +601,25 @@ export default function OrderTracker({ onClose, onOpenOrder }) {
                   {"📂"} Open Full Order View
                 </button>
               )}
+
+              {isCompleted && (
+                <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "20px", textAlign: "center", display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ fontSize: "40px" }}>{"🎉"}</div>
+                  <div style={{ fontSize: "16px", fontWeight: "800", color: "#6ee7b7" }}>Order Complete!</div>
+                  <div style={{ fontSize: "13px", color: "#888" }}>Payment has been released to the seller.</div>
+                </div>
+              )}
+
+              {order.delivered === false && !isCompleted && (
+                <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#fca5a5", textAlign: "center" }}>
+                  Your refund of {"₵"}{order.total?.toLocaleString()} is being processed.
+                </div>
+              )}
+
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
