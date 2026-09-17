@@ -1,960 +1,1544 @@
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 
-const ROLE_COLORS = {
-  user:       { bg: "#1e1e24", color: "#888", border: "#2a2a35" },
-  support:    { bg: "#1e3a5f22", color: "#93c5fd", border: "#1d4ed8" },
-  admin:      { bg: "#064e3b22", color: "#6ee7b7", border: "#065f46" },
-  superadmin: { bg: "#78350f22", color: "#fcd34d", border: "#92400e" },
-  owner:      { bg: "#c8a97e22", color: "#c8a97e", border: "#c8a97e" },
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+function getAdminToken()    { try { return localStorage.getItem("silkroad_admin_token")  || null } catch { return null } }
+function getAdminUser()     { try { return JSON.parse(localStorage.getItem("silkroad_admin_user") || "null") } catch { return null } }
+function setAdminSession(token, user) {
+  localStorage.setItem("silkroad_admin_token", token)
+  localStorage.setItem("silkroad_admin_user", JSON.stringify(user))
+}
+function clearAdminSession() {
+  localStorage.removeItem("silkroad_admin_token")
+  localStorage.removeItem("silkroad_admin_user")
 }
 
-const ROLE_LABELS = {
-  user:       "👤 User",
-  support:    "🎧 Support Agent",
-  admin:      "🛡️ Admin",
-  superadmin: "⚡ Super Admin",
-  owner:      "👑 Owner",
+async function adminFetch(path, options = {}) {
+  const token = getAdminToken()
+  const res   = await fetch(`${API}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  })
+  const data = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, data }
 }
 
-const ALL_PERMISSIONS = [
-  { id: "manage_listings",  label: "Manage Listings",  desc: "View, approve, remove listings" },
-  { id: "manage_users",     label: "Manage Users",     desc: "View, suspend, delete users" },
-  { id: "manage_orders",    label: "Manage Orders",    desc: "View, refund, release orders" },
-  { id: "manage_riders",    label: "Manage Riders",    desc: "View, approve, remove riders" },
-  { id: "view_revenue",     label: "View Revenue",     desc: "See platform stats and earnings" },
-  { id: "manage_promos",    label: "Manage Promos",    desc: "Create and delete promo codes" },
-  { id: "handle_complaints",label: "Handle Complaints",desc: "View and resolve user complaints" },
-]
-
-const ROLE_DEFAULT_PERMISSIONS = {
-  support:    ["handle_complaints"],
-  admin:      ["manage_listings", "manage_users", "manage_orders", "manage_riders", "handle_complaints"],
-  superadmin: ["manage_listings", "manage_users", "manage_orders", "manage_riders", "view_revenue", "manage_promos", "handle_complaints"],
-  owner:      ["manage_listings", "manage_users", "manage_orders", "manage_riders", "view_revenue", "manage_promos", "handle_complaints"],
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const C = {
+  bg:       "#080808",
+  surface:  "#0f0f0f",
+  surface2: "#161616",
+  border:   "#1e1e1e",
+  border2:  "#2a2a2a",
+  gold:     "#c8a97e",
+  goldDim:  "#c8a97e18",
+  goldMid:  "#c8a97e44",
+  green:    "#22c55e",
+  greenDim: "#22c55e18",
+  red:      "#ef4444",
+  redDim:   "#ef444418",
+  blue:     "#3b82f6",
+  blueDim:  "#3b82f618",
+  yellow:   "#f59e0b",
+  yellowDim:"#f59e0b18",
+  text:     "#f0ede8",
+  textMid:  "#888888",
+  textDim:  "#444444",
 }
 
-const UNIS = ["KNUST", "UG Legon", "Ashesi", "UDS", "UCC", "GIJ", "UHAS"]
-
-const STATUS_STYLE = {
-  "Active":    { bg: "#064e3b22", color: "#6ee7b7",  border: "#065f46" },
-  "Completed": { bg: "#064e3b22", color: "#6ee7b7",  border: "#065f46" },
-  "Resolved":  { bg: "#064e3b22", color: "#6ee7b7",  border: "#065f46" },
-  "Suspended": { bg: "#7f1d1d22", color: "#fca5a5",  border: "#991b1b" },
-  "Flagged":   { bg: "#78350f22", color: "#fcd34d",  border: "#92400e" },
-  "In Escrow": { bg: "#1e3a5f22", color: "#93c5fd",  border: "#1d4ed8" },
-  "Refunded":  { bg: "#78350f22", color: "#fcd34d",  border: "#92400e" },
-  "Inactive":  { bg: "#1e1e2422", color: "#666",     border: "#2a2a35" },
-  "Open":      { bg: "#7f1d1d22", color: "#fca5a5",  border: "#991b1b" },
+const tier_meta = {
+  owner:       { label: "Owner",       color: C.red,    dim: C.redDim    },
+  super_admin: { label: "Super Admin", color: C.gold,   dim: C.goldDim   },
+  admin:       { label: "Admin",       color: C.blue,   dim: C.blueDim   },
 }
 
-const INIT_USERS = [
-  { id: 1, name: "Kwame Asante",   email: "kwame@gmail.com",  university: "UG Legon", role: "user",       status: "Active",    joined: "Jan 2025" },
-  { id: 2, name: "Ama Serwaa",     email: "ama@gmail.com",    university: "KNUST",    role: "support",    status: "Active",    joined: "Feb 2025" },
-  { id: 3, name: "Kofi Mensah",    email: "kofi@gmail.com",   university: "Ashesi",   role: "admin",      status: "Active",    joined: "Jan 2025" },
-  { id: 4, name: "Abena Osei",     email: "abena@gmail.com",  university: "UDS",      role: "user",       status: "Suspended", joined: "Mar 2025" },
-  { id: 5, name: "Yaw Darko",      email: "yaw@gmail.com",    university: "UCC",      role: "superadmin", status: "Active",    joined: "Jan 2025" },
-]
-
-const INIT_LISTINGS = [
-  { id: 1, title: "Calculus Textbook",        type: "product", price: 380,  seller: "Kwame A.", status: "Active",  date: "12 Apr 2025" },
-  { id: 2, title: "Canon EOS M50 Camera",     type: "rent",    price: 120,  seller: "Ama S.",   status: "Active",  date: "10 Apr 2025" },
-  { id: 3, title: "Mathematics Tutoring",     type: "service", price: 80,   seller: "Kofi M.",  status: "Flagged", date: "08 Apr 2025" },
-  { id: 4, title: "MacBook Pro M2",           type: "product", price: 8500, seller: "Abena O.", status: "Active",  date: "05 Apr 2025" },
-  { id: 5, title: "Room Cleaning Service",    type: "service", price: 60,   seller: "Yaw D.",   status: "Active",  date: "03 Apr 2025" },
-]
-
-const INIT_ORDERS = [
-  { id: "SR-A1B2C3", item: "Calculus Textbook",  buyer: "Kwame A.", seller: "Ahmad K.", amount: 380,  status: "In Escrow", date: "12 Apr 2025" },
-  { id: "SR-D4E5F6", item: "Python Tutoring",    buyer: "Ama S.",   seller: "James O.", amount: 80,   status: "Completed", date: "10 Apr 2025" },
-  { id: "SR-G7H8I9", item: "Desk Lamp",          buyer: "Kofi M.",  seller: "Omar A.",  amount: 95,   status: "Refunded",  date: "08 Apr 2025" },
-  { id: "SR-J1K2L3", item: "Trek Bicycle",       buyer: "Abena O.", seller: "Elias T.", amount: 1800, status: "In Escrow", date: "05 Apr 2025" },
-]
-
-const INIT_RIDERS = [
-  { id: 1, name: "Kwame A.", phone: "0241234567", vehicle: "Motorbike", zone: "East Legon", status: "Active",   deliveries: 34 },
-  { id: 2, name: "Ama T.",   phone: "0501234567", vehicle: "Bicycle",   zone: "KNUST Area", status: "Active",   deliveries: 18 },
-  { id: 3, name: "Kofi B.",  phone: "0271234567", vehicle: "Walking",   zone: "Ayeduase",   status: "Inactive", deliveries: 7  },
-]
-
-const INIT_COMPLAINTS = [
-  { id: 1, from: "Kwame A.", issue: "Seller never delivered my item",          status: "Open",     date: "12 Apr 2025", response: "" },
-  { id: 2, from: "Ama S.",   issue: "Item was in worse condition than described", status: "Resolved", date: "10 Apr 2025", response: "Refund issued." },
-  { id: 3, from: "Kofi M.",  issue: "Rider was very late and rude",            status: "Open",     date: "08 Apr 2025", response: "" },
-]
-
-const INIT_LOGS = [
-  { time: "Today 14:32",      admin: "Kofi M. (Admin)",      action: "Removed listing: MacBook Pro M2" },
-  { time: "Today 13:15",      admin: "Ama S. (Support)",     action: "Resolved complaint #2" },
-  { time: "Today 11:04",      admin: "Yaw D. (Super Admin)", action: "Suspended user: Abena Osei" },
-  { time: "Yesterday 16:22",  admin: "Kofi M. (Admin)",      action: "Added promo code: WELCOME10" },
-  { time: "Yesterday 10:11",  admin: "Ama S. (Support)",     action: "Flagged listing: Mathematics Tutoring" },
-]
-
-const INIT_PROMOS = [
-  { id: 1, code: "WELCOME10", type: "percentage",    value: 10, target: "all",        uni: null,    user: null,              uses: 24, active: true },
-  { id: 2, code: "KNUST20",   type: "percentage",    value: 20, target: "university", uni: "KNUST", user: null,              uses: 8,  active: true },
-]
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
-
-export default function AdminPanel({ onClose, siteSettings, onUpdateSiteSettings }) {
-  const [authStep, setAuthStep] = useState("login")
-  const [credentials, setCredentials] = useState({ key: "" })
-  const [currentRole, setCurrentRole] = useState(null)
-  const [currentPermissions, setCurrentPermissions] = useState([])
-  const [loginError, setLoginError] = useState("")
-  const [loginLoading, setLoginLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState("dashboard")
-
-  const [users, setUsers] = useState(INIT_USERS)
-  const [listings, setListings] = useState(INIT_LISTINGS)
-  const [orders, setOrders] = useState(INIT_ORDERS)
-  const [riders, setRiders] = useState(INIT_RIDERS)
-  const [complaints, setComplaints] = useState(INIT_COMPLAINTS)
-  const [logs, setLogs] = useState(INIT_LOGS)
-  const [promos, setPromos] = useState(INIT_PROMOS)
-
-  const [promoForm, setPromoForm] = useState({ code: "", type: "percentage", value: "", target: "all", uni: "", user: "", freeDelivery: false })
-  const [promoErrors, setPromoErrors] = useState({})
-
-  const [adminForm, setAdminForm] = useState({ name: "", email: "", role: "support", permissions: [] })
-  const [masterKeyInput, setMasterKeyInput] = useState("")
-  const [masterKeyVerified, setMasterKeyVerified] = useState(false)
-  const [masterKeyError, setMasterKeyError] = useState("")
-
-  const [respondingTo, setRespondingTo] = useState(null)
-  const [responseText, setResponseText] = useState("")
-
-  const [paymentModeSaving, setPaymentModeSaving] = useState(false)
-  const [paymentModeError, setPaymentModeError] = useState("")
-
-  const addLog = (action) => {
-    if (currentRole === "owner") return
-    const entry = {
-      time: `Today ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
-      admin: `${currentRole === "superadmin" ? "Super Admin" : currentRole === "admin" ? "Admin" : "Support"}`,
-      action,
-    }
-    setLogs(l => [entry, ...l])
-  }
-
-  const handleLogin = async () => {
-    setLoginError("")
-    setLoginLoading(true)
-    try {
-      const res = await fetch(`${API_URL}/admin/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: credentials.key }),
-      })
-      const data = await res.json()
-      if (data.role) {
-        setCurrentRole(data.role)
-        setCurrentPermissions(data.permissions || [])
-        sessionStorage.setItem("silkroad_admin_token", data.token)
-        setAuthStep("panel")
-      } else {
-        setLoginError(data.message || "Invalid credentials. Access denied.")
-      }
-    } catch {
-      setLoginError("Could not connect to server. Please try again.")
-    }
-    setLoginLoading(false)
-  }
-
-  const hasPermission = (perm) => currentRole === "owner" || currentRole === "superadmin" || currentPermissions.includes(perm)
-
-  const handleSetPaymentMode = async (mode) => {
-    if (mode === siteSettings.paymentMode) return
-    setPaymentModeError("")
-    setPaymentModeSaving(true)
-    try {
-      const token = sessionStorage.getItem("silkroad_admin_token")
-      const res = await fetch(`${API_URL}/settings/payment-mode`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ mode }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        onUpdateSiteSettings(s => ({ ...s, paymentMode: mode }))
-        addLog(`Switched payment mode to ${mode === "automated" ? "Automated Paystack" : "Manual MoMo"}`)
-      } else {
-        setPaymentModeError(data.message || "Failed to update payment mode.")
-      }
-    } catch {
-      setPaymentModeError("Could not connect to server.")
-    }
-    setPaymentModeSaving(false)
-  }
-
-  const handleAddPromo = () => {
-    const e = {}
-    if (!promoForm.code.trim()) e.code = "Please enter a code."
-    if (!promoForm.value && !promoForm.freeDelivery) e.value = "Please enter a discount value."
-    if (promoForm.target === "university" && !promoForm.uni) e.uni = "Please select a university."
-    if (promoForm.target === "user" && !promoForm.user.trim()) e.user = "Please enter a user email."
-    if (Object.keys(e).length > 0) { setPromoErrors(e); return }
-    const newPromo = {
-      id: Date.now(),
-      code: promoForm.code.toUpperCase(),
-      type: promoForm.freeDelivery ? "free_delivery" : promoForm.type,
-      value: promoForm.freeDelivery ? 0 : Number(promoForm.value),
-      target: promoForm.target,
-      uni: promoForm.uni || null,
-      user: promoForm.user || null,
-      uses: 0,
-      active: true,
-    }
-    setPromos(p => [...p, newPromo])
-    setPromoForm({ code: "", type: "percentage", value: "", target: "all", uni: "", user: "", freeDelivery: false })
-    setPromoErrors({})
-    addLog(`Added promo code: ${newPromo.code}`)
-  }
-
-  const handleDeletePromo = (id, code) => {
-    if (!window.confirm(`Delete promo code ${code}?`)) return
-    setPromos(p => p.filter(x => x.id !== id))
-    addLog(`Deleted promo code: ${code}`)
-  }
-
-  const handleTogglePromo = (id) => {
-    setPromos(p => p.map(x => x.id === id ? { ...x, active: !x.active } : x))
-  }
-
-  const handleVerifyMasterKey = async () => {
-    setMasterKeyError("")
-    try {
-      const res = await fetch(`${API_URL}/admin/verify-master`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: masterKeyInput }),
-      })
-      const data = await res.json()
-      if (data.valid) setMasterKeyVerified(true)
-      else setMasterKeyError("Invalid master key.")
-    } catch {
-      setMasterKeyError("Could not connect to server.")
-    }
-  }
-
-  const Badge = ({ status }) => (
-    <span style={{ fontSize: "10px", fontWeight: "700", background: STATUS_STYLE[status]?.bg, color: STATUS_STYLE[status]?.color, border: `1px solid ${STATUS_STYLE[status]?.border}`, padding: "3px 10px", borderRadius: "20px", flexShrink: 0 }}>
-      {status}
+// ── Shared UI components ──────────────────────────────────────────────────────
+function Badge({ label, color, dim }) {
+  return (
+    <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".08em", color, background: dim, border: `1px solid ${color}44`, padding: "2px 8px", borderRadius: "3px", textTransform: "uppercase" }}>
+      {label}
     </span>
   )
+}
 
-  const RoleBadge = ({ role }) => (
-    <span style={{ fontSize: "10px", fontWeight: "700", background: ROLE_COLORS[role]?.bg, color: ROLE_COLORS[role]?.color, border: `1px solid ${ROLE_COLORS[role]?.border}`, padding: "3px 10px", borderRadius: "20px" }}>
-      {ROLE_LABELS[role]}
-    </span>
-  )
-
-  const inputStyle = {
-    width: "100%", background: "#161616", border: "1px solid #222",
-    color: "#fff", padding: "11px 14px", borderRadius: "10px",
-    fontSize: "13px", outline: "none", boxSizing: "border-box", fontFamily: "inherit",
+function StatusDot({ status }) {
+  const map = {
+    Active:    C.green, Completed: C.green, completed: C.green,
+    Suspended: C.red,   Cancelled: C.red,   cancelled:  C.red,   Refunded: C.red,
+    "In Escrow": C.blue, accepted: C.blue, picked_up: C.blue,
+    Pending:   C.yellow, pending: C.yellow, "Pending Confirmation": C.yellow,
+    Flagged:   C.yellow, delivered: C.yellow,
   }
+  const color = map[status] || C.textDim
+  return <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: color, marginRight: 6, flexShrink: 0 }} />
+}
 
-  const totalRevenue = orders.filter(o => o.status === "Completed").reduce((sum, o) => sum + Math.round(o.amount * 0.08), 0)
-  const totalVolume = orders.filter(o => o.status === "Completed").reduce((sum, o) => sum + o.amount, 0)
-  const escrowHeld = orders.filter(o => o.status === "In Escrow").reduce((sum, o) => sum + o.amount, 0)
-
-  const TABS = [
-    { id: "dashboard",  label: "📊 Dashboard",     always: true },
-    { id: "listings",   label: "📦 Listings",       perm: "manage_listings" },
-    { id: "users",      label: "👤 Users",          perm: "manage_users" },
-    { id: "orders",     label: "🧾 Orders",         perm: "manage_orders" },
-    { id: "riders",     label: "🛵 Riders",         perm: "manage_riders" },
-    { id: "promos",     label: "🎟️ Promos",         perm: "manage_promos" },
-    { id: "complaints", label: "📢 Complaints",     perm: "handle_complaints" },
-    { id: "logs",       label: "📋 Logs",           always: true },
-    { id: "settings",   label: "⚙️ Site Settings",  superadmin: true },
-    { id: "admins",     label: "🔐 Admin Mgmt",     owner: true },
-  ].filter(t =>
-    t.always ||
-    (t.superadmin && (currentRole === "owner" || currentRole === "superadmin")) ||
-    (t.owner && (currentRole === "owner" || currentRole === "superadmin")) ||
-    (t.perm && hasPermission(t.perm))
+function Stat({ label, value, sub, accent }) {
+  return (
+    <div style={{ borderTop: `2px solid ${accent || C.border2}`, paddingTop: 14 }}>
+      <div style={{ fontSize: 28, fontWeight: 800, color: accent || C.text, letterSpacing: "-0.03em", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 12, color: C.textMid, marginTop: 6, fontWeight: 500 }}>{label}</div>
+      {sub && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>{sub}</div>}
+    </div>
   )
+}
 
-  if (authStep === "login") return (
-    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000ee", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-      <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "420px", border: "1px solid #1e1e1e", overflow: "hidden" }}>
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ width: "30px", height: "30px", background: "linear-gradient(135deg,#c8a97e,#9a7040)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px" }}>🕸</div>
-            <span style={{ fontSize: "16px", fontWeight: "700", color: "#f0ede8" }}>Silk Road GH · Admin</span>
-          </div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>
+function Table({ columns, rows, empty = "No records." }) {
+  if (!rows.length) return (
+    <div style={{ padding: "48px 0", textAlign: "center", color: C.textDim, fontSize: 13 }}>
+      {empty}
+    </div>
+  )
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr>
+            {columns.map(col => (
+              <th key={col.key} style={{ textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${C.border}`, color: C.textDim, fontWeight: 600, fontSize: 11, letterSpacing: ".04em", whiteSpace: "nowrap" }}>
+                {col.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}
+              onMouseEnter={e => e.currentTarget.style.background = C.surface2}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              {columns.map(col => (
+                <td key={col.key} style={{ padding: "11px 14px", color: C.text, verticalAlign: "middle", whiteSpace: col.wrap ? "normal" : "nowrap" }}>
+                  {col.render ? col.render(row) : row[col.key] ?? "—"}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function Pagination({ page, pages, onPage }) {
+  if (pages <= 1) return null
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 20, justifyContent: "flex-end" }}>
+      <button onClick={() => onPage(page - 1)} disabled={page <= 1}
+        style={{ background: C.surface2, border: `1px solid ${C.border}`, color: page <= 1 ? C.textDim : C.text, padding: "6px 12px", borderRadius: 4, cursor: page <= 1 ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit" }}>
+        ←
+      </button>
+      <span style={{ fontSize: 12, color: C.textMid }}>Page {page} of {pages}</span>
+      <button onClick={() => onPage(page + 1)} disabled={page >= pages}
+        style={{ background: C.surface2, border: `1px solid ${C.border}`, color: page >= pages ? C.textDim : C.text, padding: "6px 12px", borderRadius: 4, cursor: page >= pages ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit" }}>
+        →
+      </button>
+    </div>
+  )
+}
+
+function Input({ label, type = "text", value, onChange, placeholder, error, mono }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {label && <label style={{ fontSize: 11, color: C.textMid, fontWeight: 600 }}>{label}</label>}
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          background: C.surface2, border: `1px solid ${error ? C.red : C.border}`,
+          color: C.text, padding: "10px 14px", borderRadius: 6, fontSize: 13,
+          outline: "none", fontFamily: mono ? "monospace" : "inherit", width: "100%",
+          boxSizing: "border-box",
+        }}
+      />
+      {error && <div style={{ fontSize: 11, color: C.red }}>{error}</div>}
+    </div>
+  )
+}
+
+function Btn({ children, onClick, disabled, variant = "primary", size = "md", fullWidth }) {
+  const variants = {
+    primary: { bg: C.gold,    color: "#000",    border: C.gold    },
+    danger:  { bg: C.redDim,  color: C.red,     border: C.red     },
+    ghost:   { bg: "transparent", color: C.textMid, border: C.border },
+    success: { bg: C.greenDim, color: C.green,  border: C.green   },
+  }
+  const sizes = { sm: "6px 12px", md: "10px 20px", lg: "13px 28px" }
+  const v = variants[variant] || variants.primary
+  return (
+    <button onClick={onClick} disabled={disabled}
+      style={{
+        background: v.bg, border: `1px solid ${v.border}`, color: v.color,
+        padding: sizes[size], borderRadius: 6, cursor: disabled ? "not-allowed" : "pointer",
+        fontWeight: 700, fontSize: size === "sm" ? 11 : 13, fontFamily: "inherit",
+        opacity: disabled ? 0.5 : 1, width: fullWidth ? "100%" : "auto",
+        transition: "opacity .15s",
+      }}>
+      {children}
+    </button>
+  )
+}
+
+function Modal({ title, onClose, children, width = 480 }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, width: "100%", maxWidth: width, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{title}</span>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: C.textDim, fontSize: 20, cursor: "pointer" }}>✕</button>
         </div>
-        <div style={{ padding: "32px 24px", display: "flex", flexDirection: "column", gap: "18px" }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "40px", marginBottom: "10px" }}>🔐</div>
-            <div style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8" }}>Admin Access</div>
-            <div style={{ fontSize: "13px", color: "#555", marginTop: "6px" }}>Enter your admin key or email</div>
-          </div>
-          <div>
-            <div style={{ fontSize: "12px", color: "#444", fontWeight: "700", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>ACCESS KEY OR EMAIL</div>
-            <input
-              placeholder="Enter your key or admin email..."
-              value={credentials.key}
-              onChange={e => setCredentials({ key: e.target.value })}
-              onKeyDown={e => e.key === "Enter" && handleLogin()}
-              style={{ ...inputStyle, padding: "13px 16px", fontSize: "14px", border: `1px solid ${loginError ? "#991b1b" : "#222"}` }}
-            />
-          </div>
-          {loginError && (
-            <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "13px", fontSize: "13px", color: "#fca5a5", textAlign: "center" }}>
-              🚫 {loginError}
-            </div>
-          )}
-          <button className="btn-gold" onClick={handleLogin} disabled={loginLoading}
-            style={{ padding: "14px", borderRadius: "12px", fontSize: "15px", opacity: loginLoading ? 0.7 : 1, cursor: loginLoading ? "not-allowed" : "pointer" }}>
-            {loginLoading ? "⏳ Verifying..." : "Access Panel →"}
-          </button>
-          <div style={{ textAlign: "center", fontSize: "12px", color: "#333" }}>Unauthorized access attempts are logged.</div>
-        </div>
+        <div style={{ padding: 24 }}>{children}</div>
       </div>
     </div>
   )
+}
+
+function Alert({ type = "info", children }) {
+  const map = { info: [C.blue, C.blueDim], warn: [C.yellow, C.yellowDim], error: [C.red, C.redDim], success: [C.green, C.greenDim] }
+  const [color, bg] = map[type] || map.info
+  return (
+    <div style={{ background: bg, border: `1px solid ${color}44`, borderRadius: 6, padding: "11px 14px", fontSize: 12, color, lineHeight: 1.6 }}>
+      {children}
+    </div>
+  )
+}
+
+function fmt(ts) {
+  if (!ts) return "—"
+  return new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+}
+
+function fmtGHS(n) { return `₵${(n || 0).toLocaleString()}` }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOGIN SCREENS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function OwnerLogin({ onSuccess }) {
+  const [email, setEmail]       = useState("")
+  const [password, setPassword] = useState("")
+  const [secretKey, setKey]     = useState("")
+  const [error, setError]       = useState("")
+  const [loading, setLoading]   = useState(false)
+
+  const handle = async () => {
+    setError(""); setLoading(true)
+    const { ok, data } = await adminFetch("/admin-auth/owner/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password, secretKey }),
+    })
+    setLoading(false)
+    if (!ok) { setError(data.message || "Login failed."); return }
+    setAdminSession(data.token, { tier: "owner", email: data.email, unusedRecoveryCodes: data.unusedRecoveryCodes })
+    onSuccess()
+  }
 
   return (
-    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000ee", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-      <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "900px", maxHeight: "92vh", display: "flex", flexDirection: "column", border: "1px solid #1e1e1e", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ background: C.redDim, border: `1px solid ${C.red}44`, borderRadius: 6, padding: "12px 16px", fontSize: 12, color: C.red, lineHeight: 1.7 }}>
+        <strong>Owner access.</strong> All actions are logged and audited. Unauthorised access attempts are recorded.
+      </div>
+      <Input label="Email" type="email" value={email} onChange={setEmail} placeholder="owner@silkroadgh.com" />
+      <Input label="Password" type="password" value={password} onChange={setPassword} placeholder="••••••••••••••••" />
+      <Input label="Owner Secret Key" type="password" value={secretKey} onChange={setKey} placeholder="Your secret key" mono />
+      {error && <Alert type="error">{error}</Alert>}
+      <Btn onClick={handle} disabled={loading || !email || !password || !secretKey} fullWidth>
+        {loading ? "Verifying..." : "Access Owner Panel"}
+      </Btn>
+    </div>
+  )
+}
 
-        <div style={{ padding: "18px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <span style={{ fontSize: "16px", fontWeight: "700", color: "#f0ede8" }}>Silk Road GH · Admin</span>
-            <RoleBadge role={currentRole} />
-            <span style={{ fontSize: "10px", fontWeight: "700", color: siteSettings?.paymentMode === "automated" ? "#6ee7b7" : "#fcd34d", background: siteSettings?.paymentMode === "automated" ? "#064e3b22" : "#78350f22", border: `1px solid ${siteSettings?.paymentMode === "automated" ? "#065f46" : "#92400e"}`, padding: "3px 10px", borderRadius: "20px" }}>
-              {siteSettings?.paymentMode === "automated" ? "⚡ Live Paystack" : "📱 Manual MoMo"}
-            </span>
+function OwnerRecovery({ onSuccess, onBack }) {
+  const [mode, setMode]         = useState("recovery") // "recovery" | "emergency"
+  const [email, setEmail]       = useState("")
+  const [code, setCode]         = useState("")
+  const [ek1, setEk1]           = useState("")
+  const [ek2, setEk2]           = useState("")
+  const [error, setError]       = useState("")
+  const [loading, setLoading]   = useState(false)
+
+  const handleRecovery = async () => {
+    setError(""); setLoading(true)
+    const { ok, data } = await adminFetch("/admin-auth/owner/recover", {
+      method: "POST",
+      body: JSON.stringify({ email, recoveryCode: code }),
+    })
+    setLoading(false)
+    if (!ok) { setError(data.message || "Recovery failed."); return }
+    setAdminSession(data.token, { tier: "owner", email: data.email })
+    onSuccess()
+  }
+
+  const handleEmergency = async () => {
+    setError(""); setLoading(true)
+    const { ok, data } = await adminFetch("/admin-auth/owner/emergency", {
+      method: "POST",
+      body: JSON.stringify({ email, emergencyKey1: ek1, emergencyKey2: ek2 }),
+    })
+    setLoading(false)
+    if (!ok) { setError(data.message || "Emergency access failed."); return }
+    setAdminSession(data.token, { tier: "owner", email: data.email })
+    onSuccess()
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        {["recovery", "emergency"].map(m => (
+          <button key={m} onClick={() => setMode(m)}
+            style={{ flex: 1, padding: "9px", borderRadius: 6, border: `1px solid ${mode === m ? C.red : C.border}`, background: mode === m ? C.redDim : "transparent", color: mode === m ? C.red : C.textMid, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit" }}>
+            {m === "recovery" ? "Recovery Code" : "Emergency Keys"}
+          </button>
+        ))}
+      </div>
+
+      <Input label="Email" type="email" value={email} onChange={setEmail} placeholder="owner@silkroadgh.com" />
+
+      {mode === "recovery" ? (
+        <Input label="Recovery Code" value={code} onChange={setCode} placeholder="XXXXXX-XXXXXX-XXXXXX" mono />
+      ) : (
+        <>
+          <Alert type="warn">Both emergency keys are required simultaneously. They will be burned after use.</Alert>
+          <Input label="Emergency Key 1" type="password" value={ek1} onChange={setEk1} placeholder="Emergency key 1" mono />
+          <Input label="Emergency Key 2" type="password" value={ek2} onChange={setEk2} placeholder="Emergency key 2" mono />
+        </>
+      )}
+
+      {error && <Alert type="error">{error}</Alert>}
+
+      <Btn onClick={mode === "recovery" ? handleRecovery : handleEmergency} disabled={loading} fullWidth variant="danger">
+        {loading ? "Verifying..." : mode === "recovery" ? "Use Recovery Code" : "Use Emergency Keys"}
+      </Btn>
+      <button onClick={onBack} style={{ background: "transparent", border: "none", color: C.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
+        ← Back to login
+      </button>
+    </div>
+  )
+}
+
+function SuperAdminLogin({ onSuccess }) {
+  const [email, setEmail]       = useState("")
+  const [password, setPassword] = useState("")
+  const [secretKey, setKey]     = useState("")
+  const [error, setError]       = useState("")
+  const [loading, setLoading]   = useState(false)
+
+  const handle = async () => {
+    setError(""); setLoading(true)
+    const { ok, data } = await adminFetch("/admin-auth/super-admin/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password, secretKey }),
+    })
+    setLoading(false)
+    if (!ok) { setError(data.message || "Login failed."); return }
+    setAdminSession(data.token, data.admin)
+    onSuccess()
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Input label="Email" type="email" value={email} onChange={setEmail} placeholder="superadmin@silkroadgh.com" />
+      <Input label="Password" type="password" value={password} onChange={setPassword} placeholder="••••••••••••" />
+      <Input label="Secret Key" type="password" value={secretKey} onChange={setKey} placeholder="Your assigned secret key" mono />
+      {error && <Alert type="error">{error}</Alert>}
+      <Btn onClick={handle} disabled={loading || !email || !password || !secretKey} fullWidth>
+        {loading ? "Verifying..." : "Sign In"}
+      </Btn>
+    </div>
+  )
+}
+
+function AdminLogin({ onSuccess }) {
+  const [email, setEmail]       = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError]       = useState("")
+  const [loading, setLoading]   = useState(false)
+
+  const handle = async () => {
+    setError(""); setLoading(true)
+    const { ok, data } = await adminFetch("/admin-auth/admin/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    })
+    setLoading(false)
+    if (!ok) { setError(data.message || "Login failed."); return }
+    setAdminSession(data.token, data.admin)
+    onSuccess()
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Input label="Email" type="email" value={email} onChange={setEmail} placeholder="admin@silkroadgh.com" />
+      <Input label="Password" type="password" value={password} onChange={setPassword} placeholder="••••••••••" />
+      {error && <Alert type="error">{error}</Alert>}
+      <Btn onClick={handle} disabled={loading || !email || !password} fullWidth>
+        {loading ? "Signing in..." : "Sign In"}
+      </Btn>
+    </div>
+  )
+}
+
+function LoginScreen({ onSuccess }) {
+  const [tier, setTier]         = useState("admin")
+  const [recovery, setRecovery] = useState(false)
+
+  const tierConfig = {
+    owner:       { label: "Owner",       accent: C.red,  desc: "Root platform authority" },
+    super_admin: { label: "Super Admin", accent: C.gold, desc: "Platform administration" },
+    admin:       { label: "Admin",       accent: C.blue, desc: "Operational access"       },
+  }
+  const tc = tierConfig[tier]
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <style>{`* { box-sizing: border-box } input::placeholder { color: #444 }`}</style>
+      <div style={{ width: "100%", maxWidth: 420 }}>
+
+        {/* Brand */}
+        <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div style={{ width: 36, height: 36, background: `linear-gradient(135deg, ${C.gold}, #9a7040)`, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{"🕸"}</div>
+            <span style={{ fontSize: 22, fontWeight: 800, color: C.gold, letterSpacing: "-0.02em" }}>Silk Road GH</span>
           </div>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            {currentRole !== "owner" && <div style={{ fontSize: "12px", color: "#444" }}>Actions logged</div>}
-            <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>
-          </div>
+          <div style={{ fontSize: 12, color: C.textDim, letterSpacing: ".04em" }}>ADMINISTRATION PORTAL</div>
         </div>
 
-        <div style={{ display: "flex", gap: "2px", padding: "0 16px", borderBottom: "1px solid #1a1a1a", overflowX: "auto", flexShrink: 0, background: "#0d0d0f" }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setActiveTab(t.id)}
-              style={{ background: "transparent", border: "none", color: activeTab === t.id ? "#c8a97e" : "#444", cursor: "pointer", fontSize: "12px", fontWeight: "600", padding: "13px 14px", borderBottom: `2px solid ${activeTab === t.id ? "#c8a97e" : "transparent"}`, whiteSpace: "nowrap", fontFamily: "inherit", minHeight: "auto" }}>
-              {t.label}
+        {/* Tier selector */}
+        <div style={{ display: "flex", gap: 2, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 3, marginBottom: 28 }}>
+          {Object.entries(tierConfig).map(([t, cfg]) => (
+            <button key={t} onClick={() => { setTier(t); setRecovery(false) }}
+              style={{ flex: 1, padding: "8px 4px", borderRadius: 6, border: "none", background: tier === t ? C.surface2 : "transparent", color: tier === t ? cfg.accent : C.textDim, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "inherit", transition: "all .15s" }}>
+              {cfg.label}
             </button>
           ))}
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
-
-          {activeTab === "dashboard" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>Platform Overview</h2>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "14px" }}>
-                {[
-                  ["📦", "Total Listings", listings.length, `${listings.filter(l => l.status === "Active").length} active`],
-                  ["👤", "Total Users", users.length, `${users.filter(u => u.status === "Active").length} active`],
-                  ["🧾", "Total Orders", orders.length, `${orders.filter(o => o.status === "In Escrow").length} in escrow`],
-                  ["🛵", "Active Riders", riders.filter(r => r.status === "Active").length, `${riders.length} total`],
-                  ["💰", "Platform Revenue", `₵${totalRevenue}`, `Vol: ₵${totalVolume}`],
-                  ["🔒", "Escrow Held", `₵${escrowHeld}`, `${orders.filter(o => o.status === "In Escrow").length} orders`],
-                ].map(([icon, label, value, sub]) => (
-                  <div key={label} style={{ background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", padding: "18px" }}>
-                    <div style={{ fontSize: "24px", marginBottom: "10px" }}>{icon}</div>
-                    <div style={{ fontSize: "20px", fontWeight: "800", color: "#c8a97e", letterSpacing: "-0.02em" }}>{value}</div>
-                    <div style={{ fontSize: "12px", color: "#888", marginTop: "4px" }}>{label}</div>
-                    <div style={{ fontSize: "11px", color: "#444", marginTop: "4px" }}>{sub}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "20px", border: "1px solid #1e1e1e" }}>
-                <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8", marginBottom: "16px" }}>Recent Activity</div>
-                {logs.slice(0, 4).map((log, i) => (
-                  <div key={i} style={{ display: "flex", gap: "14px", padding: "12px 0", borderBottom: i < 3 ? "1px solid #1a1a1a" : "none", fontSize: "13px" }}>
-                    <span style={{ color: "#444", minWidth: "120px", flexShrink: 0 }}>{log.time}</span>
-                    <span style={{ color: "#888" }}><span style={{ color: "#c8a97e" }}>{log.admin}</span> — {log.action}</span>
-                  </div>
-                ))}
-              </div>
-              {complaints.filter(c => c.status === "Open").length > 0 && (
-                <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "13px", color: "#fca5a5" }}>⚠️ {complaints.filter(c => c.status === "Open").length} open complaints need attention</span>
-                  <button onClick={() => setActiveTab("complaints")}
-                    style={{ background: "#7f1d1d", border: "none", color: "#fca5a5", padding: "7px 16px", borderRadius: "10px", cursor: "pointer", fontSize: "12px", fontWeight: "600", fontFamily: "inherit" }}>
-                    View →
-                  </button>
-                </div>
-              )}
+        {/* Login card */}
+        <div style={{ background: C.surface, border: `1px solid ${tier === "owner" ? C.red + "44" : tier === "super_admin" ? C.goldMid : C.border}`, borderRadius: 10, padding: 28 }}>
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>
+              {recovery ? "Account Recovery" : `${tc.label} Login`}
             </div>
+            <div style={{ fontSize: 12, color: C.textMid }}>{tc.desc}</div>
+          </div>
+
+          {tier === "owner" && !recovery && <OwnerLogin onSuccess={onSuccess} />}
+          {tier === "owner" && recovery  && <OwnerRecovery onSuccess={onSuccess} onBack={() => setRecovery(false)} />}
+          {tier === "super_admin"        && <SuperAdminLogin onSuccess={onSuccess} />}
+          {tier === "admin"              && <AdminLogin onSuccess={onSuccess} />}
+
+          {tier === "owner" && !recovery && (
+            <button onClick={() => setRecovery(true)}
+              style={{ background: "transparent", border: "none", color: C.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", marginTop: 16, display: "block", width: "100%", textAlign: "center" }}>
+              Lost access? Use recovery code or emergency keys →
+            </button>
           )}
-
-          {activeTab === "listings" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>All Listings</h2>
-                <span style={{ fontSize: "12px", color: "#444" }}>{listings.length} total · {listings.filter(l => l.status === "Flagged").length} flagged</span>
-              </div>
-              {listings.map(listing => (
-                <div key={listing.id} style={{ background: "#161616", borderRadius: "14px", padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px", border: "1px solid #1e1e1e" }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "5px" }}>{listing.title}</div>
-                    <div style={{ fontSize: "12px", color: "#555" }}>
-                      <span style={{ color: "#c8a97e", fontWeight: "600", textTransform: "capitalize" }}>{listing.type}</span>
-                      {" "}· by {listing.seller} · ₵{listing.price} · {listing.date}
-                    </div>
-                  </div>
-                  <Badge status={listing.status} />
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button
-                      onClick={() => {
-                        const newStatus = listing.status === "Flagged" ? "Active" : "Flagged"
-                        setListings(l => l.map(x => x.id === listing.id ? { ...x, status: newStatus } : x))
-                        addLog(`${newStatus === "Flagged" ? "Flagged" : "Unflagged"} listing: ${listing.title}`)
-                      }}
-                      style={{ background: "#78350f18", border: "1px solid #92400e", color: "#fcd34d", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "11px", fontWeight: "600", fontFamily: "inherit", minHeight: "auto" }}>
-                      {listing.status === "Flagged" ? "Unflag" : "Flag"}
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!window.confirm(`Remove "${listing.title}"?`)) return
-                        setListings(l => l.filter(x => x.id !== listing.id))
-                        addLog(`Removed listing: ${listing.title}`)
-                      }}
-                      style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "11px", fontWeight: "600", fontFamily: "inherit", minHeight: "auto" }}>
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === "users" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>All Users</h2>
-                <span style={{ fontSize: "12px", color: "#444" }}>{users.length} total · {users.filter(u => u.status === "Suspended").length} suspended</span>
-              </div>
-              {users.map(u => (
-                <div key={u.id} style={{ background: "#161616", borderRadius: "14px", padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px", border: "1px solid #1e1e1e" }}>
-                  <div style={{ width: "38px", height: "38px", borderRadius: "50%", background: "#c8a97e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", fontWeight: "700", color: "#000", flexShrink: 0 }}>
-                    {u.name.charAt(0)}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "5px" }}>{u.name}</div>
-                    <div style={{ fontSize: "12px", color: "#555" }}>{u.email} · {u.university} · Joined {u.joined}</div>
-                  </div>
-                  <RoleBadge role={u.role} />
-                  <Badge status={u.status} />
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button
-                      onClick={() => {
-                        const newStatus = u.status === "Suspended" ? "Active" : "Suspended"
-                        setUsers(us => us.map(x => x.id === u.id ? { ...x, status: newStatus } : x))
-                        addLog(`${newStatus === "Suspended" ? "Suspended" : "Reinstated"} user: ${u.name}`)
-                      }}
-                      style={{ background: u.status === "Suspended" ? "#064e3b18" : "#7f1d1d18", border: `1px solid ${u.status === "Suspended" ? "#065f46" : "#7f1d1d"}`, color: u.status === "Suspended" ? "#6ee7b7" : "#fca5a5", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "11px", fontWeight: "600", fontFamily: "inherit", minHeight: "auto" }}>
-                      {u.status === "Suspended" ? "Reinstate" : "Suspend"}
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!window.confirm(`Delete user ${u.name}? This cannot be undone.`)) return
-                        setUsers(us => us.filter(x => x.id !== u.id))
-                        addLog(`Deleted user: ${u.name}`)
-                      }}
-                      style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "11px", fontWeight: "600", fontFamily: "inherit", minHeight: "auto" }}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === "orders" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>All Orders</h2>
-                <span style={{ fontSize: "12px", color: "#444" }}>₵{escrowHeld} in escrow</span>
-              </div>
-              {orders.map(order => (
-                <div key={order.id} style={{ background: "#161616", borderRadius: "14px", padding: "16px 18px", border: "1px solid #1e1e1e" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: order.status === "In Escrow" ? "14px" : "0" }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "5px" }}>{order.item}</div>
-                      <div style={{ fontSize: "12px", color: "#555" }}>Buyer: {order.buyer} · Seller: {order.seller} · {order.date}</div>
-                      <div style={{ fontSize: "11px", color: "#444", marginTop: "3px", fontFamily: "monospace" }}>{order.id}</div>
-                    </div>
-                    <div style={{ fontSize: "16px", fontWeight: "700", color: "#c8a97e" }}>₵{order.amount}</div>
-                    <Badge status={order.status} />
-                  </div>
-                  {order.status === "In Escrow" && (
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <button
-                        onClick={() => {
-                          setOrders(o => o.map(x => x.id === order.id ? { ...x, status: "Completed" } : x))
-                          addLog(`Released escrow for order ${order.id}: ${order.item}`)
-                        }}
-                        style={{ background: "#064e3b18", border: "1px solid #065f46", color: "#6ee7b7", padding: "8px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "600", fontFamily: "inherit", minHeight: "auto" }}>
-                        ✅ Release to Seller
-                      </button>
-                      <button
-                        onClick={() => {
-                          setOrders(o => o.map(x => x.id === order.id ? { ...x, status: "Refunded" } : x))
-                          addLog(`Refunded order ${order.id}: ${order.item}`)
-                        }}
-                        style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "8px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "600", fontFamily: "inherit", minHeight: "auto" }}>
-                        💸 Refund Buyer
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === "riders" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>All Riders</h2>
-                <span style={{ fontSize: "12px", color: "#444" }}>{riders.filter(r => r.status === "Active").length} active · {riders.length} total</span>
-              </div>
-              {riders.map(rider => (
-                <div key={rider.id} style={{ background: "#161616", borderRadius: "14px", padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px", border: "1px solid #1e1e1e" }}>
-                  <div style={{ fontSize: "28px" }}>{rider.vehicle === "Motorbike" ? "🛵" : rider.vehicle === "Bicycle" ? "🚲" : "🚶"}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "5px" }}>{rider.name}</div>
-                    <div style={{ fontSize: "12px", color: "#555" }}>{rider.phone} · {rider.zone} · {rider.deliveries} deliveries</div>
-                  </div>
-                  <Badge status={rider.status} />
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button
-                      onClick={() => {
-                        const newStatus = rider.status === "Active" ? "Inactive" : "Active"
-                        setRiders(r => r.map(x => x.id === rider.id ? { ...x, status: newStatus } : x))
-                        addLog(`${newStatus === "Active" ? "Activated" : "Deactivated"} rider: ${rider.name}`)
-                      }}
-                      style={{ background: rider.status === "Active" ? "#7f1d1d18" : "#064e3b18", border: `1px solid ${rider.status === "Active" ? "#7f1d1d" : "#065f46"}`, color: rider.status === "Active" ? "#fca5a5" : "#6ee7b7", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "11px", fontWeight: "600", fontFamily: "inherit", minHeight: "auto" }}>
-                      {rider.status === "Active" ? "Deactivate" : "Activate"}
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!window.confirm(`Remove rider ${rider.name}?`)) return
-                        setRiders(r => r.filter(x => x.id !== rider.id))
-                        addLog(`Removed rider: ${rider.name}`)
-                      }}
-                      style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "11px", fontWeight: "600", fontFamily: "inherit", minHeight: "auto" }}>
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === "promos" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>Promo Codes</h2>
-
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "22px", border: "1px solid #1e1e1e" }}>
-                <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8", marginBottom: "18px" }}>➕ Create Promo Code</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                    <div>
-                      <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "6px" }}>CODE</div>
-                      <input placeholder="e.g. WELCOME10" value={promoForm.code} onChange={e => setPromoForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} style={inputStyle} />
-                      {promoErrors.code && <div style={{ fontSize: "11px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {promoErrors.code}</div>}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "6px" }}>TYPE</div>
-                      <div style={{ display: "flex", gap: "6px" }}>
-                        {[["percentage", "% Off"], ["fixed", "₵ Off"]].map(([v, l]) => (
-                          <button key={v} onClick={() => setPromoForm(f => ({ ...f, type: v, freeDelivery: false }))}
-                            style={{ flex: 1, padding: "10px", borderRadius: "8px", border: `1.5px solid ${promoForm.type === v && !promoForm.freeDelivery ? "#c8a97e" : "#222"}`, background: promoForm.type === v && !promoForm.freeDelivery ? "#c8a97e18" : "#111", color: promoForm.type === v && !promoForm.freeDelivery ? "#c8a97e" : "#888", cursor: "pointer", fontWeight: "600", fontSize: "12px", fontFamily: "inherit" }}>
-                            {l}
-                          </button>
-                        ))}
-                        <button onClick={() => setPromoForm(f => ({ ...f, freeDelivery: !f.freeDelivery }))}
-                          style={{ flex: 1, padding: "10px", borderRadius: "8px", border: `1.5px solid ${promoForm.freeDelivery ? "#c8a97e" : "#222"}`, background: promoForm.freeDelivery ? "#c8a97e18" : "#111", color: promoForm.freeDelivery ? "#c8a97e" : "#888", cursor: "pointer", fontWeight: "600", fontSize: "11px", fontFamily: "inherit" }}>
-                          🛵 Free
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {!promoForm.freeDelivery && (
-                    <div>
-                      <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "6px" }}>
-                        {promoForm.type === "percentage" ? "DISCOUNT %" : "DISCOUNT AMOUNT (₵)"}
-                      </div>
-                      <input placeholder={promoForm.type === "percentage" ? "e.g. 10" : "e.g. 20"} type="number" value={promoForm.value} onChange={e => setPromoForm(f => ({ ...f, value: e.target.value }))} style={inputStyle} />
-                      {promoErrors.value && <div style={{ fontSize: "11px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {promoErrors.value}</div>}
-                    </div>
-                  )}
-
-                  <div>
-                    <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "10px" }}>WHO CAN USE IT?</div>
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      {[["all", "👥 Everyone"], ["university", "🏫 University"], ["user", "👤 Specific User"]].map(([v, l]) => (
-                        <button key={v} onClick={() => setPromoForm(f => ({ ...f, target: v, uni: "", user: "" }))}
-                          style={{ flex: 1, padding: "10px 6px", borderRadius: "8px", border: `1.5px solid ${promoForm.target === v ? "#c8a97e" : "#222"}`, background: promoForm.target === v ? "#c8a97e18" : "#111", color: promoForm.target === v ? "#c8a97e" : "#888", cursor: "pointer", fontWeight: "600", fontSize: "11px", fontFamily: "inherit", textAlign: "center" }}>
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {promoForm.target === "university" && (
-                    <div>
-                      <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "10px" }}>SELECT UNIVERSITY</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                        {UNIS.map(u => (
-                          <button key={u} onClick={() => setPromoForm(f => ({ ...f, uni: u }))}
-                            style={{ padding: "7px 14px", borderRadius: "20px", border: `1.5px solid ${promoForm.uni === u ? "#c8a97e" : "#222"}`, background: promoForm.uni === u ? "#c8a97e18" : "#111", color: promoForm.uni === u ? "#c8a97e" : "#888", cursor: "pointer", fontWeight: "600", fontSize: "11px", fontFamily: "inherit" }}>
-                            {u}
-                          </button>
-                        ))}
-                      </div>
-                      {promoErrors.uni && <div style={{ fontSize: "11px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {promoErrors.uni}</div>}
-                    </div>
-                  )}
-
-                  {promoForm.target === "user" && (
-                    <div>
-                      <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "6px" }}>USER EMAIL</div>
-                      <input placeholder="e.g. student@gmail.com" value={promoForm.user} onChange={e => setPromoForm(f => ({ ...f, user: e.target.value }))} style={inputStyle} />
-                      {promoErrors.user && <div style={{ fontSize: "11px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {promoErrors.user}</div>}
-                    </div>
-                  )}
-
-                  <button className="btn-gold" onClick={handleAddPromo} style={{ padding: "13px", borderRadius: "10px", fontSize: "14px" }}>
-                    ➕ Add Promo Code
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {promos.map(promo => (
-                  <div key={promo.id} style={{ background: "#161616", borderRadius: "14px", padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px", border: "1px solid #1e1e1e" }}>
-                    <div style={{ background: "#c8a97e18", border: "1px solid #c8a97e33", borderRadius: "10px", padding: "7px 14px", fontWeight: "800", fontSize: "14px", color: "#c8a97e", letterSpacing: ".06em", flexShrink: 0 }}>
-                      {promo.code}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: "13px", color: "#f0ede8", fontWeight: "600" }}>
-                        {promo.type === "free_delivery" ? "🛵 Free Delivery" : promo.type === "percentage" ? `${promo.value}% off` : `₵${promo.value} off`}
-                      </div>
-                      <div style={{ fontSize: "11px", color: "#555", marginTop: "3px" }}>
-                        {promo.target === "all" ? "Everyone" : promo.target === "university" ? `${promo.uni} only` : `User: ${promo.user}`} · {promo.uses} uses
-                      </div>
-                    </div>
-                    <div onClick={() => handleTogglePromo(promo.id)}
-                      style={{ width: "38px", height: "21px", background: promo.active ? "#c8a97e" : "#222", borderRadius: "20px", position: "relative", cursor: "pointer", transition: "background 0.2s", flexShrink: 0 }}>
-                      <div style={{ position: "absolute", top: "3px", left: promo.active ? "19px" : "3px", width: "15px", height: "15px", background: "#fff", borderRadius: "50%", transition: "left 0.2s" }} />
-                    </div>
-                    <button onClick={() => handleDeletePromo(promo.id, promo.code)}
-                      style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "11px", fontWeight: "600", fontFamily: "inherit", minHeight: "auto" }}>
-                      Delete
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === "complaints" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>Complaints</h2>
-                <span style={{ fontSize: "12px", color: "#444" }}>{complaints.filter(c => c.status === "Open").length} open</span>
-              </div>
-              {complaints.map(c => (
-                <div key={c.id} style={{ background: "#161616", borderRadius: "14px", padding: "18px", border: "1px solid #1e1e1e" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-                    <div>
-                      <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "5px" }}>{c.issue}</div>
-                      <div style={{ fontSize: "12px", color: "#555" }}>From: {c.from} · {c.date}</div>
-                    </div>
-                    <Badge status={c.status} />
-                  </div>
-
-                  {c.response && (
-                    <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "10px", padding: "11px 14px", fontSize: "13px", color: "#6ee7b7", marginBottom: "12px" }}>
-                      ✅ Response: {c.response}
-                    </div>
-                  )}
-
-                  {c.status === "Open" && (
-                    <>
-                      {respondingTo === c.id ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                          <textarea
-                            placeholder="Type your response to the user..."
-                            value={responseText}
-                            onChange={e => setResponseText(e.target.value)}
-                            rows={3}
-                            style={{ ...inputStyle, resize: "vertical" }}
-                          />
-                          <div style={{ display: "flex", gap: "8px" }}>
-                            <button className="btn-ghost" onClick={() => { setRespondingTo(null); setResponseText("") }} style={{ flex: 1, padding: "10px", borderRadius: "8px" }}>Cancel</button>
-                            <button onClick={() => {
-                              if (!responseText.trim()) return
-                              setComplaints(cs => cs.map(x => x.id === c.id ? { ...x, status: "Resolved", response: responseText } : x))
-                              addLog(`Resolved complaint from ${c.from}`)
-                              setRespondingTo(null)
-                              setResponseText("")
-                            }}
-                              style={{ flex: 2, background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "10px", borderRadius: "8px", cursor: "pointer", fontWeight: "700", fontFamily: "inherit" }}>
-                              ✅ Send & Resolve
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", gap: "8px" }}>
-                          <button
-                            onClick={() => {
-                              setComplaints(cs => cs.map(x => x.id === c.id ? { ...x, status: "Resolved", response: "Marked as resolved by admin." } : x))
-                              addLog(`Resolved complaint from ${c.from}`)
-                            }}
-                            style={{ background: "#064e3b18", border: "1px solid #065f46", color: "#6ee7b7", padding: "8px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "600", fontFamily: "inherit", minHeight: "auto" }}>
-                            ✅ Mark Resolved
-                          </button>
-                          <button onClick={() => { setRespondingTo(c.id); setResponseText("") }}
-                            style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", color: "#888", padding: "8px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "600", fontFamily: "inherit", minHeight: "auto" }}>
-                            💬 Respond
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === "logs" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>Activity Logs</h2>
-                <span style={{ fontSize: "12px", color: "#444" }}>{logs.length} entries</span>
-              </div>
-              <div style={{ background: "#161616", borderRadius: "14px", border: "1px solid #1e1e1e", overflow: "hidden" }}>
-                {logs.map((log, i) => (
-                  <div key={i} style={{ display: "flex", gap: "16px", padding: "14px 18px", borderBottom: i < logs.length - 1 ? "1px solid #1a1a1a" : "none", fontSize: "13px" }}>
-                    <span style={{ color: "#444", minWidth: "130px", flexShrink: 0 }}>{log.time}</span>
-                    <span style={{ color: "#888" }}><span style={{ color: "#c8a97e", fontWeight: "600" }}>{log.admin}</span> — {log.action}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: "12px", color: "#333", textAlign: "center" }}>Owner actions are never logged.</div>
-            </div>
-          )}
-
-          {activeTab === "settings" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>Site Settings</h2>
-              <p style={{ fontSize: "13px", color: "#555", marginTop: "-12px" }}>Changes apply immediately across the entire platform.</p>
-
-              {(currentRole === "owner" || currentRole === "superadmin") && (
-                <div style={{ background: "#161616", borderRadius: "14px", padding: "22px", border: `1px solid ${siteSettings.paymentMode === "automated" ? "#065f46" : "#92400e"}`, display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>💳 Payment Processing Mode</div>
-                    <span style={{ fontSize: "10px", fontWeight: "700", color: siteSettings.paymentMode === "automated" ? "#6ee7b7" : "#fcd34d", background: siteSettings.paymentMode === "automated" ? "#064e3b22" : "#78350f22", border: `1px solid ${siteSettings.paymentMode === "automated" ? "#065f46" : "#92400e"}`, padding: "4px 10px", borderRadius: "20px" }}>
-                      {siteSettings.paymentMode === "automated" ? "🟢 LIVE — AUTOMATED" : "🟡 MANUAL MODE"}
-                    </span>
-                  </div>
-
-                  <p style={{ fontSize: "13px", color: "#888", margin: 0, lineHeight: "1.6" }}>
-                    Controls how every checkout on the platform is processed. This affects all buyers immediately.
-                  </p>
-
-                  <div style={{ display: "flex", gap: "10px" }}>
-                    <div onClick={() => handleSetPaymentMode("manual")}
-                      style={{ flex: 1, padding: "18px", borderRadius: "12px", border: `1.5px solid ${siteSettings.paymentMode === "manual" ? "#92400e" : "#222"}`, background: siteSettings.paymentMode === "manual" ? "#78350f14" : "#111", cursor: "pointer", textAlign: "center", transition: "all 0.2s" }}>
-                      <div style={{ fontSize: "26px", marginBottom: "8px" }}>📱</div>
-                      <div style={{ fontSize: "13px", fontWeight: "700", color: siteSettings.paymentMode === "manual" ? "#fcd34d" : "#888" }}>Manual MoMo</div>
-                      <div style={{ fontSize: "11px", color: "#555", marginTop: "6px" }}>Buyers send money directly, you confirm manually</div>
-                    </div>
-                    <div onClick={() => handleSetPaymentMode("automated")}
-                      style={{ flex: 1, padding: "18px", borderRadius: "12px", border: `1.5px solid ${siteSettings.paymentMode === "automated" ? "#065f46" : "#222"}`, background: siteSettings.paymentMode === "automated" ? "#064e3b14" : "#111", cursor: "pointer", textAlign: "center", transition: "all 0.2s" }}>
-                      <div style={{ fontSize: "26px", marginBottom: "8px" }}>⚡</div>
-                      <div style={{ fontSize: "13px", fontWeight: "700", color: siteSettings.paymentMode === "automated" ? "#6ee7b7" : "#888" }}>Automated Paystack</div>
-                      <div style={{ fontSize: "11px", color: "#555", marginTop: "6px" }}>Instant payment via Paystack, fully automatic</div>
-                    </div>
-                  </div>
-
-                  {paymentModeError && (
-                    <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "11px 14px", fontSize: "12px", color: "#fca5a5" }}>
-                      ⚠️ {paymentModeError}
-                    </div>
-                  )}
-
-                  {paymentModeSaving && (
-                    <div style={{ fontSize: "12px", color: "#444", textAlign: "center" }}>⏳ Updating payment mode...</div>
-                  )}
-
-                  <div style={{ background: siteSettings.paymentMode === "automated" ? "#064e3b14" : "#78350f14", border: `1px solid ${siteSettings.paymentMode === "automated" ? "#065f46" : "#92400e"}`, borderRadius: "10px", padding: "13px", fontSize: "12px", color: siteSettings.paymentMode === "automated" ? "#6ee7b7" : "#fcd34d", lineHeight: "1.6" }}>
-                    {siteSettings.paymentMode === "automated"
-                      ? "✅ Paystack is live. Buyers pay instantly through Paystack's MoMo prompt — no manual confirmation needed."
-                      : "⚠️ Buyers see your MoMo number at checkout and submit proof of payment manually. You must confirm each order yourself."}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "22px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>📞 Contact Info</div>
-                <div>
-                  <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "6px" }}>PHONE NUMBER</div>
-                  <input value={siteSettings.contactPhone} onChange={e => onUpdateSiteSettings(s => ({ ...s, contactPhone: e.target.value }))} style={inputStyle} />
-                </div>
-                <div>
-                  <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "6px" }}>WHATSAPP (digits only, with country code)</div>
-                  <input value={siteSettings.contactWhatsApp} onChange={e => onUpdateSiteSettings(s => ({ ...s, contactWhatsApp: e.target.value }))} style={inputStyle} />
-                </div>
-              </div>
-
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "22px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>🛵 Delivery Fee</div>
-                <div style={{ fontSize: "13px", color: "#888" }}>Fixed platform delivery rate charged to buyers per order.</div>
-                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                  <div style={{ fontSize: "16px", color: "#c8a97e", fontWeight: "700" }}>₵</div>
-                  <input type="number" value={siteSettings.deliveryFee ?? 10} onChange={e => onUpdateSiteSettings(s => ({ ...s, deliveryFee: Number(e.target.value) }))} style={{ ...inputStyle, width: "120px" }} />
-                </div>
-                <div style={{ fontSize: "12px", color: "#444" }}>Riders receive 100% of this fee. Silk Road takes no cut from deliveries.</div>
-              </div>
-
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "22px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>🦶 Footer Tagline</div>
-                <textarea value={siteSettings.footerTagline} onChange={e => onUpdateSiteSettings(s => ({ ...s, footerTagline: e.target.value }))} rows={3}
-                  style={{ ...inputStyle, resize: "vertical" }} />
-              </div>
-
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "22px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>ℹ️ About Text</div>
-                <textarea value={siteSettings.aboutText} onChange={e => onUpdateSiteSettings(s => ({ ...s, aboutText: e.target.value }))} rows={5}
-                  style={{ ...inputStyle, resize: "vertical" }} />
-              </div>
-
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "22px", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8" }}>🔒 Privacy Policy (Information We Collect)</div>
-                <textarea value={siteSettings.privacyText} onChange={e => onUpdateSiteSettings(s => ({ ...s, privacyText: e.target.value }))} rows={5}
-                  style={{ ...inputStyle, resize: "vertical" }} />
-              </div>
-
-              <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "12px", padding: "13px", fontSize: "13px", color: "#6ee7b7" }}>
-                ✅ All changes apply instantly. No save button needed.
-              </div>
-            </div>
-          )}
-
-          {activeTab === "admins" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>Admin Management</h2>
-
-              {!masterKeyVerified && currentRole !== "owner" && (
-                <div style={{ background: "#161616", borderRadius: "14px", padding: "22px", border: "1px solid #92400e" }}>
-                  <div style={{ fontSize: "14px", fontWeight: "700", color: "#fcd34d", marginBottom: "14px" }}>🔑 Master Key Required</div>
-                  <div style={{ display: "flex", gap: "10px" }}>
-                    <input placeholder="Enter master key..." type="password" value={masterKeyInput} onChange={e => setMasterKeyInput(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && handleVerifyMasterKey()}
-                      style={{ flex: 1, ...inputStyle }} />
-                    <button onClick={handleVerifyMasterKey}
-                      style={{ background: "#c8a97e", border: "none", padding: "11px 20px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", color: "#000" }}>
-                      Verify
-                    </button>
-                  </div>
-                  {masterKeyError && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "10px" }}>⚠️ {masterKeyError}</div>}
-                </div>
-              )}
-
-              {(masterKeyVerified || currentRole === "owner") && (
-                <>
-                  <div style={{ background: "#161616", borderRadius: "14px", padding: "22px", border: "1px solid #1e1e1e" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8", marginBottom: "18px" }}>➕ Add Admin</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                        <div>
-                          <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "6px" }}>NAME</div>
-                          <input placeholder="Full name" value={adminForm.name} onChange={e => setAdminForm(f => ({ ...f, name: e.target.value }))} style={inputStyle} />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "6px" }}>EMAIL</div>
-                          <input placeholder="email@example.com" value={adminForm.email} onChange={e => setAdminForm(f => ({ ...f, email: e.target.value }))} style={inputStyle} />
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "10px" }}>ROLE</div>
-                        <div style={{ display: "flex", gap: "8px" }}>
-                          {["support", "admin", "superadmin"].map(r => (
-                            <button key={r} onClick={() => setAdminForm(f => ({ ...f, role: r, permissions: ROLE_DEFAULT_PERMISSIONS[r] || [] }))}
-                              style={{ flex: 1, padding: "10px", borderRadius: "8px", border: `1.5px solid ${adminForm.role === r ? ROLE_COLORS[r].border : "#222"}`, background: adminForm.role === r ? ROLE_COLORS[r].bg : "#111", color: adminForm.role === r ? ROLE_COLORS[r].color : "#888", cursor: "pointer", fontWeight: "600", fontSize: "11px", fontFamily: "inherit" }}>
-                              {ROLE_LABELS[r]}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: "11px", color: "#444", fontWeight: "600", marginBottom: "10px" }}>PERMISSIONS</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          {ALL_PERMISSIONS.map(perm => (
-                            <div key={perm.id}
-                              onClick={() => setAdminForm(f => ({ ...f, permissions: f.permissions.includes(perm.id) ? f.permissions.filter(p => p !== perm.id) : [...f.permissions, perm.id] }))}
-                              style={{ display: "flex", alignItems: "center", gap: "10px", padding: "11px 13px", borderRadius: "10px", background: adminForm.permissions.includes(perm.id) ? "#c8a97e0a" : "#111", border: `1px solid ${adminForm.permissions.includes(perm.id) ? "#c8a97e33" : "#222"}`, cursor: "pointer" }}>
-                              <div style={{ width: "16px", height: "16px", borderRadius: "4px", background: adminForm.permissions.includes(perm.id) ? "#c8a97e" : "#1a1a1a", border: `1.5px solid ${adminForm.permissions.includes(perm.id) ? "#c8a97e" : "#333"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                {adminForm.permissions.includes(perm.id) && <span style={{ fontSize: "10px", color: "#000", fontWeight: "800" }}>✓</span>}
-                              </div>
-                              <div>
-                                <div style={{ fontSize: "13px", fontWeight: "600", color: "#f0ede8" }}>{perm.label}</div>
-                                <div style={{ fontSize: "11px", color: "#555" }}>{perm.desc}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <button className="btn-gold"
-                        onClick={() => {
-                          if (!adminForm.name.trim() || !adminForm.email.trim()) { alert("Please fill in name and email."); return }
-                          const newAdmin = { id: Date.now(), name: adminForm.name, email: adminForm.email, university: "N/A", role: adminForm.role, status: "Active", joined: new Date().toLocaleDateString("en-GB", { month: "short", year: "numeric" }) }
-                          setUsers(u => [...u, newAdmin])
-                          addLog(`Added ${ROLE_LABELS[adminForm.role]}: ${adminForm.name}`)
-                          setAdminForm({ name: "", email: "", role: "support", permissions: [] })
-                          alert(`${adminForm.name} added as ${ROLE_LABELS[adminForm.role]}`)
-                        }}
-                        style={{ padding: "13px", borderRadius: "10px", fontSize: "14px" }}>
-                        ➕ Add Admin
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={{ fontSize: "14px", fontWeight: "700", color: "#f0ede8", marginBottom: "14px" }}>Current Admins & Staff</div>
-                    {users.filter(u => u.role !== "user").map(u => (
-                      <div key={u.id} style={{ background: "#161616", borderRadius: "14px", padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px", border: "1px solid #1e1e1e", marginBottom: "10px" }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "5px" }}>{u.name}</div>
-                          <div style={{ fontSize: "12px", color: "#555" }}>{u.email}</div>
-                        </div>
-                        <RoleBadge role={u.role} />
-                        {currentRole === "owner" && u.role !== "owner" && (
-                          <button
-                            onClick={() => {
-                              if (!window.confirm(`Revoke admin access for ${u.name}?`)) return
-                              setUsers(us => us.map(x => x.id === u.id ? { ...x, role: "user" } : x))
-                            }}
-                            style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "11px", fontWeight: "600", fontFamily: "inherit", minHeight: "auto" }}>
-                            Revoke Access
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RE-AUTH MODAL (Owner critical actions)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ReAuthModal({ onSuccess, onClose }) {
+  const [password, setPassword] = useState("")
+  const [secretKey, setKey]     = useState("")
+  const [error, setError]       = useState("")
+  const [loading, setLoading]   = useState(false)
+
+  const handle = async () => {
+    setError(""); setLoading(true)
+    const { ok, data } = await adminFetch("/admin-auth/owner/reauth", {
+      method: "POST",
+      body: JSON.stringify({ password, secretKey }),
+    })
+    setLoading(false)
+    if (!ok) { setError(data.message || "Re-auth failed."); return }
+    onSuccess(data.reAuthToken)
+  }
+
+  return (
+    <Modal title="Re-authentication Required" onClose={onClose} width={400}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <Alert type="warn">
+          This is a critical action. Re-enter your password and secret key to proceed. Your authorisation expires in 5 minutes.
+        </Alert>
+        <Input label="Password" type="password" value={password} onChange={setPassword} placeholder="Your password" />
+        <Input label="Owner Secret Key" type="password" value={secretKey} onChange={setKey} placeholder="Your secret key" mono />
+        {error && <Alert type="error">{error}</Alert>}
+        <Btn onClick={handle} disabled={loading || !password || !secretKey} fullWidth>
+          {loading ? "Verifying..." : "Confirm Identity"}
+        </Btn>
+      </div>
+    </Modal>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD TAB
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DashboardTab() {
+  const [data, setData]     = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    adminFetch("/admin/dashboard").then(({ data }) => { setData(data); setLoading(false) })
+  }, [])
+
+  if (loading) return <LoadingState />
+  if (!data)   return <EmptyState message="Could not load dashboard." />
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
+      <div>
+        <SectionTitle>Platform Overview</SectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 24, marginTop: 20 }}>
+          <Stat label="Total Users"        value={data.users?.toLocaleString()}           accent={C.gold}  />
+          <Stat label="Active Listings"    value={data.listings?.toLocaleString()}                         />
+          <Stat label="Total Orders"       value={data.orders?.toLocaleString()}                           />
+          <Stat label="Riders"             value={data.riders?.toLocaleString()}           accent={C.blue} />
+          <Stat label="Active Deliveries"  value={data.activeDeliveries?.toLocaleString()} accent={C.blue} />
+          <Stat label="Completed Orders"   value={data.completedOrders?.toLocaleString()}  accent={C.green}/>
+        </div>
+      </div>
+
+      <div>
+        <SectionTitle>Financials</SectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 24, marginTop: 20 }}>
+          <Stat label="Platform Revenue"   value={fmtGHS(data.revenue)}     accent={C.gold}   sub="Completed orders" />
+          <Stat label="Total GMV"          value={fmtGHS(data.totalVolume)}  accent={C.green}  sub="Gross merchandise value" />
+          <Stat label="In Escrow"          value={fmtGHS(data.escrowHeld)}   accent={C.yellow} sub="Held pending delivery" />
+          <Stat label="Pending Orders"     value={data.pendingOrders}        accent={C.yellow} />
+          <Stat label="Escrow Orders"      value={data.escrowOrders}         accent={C.blue}   />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USERS TAB
+// ─────────────────────────────────────────────────────────────────────────────
+
+function UsersTab() {
+  const [users, setUsers]   = useState([])
+  const [total, setTotal]   = useState(0)
+  const [page, setPage]     = useState(1)
+  const [pages, setPages]   = useState(1)
+  const [search, setSearch] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [confirm, setConfirm] = useState(null) // { action, user }
+
+  const load = useCallback(async (p = 1, q = search) => {
+    setLoading(true)
+    const { data } = await adminFetch(`/admin/users?page=${p}&search=${encodeURIComponent(q)}&limit=30`)
+    setUsers(data.users || [])
+    setTotal(data.total || 0)
+    setPage(data.page  || 1)
+    setPages(data.pages || 1)
+    setLoading(false)
+  }, [search])
+
+  useEffect(() => { load(1) }, [])
+
+  const suspend   = async (user) => {
+    await adminFetch(`/admin/users/${user._id}/suspend`, { method: "PUT", body: JSON.stringify({ reason: "Suspended by admin" }) })
+    load(page)
+  }
+  const reinstate = async (user) => {
+    await adminFetch(`/admin/users/${user._id}/reinstate`, { method: "PUT" })
+    load(page)
+  }
+
+  const columns = [
+    { key: "name",       label: "Name",       render: u => <span style={{ color: C.text, fontWeight: 600 }}>{u.name}</span> },
+    { key: "email",      label: "Email",      render: u => <span style={{ color: C.textMid, fontSize: 12 }}>{u.email}</span> },
+    { key: "university", label: "University", render: u => u.university || "—" },
+    { key: "status",     label: "Status",     render: u => <span style={{ display: "flex", alignItems: "center" }}><StatusDot status={u.status || "Active"} />{u.status || "Active"}</span> },
+    { key: "createdAt",  label: "Joined",     render: u => fmt(u.createdAt) },
+    { key: "actions",    label: "",           render: u => (
+      <div style={{ display: "flex", gap: 6 }}>
+        {u.status === "Suspended"
+          ? <Btn size="sm" variant="success" onClick={() => setConfirm({ action: "reinstate", user: u })}>Reinstate</Btn>
+          : <Btn size="sm" variant="danger"  onClick={() => setConfirm({ action: "suspend",   user: u })}>Suspend</Btn>}
+      </div>
+    )},
+  ]
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20 }}>
+        <SectionTitle>Users <span style={{ color: C.textDim, fontWeight: 400, fontSize: 14 }}>({total})</span></SectionTitle>
+        <div style={{ flex: 1 }} />
+        <input
+          placeholder="Search name or email..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && load(1, search)}
+          style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, padding: "8px 14px", borderRadius: 6, fontSize: 13, outline: "none", width: 240 }}
+        />
+        <Btn size="sm" onClick={() => load(1, search)}>Search</Btn>
+      </div>
+
+      {loading ? <LoadingState /> : <Table columns={columns} rows={users} empty="No users found." />}
+      <Pagination page={page} pages={pages} onPage={p => { setPage(p); load(p) }} />
+
+      {confirm && (
+        <Modal title={confirm.action === "suspend" ? "Suspend User" : "Reinstate User"} onClose={() => setConfirm(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <p style={{ color: C.textMid, fontSize: 13, margin: 0 }}>
+              {confirm.action === "suspend"
+                ? `Suspend ${confirm.user.name} (${confirm.user.email})? They will lose access to their account.`
+                : `Reinstate ${confirm.user.name} (${confirm.user.email})?`}
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Btn variant="ghost" onClick={() => setConfirm(null)}>Cancel</Btn>
+              <Btn variant={confirm.action === "suspend" ? "danger" : "success"} onClick={async () => {
+                confirm.action === "suspend" ? await suspend(confirm.user) : await reinstate(confirm.user)
+                setConfirm(null)
+              }}>
+                {confirm.action === "suspend" ? "Suspend" : "Reinstate"}
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LISTINGS TAB
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ListingsTab() {
+  const [listings, setListings] = useState([])
+  const [total, setTotal]       = useState(0)
+  const [page, setPage]         = useState(1)
+  const [pages, setPages]       = useState(1)
+  const [search, setSearch]     = useState("")
+  const [loading, setLoading]   = useState(false)
+  const [confirm, setConfirm]   = useState(null)
+
+  const load = useCallback(async (p = 1, q = search) => {
+    setLoading(true)
+    const { data } = await adminFetch(`/admin/listings?page=${p}&search=${encodeURIComponent(q)}&limit=30`)
+    setListings(data.listings || [])
+    setTotal(data.total || 0)
+    setPage(data.page  || 1)
+    setPages(data.pages || 1)
+    setLoading(false)
+  }, [search])
+
+  useEffect(() => { load(1) }, [])
+
+  const flag   = async (l) => { await adminFetch(`/admin/listings/${l._id}/flag`,   { method: "PUT" }); load(page) }
+  const remove = async (l) => { await adminFetch(`/admin/listings/${l._id}`,        { method: "DELETE" }); load(page) }
+
+  const columns = [
+    { key: "image",    label: "",       render: l => l.image ? <img src={l.image} alt={l.title} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4 }} /> : <div style={{ width: 40, height: 40, background: C.surface2, borderRadius: 4 }} /> },
+    { key: "title",    label: "Title",  render: l => <span style={{ color: C.text, fontWeight: 600 }}>{l.title}</span>, wrap: true },
+    { key: "category", label: "Category" },
+    { key: "seller",   label: "Seller", render: l => l.seller?.name || "—" },
+    { key: "price",    label: "Price",  render: l => l.price ? fmtGHS(l.price) : l.dailyRate ? `${fmtGHS(l.dailyRate)}/day` : "—" },
+    { key: "status",   label: "Status", render: l => <span style={{ display: "flex", alignItems: "center" }}><StatusDot status={l.status || "Active"} />{l.status || "Active"}</span> },
+    { key: "actions",  label: "",       render: l => (
+      <div style={{ display: "flex", gap: 6 }}>
+        {l.status !== "Flagged" && <Btn size="sm" variant="ghost" onClick={() => setConfirm({ action: "flag", listing: l })}>Flag</Btn>}
+        <Btn size="sm" variant="danger" onClick={() => setConfirm({ action: "remove", listing: l })}>Remove</Btn>
+      </div>
+    )},
+  ]
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20 }}>
+        <SectionTitle>Listings <span style={{ color: C.textDim, fontWeight: 400, fontSize: 14 }}>({total})</span></SectionTitle>
+        <div style={{ flex: 1 }} />
+        <input
+          placeholder="Search title or category..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && load(1, search)}
+          style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, padding: "8px 14px", borderRadius: 6, fontSize: 13, outline: "none", width: 240 }}
+        />
+        <Btn size="sm" onClick={() => load(1, search)}>Search</Btn>
+      </div>
+
+      {loading ? <LoadingState /> : <Table columns={columns} rows={listings} empty="No listings found." />}
+      <Pagination page={page} pages={pages} onPage={p => { setPage(p); load(p) }} />
+
+      {confirm && (
+        <Modal title={confirm.action === "flag" ? "Flag Listing" : "Remove Listing"} onClose={() => setConfirm(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <p style={{ color: C.textMid, fontSize: 13, margin: 0 }}>
+              {confirm.action === "flag"
+                ? `Flag "${confirm.listing.title}"? It will be marked for review.`
+                : `Permanently remove "${confirm.listing.title}"? This cannot be undone.`}
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Btn variant="ghost" onClick={() => setConfirm(null)}>Cancel</Btn>
+              <Btn variant="danger" onClick={async () => {
+                confirm.action === "flag" ? await flag(confirm.listing) : await remove(confirm.listing)
+                setConfirm(null)
+              }}>
+                {confirm.action === "flag" ? "Flag" : "Remove Permanently"}
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORDERS TAB
+// ─────────────────────────────────────────────────────────────────────────────
+
+function OrdersTab() {
+  const [orders, setOrders]   = useState([])
+  const [total, setTotal]     = useState(0)
+  const [page, setPage]       = useState(1)
+  const [pages, setPages]     = useState(1)
+  const [search, setSearch]   = useState("")
+  const [status, setStatus]   = useState("")
+  const [loading, setLoading] = useState(false)
+  const [confirm, setConfirm] = useState(null)
+  const [msg, setMsg]         = useState("")
+
+  const load = useCallback(async (p = 1) => {
+    setLoading(true)
+    const { data } = await adminFetch(`/admin/orders?page=${p}&limit=30&search=${encodeURIComponent(search)}&status=${status}`)
+    setOrders(data.orders || [])
+    setTotal(data.total   || 0)
+    setPage(data.page     || 1)
+    setPages(data.pages   || 1)
+    setLoading(false)
+  }, [search, status])
+
+  useEffect(() => { load(1) }, [status])
+
+  const doAction = async (action, order) => {
+    const path = action === "release" ? `/admin/orders/${order._id}/release` : `/admin/orders/${order._id}/refund`
+    const { ok, data } = await adminFetch(path, { method: "PUT", body: JSON.stringify({ reason: "Admin action" }) })
+    if (ok) { setMsg(data.message); load(page) }
+    setConfirm(null)
+  }
+
+  const columns = [
+    { key: "localOrderId", label: "Order ID",   render: o => <span style={{ fontFamily: "monospace", color: C.gold, fontSize: 12 }}>{o.localOrderId || o._id?.slice(-8)}</span> },
+    { key: "buyer",        label: "Buyer",       render: o => o.buyer?.name || o.payerName || "Guest" },
+    { key: "seller",       label: "Seller",      render: o => o.seller?.name || "—" },
+    { key: "amount",       label: "Amount",      render: o => <span style={{ color: C.gold, fontWeight: 700 }}>{fmtGHS(o.amount)}</span> },
+    { key: "delivery",     label: "Delivery",    render: o => o.deliveryMethod === "rider" ? "Rider" : "Pickup" },
+    { key: "status",       label: "Status",      render: o => <span style={{ display: "flex", alignItems: "center" }}><StatusDot status={o.status} />{o.status}</span> },
+    { key: "createdAt",    label: "Date",        render: o => fmt(o.createdAt) },
+    { key: "actions",      label: "",            render: o => (
+      <div style={{ display: "flex", gap: 6 }}>
+        {(o.status === "In Escrow" || o.status === "Pending Confirmation") && (
+          <>
+            <Btn size="sm" variant="success" onClick={() => setConfirm({ action: "release", order: o })}>Release</Btn>
+            <Btn size="sm" variant="danger"  onClick={() => setConfirm({ action: "refund",  order: o })}>Refund</Btn>
+          </>
+        )}
+      </div>
+    )},
+  ]
+
+  const statuses = ["", "In Escrow", "Pending Confirmation", "Completed", "Refunded", "Cancelled"]
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
+        <SectionTitle>Orders <span style={{ color: C.textDim, fontWeight: 400, fontSize: 14 }}>({total})</span></SectionTitle>
+        <div style={{ flex: 1 }} />
+        <select value={status} onChange={e => setStatus(e.target.value)}
+          style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, padding: "8px 12px", borderRadius: 6, fontSize: 13, outline: "none", fontFamily: "inherit" }}>
+          {statuses.map(s => <option key={s} value={s}>{s || "All Statuses"}</option>)}
+        </select>
+        <input
+          placeholder="Search by Order ID..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && load(1)}
+          style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, padding: "8px 14px", borderRadius: 6, fontSize: 13, outline: "none", width: 220 }}
+        />
+        <Btn size="sm" onClick={() => load(1)}>Search</Btn>
+      </div>
+
+      {msg && <div style={{ marginBottom: 16 }}><Alert type="success">{msg}</Alert></div>}
+      {loading ? <LoadingState /> : <Table columns={columns} rows={orders} empty="No orders found." />}
+      <Pagination page={page} pages={pages} onPage={p => { setPage(p); load(p) }} />
+
+      {confirm && (
+        <Modal title={confirm.action === "release" ? "Release Payment" : "Issue Refund"} onClose={() => setConfirm(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Alert type={confirm.action === "release" ? "info" : "warn"}>
+              {confirm.action === "release"
+                ? `Release ₵${confirm.order.amount?.toLocaleString()} to the seller for order ${confirm.order.localOrderId || confirm.order._id?.slice(-8)}?`
+                : `Refund ₵${confirm.order.amount?.toLocaleString()} to buyer for order ${confirm.order.localOrderId || confirm.order._id?.slice(-8)}? This cannot be undone.`}
+            </Alert>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Btn variant="ghost" onClick={() => setConfirm(null)}>Cancel</Btn>
+              <Btn variant={confirm.action === "release" ? "success" : "danger"} onClick={() => doAction(confirm.action, confirm.order)}>
+                {confirm.action === "release" ? "Release Payment" : "Issue Refund"}
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIDERS TAB
+// ─────────────────────────────────────────────────────────────────────────────
+
+function RidersTab() {
+  const [riders, setRiders]   = useState([])
+  const [total, setTotal]     = useState(0)
+  const [page, setPage]       = useState(1)
+  const [pages, setPages]     = useState(1)
+  const [search, setSearch]   = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const load = useCallback(async (p = 1, q = search) => {
+    setLoading(true)
+    const { data } = await adminFetch(`/admin/riders?page=${p}&search=${encodeURIComponent(q)}&limit=30`)
+    setRiders(data.riders || [])
+    setTotal(data.total   || 0)
+    setPage(data.page     || 1)
+    setPages(data.pages   || 1)
+    setLoading(false)
+  }, [search])
+
+  useEffect(() => { load(1) }, [])
+
+  const toggle = async (rider) => {
+    const path = rider.isActive ? `/admin/riders/${rider._id}/deactivate` : `/admin/riders/${rider._id}/activate`
+    await adminFetch(path, { method: "PUT" })
+    load(page)
+  }
+
+  const columns = [
+    { key: "name",            label: "Name",       render: r => <span style={{ color: C.text, fontWeight: 600 }}>{r.name}</span> },
+    { key: "phone",           label: "Phone" },
+    { key: "vehicle",         label: "Vehicle" },
+    { key: "zone",            label: "Zone",       render: r => r.zone || "—" },
+    { key: "totalDeliveries", label: "Deliveries", render: r => r.totalDeliveries || 0 },
+    { key: "totalEarned",     label: "Earned",     render: r => fmtGHS(r.totalEarned) },
+    { key: "status",          label: "Status",     render: r => <span style={{ display: "flex", alignItems: "center" }}><StatusDot status={r.isActive ? "Active" : "Suspended"} />{r.isActive ? "Active" : "Inactive"}</span> },
+    { key: "actions",         label: "",           render: r => (
+      <Btn size="sm" variant={r.isActive ? "danger" : "success"} onClick={() => toggle(r)}>
+        {r.isActive ? "Deactivate" : "Activate"}
+      </Btn>
+    )},
+  ]
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20 }}>
+        <SectionTitle>Riders <span style={{ color: C.textDim, fontWeight: 400, fontSize: 14 }}>({total})</span></SectionTitle>
+        <div style={{ flex: 1 }} />
+        <input
+          placeholder="Search name or phone..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && load(1, search)}
+          style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, padding: "8px 14px", borderRadius: 6, fontSize: 13, outline: "none", width: 240 }}
+        />
+        <Btn size="sm" onClick={() => load(1, search)}>Search</Btn>
+      </div>
+      {loading ? <LoadingState /> : <Table columns={columns} rows={riders} empty="No riders found." />}
+      <Pagination page={page} pages={pages} onPage={p => { setPage(p); load(p) }} />
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELIVERIES TAB
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DeliveriesTab() {
+  const [deliveries, setDeliveries] = useState([])
+  const [total, setTotal]           = useState(0)
+  const [page, setPage]             = useState(1)
+  const [pages, setPages]           = useState(1)
+  const [status, setStatus]         = useState("")
+  const [loading, setLoading]       = useState(false)
+
+  const load = useCallback(async (p = 1) => {
+    setLoading(true)
+    const { data } = await adminFetch(`/admin/deliveries?page=${p}&limit=30&status=${status}`)
+    setDeliveries(data.deliveries || [])
+    setTotal(data.total  || 0)
+    setPage(data.page    || 1)
+    setPages(data.pages  || 1)
+    setLoading(false)
+  }, [status])
+
+  useEffect(() => { load(1) }, [status])
+
+  const statuses = ["", "pending", "accepted", "picked_up", "delivered", "completed", "cancelled"]
+
+  const columns = [
+    { key: "localOrderId", label: "Order",    render: d => <span style={{ fontFamily: "monospace", color: C.gold, fontSize: 12 }}>{d.localOrderId || "—"}</span> },
+    { key: "itemTitle",    label: "Item",     render: d => d.itemTitle || "—", wrap: true },
+    { key: "rider",        label: "Rider",    render: d => d.rider?.name || "Unassigned" },
+    { key: "seller",       label: "Seller",   render: d => d.seller?.name || "—" },
+    { key: "distanceKm",   label: "Distance", render: d => d.distanceKm ? `${d.distanceKm} km` : "—" },
+    { key: "deliveryFee",  label: "Fee",      render: d => fmtGHS(d.deliveryFee) },
+    { key: "status",       label: "Status",   render: d => <span style={{ display: "flex", alignItems: "center" }}><StatusDot status={d.status} />{d.status}</span> },
+    { key: "createdAt",    label: "Created",  render: d => fmt(d.createdAt) },
+  ]
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20 }}>
+        <SectionTitle>Deliveries <span style={{ color: C.textDim, fontWeight: 400, fontSize: 14 }}>({total})</span></SectionTitle>
+        <div style={{ flex: 1 }} />
+        <select value={status} onChange={e => setStatus(e.target.value)}
+          style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, padding: "8px 12px", borderRadius: 6, fontSize: 13, outline: "none", fontFamily: "inherit" }}>
+          {statuses.map(s => <option key={s} value={s}>{s || "All Statuses"}</option>)}
+        </select>
+      </div>
+      {loading ? <LoadingState /> : <Table columns={columns} rows={deliveries} empty="No deliveries found." />}
+      <Pagination page={page} pages={pages} onPage={p => { setPage(p); load(p) }} />
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINANCIAL REPORTS TAB
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FinanceTab() {
+  const [report, setReport] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [from, setFrom]     = useState("")
+  const [to, setTo]         = useState("")
+
+  const load = async () => {
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (from) params.set("from", from)
+    if (to)   params.set("to",   to)
+    const { data } = await adminFetch(`/admin/reports/financial?${params}`)
+    setReport(data)
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+      <div>
+        <SectionTitle>Financial Reports</SectionTitle>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-end", marginTop: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ fontSize: 11, color: C.textMid, fontWeight: 600 }}>From</label>
+            <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+              style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, padding: "8px 12px", borderRadius: 6, fontSize: 13, outline: "none", fontFamily: "inherit" }} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ fontSize: 11, color: C.textMid, fontWeight: 600 }}>To</label>
+            <input type="date" value={to} onChange={e => setTo(e.target.value)}
+              style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, padding: "8px 12px", borderRadius: 6, fontSize: 13, outline: "none", fontFamily: "inherit" }} />
+          </div>
+          <Btn onClick={load} disabled={loading}>{loading ? "Loading..." : "Apply Filter"}</Btn>
+          <Btn variant="ghost" onClick={() => { setFrom(""); setTo(""); setTimeout(load, 50) }}>Reset</Btn>
+        </div>
+      </div>
+
+      {loading && <LoadingState />}
+
+      {report && !loading && (
+        <>
+          <div>
+            <div style={{ fontSize: 11, color: C.textDim, fontWeight: 600, marginBottom: 16 }}>SUMMARY</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 24 }}>
+              <Stat label="Platform Revenue"    value={fmtGHS(report.summary?.totalRevenue)}   accent={C.gold}  />
+              <Stat label="Total GMV"           value={fmtGHS(report.summary?.totalVolume)}    accent={C.green} />
+              <Stat label="Completed Orders"    value={report.summary?.totalOrders}             />
+              <Stat label="Avg. Order Value"    value={fmtGHS(report.summary?.avgOrderValue)}  />
+            </div>
+          </div>
+
+          {report.byMethod?.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, color: C.textDim, fontWeight: 600, marginBottom: 16 }}>BY PAYMENT METHOD</div>
+              <Table
+                columns={[
+                  { key: "_id",   label: "Method",     render: r => r._id || "Unknown" },
+                  { key: "count", label: "Orders" },
+                  { key: "total", label: "Volume",      render: r => fmtGHS(r.total) },
+                ]}
+                rows={report.byMethod}
+              />
+            </div>
+          )}
+
+          {report.topSellers?.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, color: C.textDim, fontWeight: 600, marginBottom: 16 }}>TOP SELLERS</div>
+              <Table
+                columns={[
+                  { key: "sellerName",    label: "Seller",      render: r => <span style={{ color: C.text, fontWeight: 600 }}>{r.sellerName || "—"}</span> },
+                  { key: "sellerEmail",   label: "Email",       render: r => <span style={{ color: C.textMid, fontSize: 12 }}>{r.sellerEmail || "—"}</span> },
+                  { key: "orderCount",    label: "Orders" },
+                  { key: "totalSales",    label: "GMV",         render: r => fmtGHS(r.totalSales) },
+                  { key: "totalEarnings", label: "Earned",      render: r => fmtGHS(r.totalEarnings) },
+                ]}
+                rows={report.topSellers}
+              />
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECURITY TAB
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SecurityTab() {
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    adminFetch("/admin/security/activity").then(({ data }) => { setData(data); setLoading(false) })
+  }, [])
+
+  if (loading) return <LoadingState />
+  if (!data)   return <EmptyState message="Could not load security data." />
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+      {data.suspicious?.length > 0 && (
+        <div>
+          <SectionTitle>Suspicious Activity</SectionTitle>
+          <div style={{ marginTop: 4, marginBottom: 16 }}><Alert type="warn">Multiple orders from the same phone number within 1 hour.</Alert></div>
+          <Table
+            columns={[
+              { key: "_id",    label: "Phone Number", render: r => <span style={{ fontFamily: "monospace", color: C.yellow }}>{r._id}</span> },
+              { key: "count",  label: "Order Count",  render: r => <span style={{ color: C.red, fontWeight: 700 }}>{r.count}</span> },
+              { key: "orders", label: "Order IDs",    render: r => <span style={{ fontSize: 11, color: C.textMid }}>{r.orders?.join(", ")}</span>, wrap: true },
+            ]}
+            rows={data.suspicious}
+          />
+        </div>
+      )}
+
+      {data.suspendedUsers?.length > 0 && (
+        <div>
+          <SectionTitle>Suspended Users</SectionTitle>
+          <Table
+            columns={[
+              { key: "name",        label: "Name",         render: u => <span style={{ color: C.text }}>{u.name}</span> },
+              { key: "email",       label: "Email",        render: u => <span style={{ color: C.textMid, fontSize: 12 }}>{u.email}</span> },
+              { key: "suspendedAt", label: "Suspended At", render: u => fmt(u.suspendedAt) },
+            ]}
+            rows={data.suspendedUsers}
+            empty="No suspended users."
+          />
+        </div>
+      )}
+
+      {data.flaggedListings?.length > 0 && (
+        <div>
+          <SectionTitle>Flagged Listings</SectionTitle>
+          <Table
+            columns={[
+              { key: "title",  label: "Title",  render: l => <span style={{ color: C.text }}>{l.title}</span>, wrap: true },
+              { key: "seller", label: "Seller", render: l => l.seller?.name || "—" },
+            ]}
+            rows={data.flaggedListings}
+            empty="No flagged listings."
+          />
+        </div>
+      )}
+
+      {!data.suspicious?.length && !data.suspendedUsers?.length && !data.flaggedListings?.length && (
+        <EmptyState message="No security alerts at this time." />
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN MANAGEMENT TAB (Owner + Super Admin only)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AdminsTab({ adminUser, reAuthToken, onNeedReAuth }) {
+  const [admins, setAdmins]     = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [showCreate, setCreate] = useState(false)
+  const [confirm, setConfirm]   = useState(null)
+
+  // Create Super Admin form (Owner only)
+  const [saName,     setSaName]     = useState("")
+  const [saEmail,    setSaEmail]    = useState("")
+  const [saPassword, setSaPassword] = useState("")
+  const [saError,    setSaError]    = useState("")
+  const [saResult,   setSaResult]   = useState(null)
+
+  // Create Admin form
+  const [aName,     setAName]     = useState("")
+  const [aEmail,    setAEmail]    = useState("")
+  const [aPassword, setAPassword] = useState("")
+  const [aRole,     setARole]     = useState("support")
+  const [aError,    setAError]    = useState("")
+  const [createMode, setCreateMode] = useState("admin") // "admin" | "super_admin"
+
+  const load = async () => {
+    setLoading(true)
+    const { data } = await adminFetch("/admin-auth/admins")
+    setAdmins(data.admins || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const createSuperAdmin = async () => {
+    if (!reAuthToken) { onNeedReAuth(); return }
+    setSaError("")
+    const { ok, data } = await adminFetch("/admin-auth/super-admin/create", {
+      method:  "POST",
+      headers: { "x-reauth-token": reAuthToken },
+      body:    JSON.stringify({ name: saName, email: saEmail, password: saPassword }),
+    })
+    if (!ok) { setSaError(data.message || "Failed."); return }
+    setSaResult(data)
+    load()
+  }
+
+  const createAdmin = async () => {
+    setAError("")
+    const { ok, data } = await adminFetch("/admin-auth/admin/create", {
+      method: "POST",
+      body:   JSON.stringify({ name: aName, email: aEmail, password: aPassword, role: aRole }),
+    })
+    if (!ok) { setAError(data.message || "Failed."); return }
+    setCreate(false); setAName(""); setAEmail(""); setAPassword(""); setARole("support")
+    load()
+  }
+
+  const suspend   = async (a) => { await adminFetch(`/admin-auth/admin/${a._id}/suspend`,   { method: "PUT" }); load() }
+  const reinstate = async (a) => { await adminFetch(`/admin-auth/admin/${a._id}/reinstate`,  { method: "PUT" }); load() }
+  const revoke    = async (a) => {
+    if (!reAuthToken) { onNeedReAuth(); return }
+    await adminFetch(`/admin-auth/super-admin/${a._id}/revoke`, {
+      method: "DELETE", headers: { "x-reauth-token": reAuthToken },
+    })
+    load()
+  }
+  const deleteAdmin = async (a) => {
+    if (!reAuthToken) { onNeedReAuth(); return }
+    await adminFetch(`/admin-auth/admin/${a._id}`, {
+      method: "DELETE", headers: { "x-reauth-token": reAuthToken },
+    })
+    load()
+    setConfirm(null)
+  }
+
+  const ROLES = ["operations","user_seller","finance","dispute","moderation","support","delivery","security"]
+
+  const tier_badge = (a) => {
+    if (a.tier === "super_admin") return <Badge label="Super Admin" color={C.gold} dim={C.goldDim} />
+    return <Badge label={a.role || "admin"} color={C.blue} dim={C.blueDim} />
+  }
+
+  const columns = [
+    { key: "name",      label: "Name",    render: a => <span style={{ color: C.text, fontWeight: 600 }}>{a.name}</span> },
+    { key: "email",     label: "Email",   render: a => <span style={{ color: C.textMid, fontSize: 12 }}>{a.email}</span> },
+    { key: "tier",      label: "Role",    render: a => tier_badge(a) },
+    { key: "createdBy", label: "Created By", render: a => <span style={{ color: C.textDim, fontSize: 12 }}>{a.createdBy || "—"}</span> },
+    { key: "lastLogin", label: "Last Login", render: a => fmt(a.lastLogin) },
+    { key: "status",    label: "Status",  render: a => <span style={{ display: "flex", alignItems: "center" }}><StatusDot status={a.isActive ? "Active" : "Suspended"} />{a.isActive ? "Active" : "Suspended"}</span> },
+    { key: "actions",   label: "",        render: a => (
+      <div style={{ display: "flex", gap: 6 }}>
+        {a.tier === "super_admin" && adminUser.tier === "owner" && (
+          <Btn size="sm" variant="danger" onClick={() => revoke(a)}>Revoke</Btn>
+        )}
+        {a.tier === "admin" && (
+          <>
+            {a.isActive
+              ? <Btn size="sm" variant="danger"   onClick={() => suspend(a)}>Suspend</Btn>
+              : <Btn size="sm" variant="success"  onClick={() => reinstate(a)}>Reinstate</Btn>}
+            {adminUser.tier === "owner" && (
+              <Btn size="sm" variant="danger" onClick={() => setConfirm({ action: "delete", admin: a })}>Delete</Btn>
+            )}
+          </>
+        )}
+      </div>
+    )},
+  ]
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <SectionTitle>Admin Accounts</SectionTitle>
+        <div style={{ flex: 1 }} />
+        {adminUser.tier === "owner" && (
+          <Btn size="sm" onClick={() => { setCreateMode("super_admin"); setCreate(true) }}>
+            + New Super Admin
+          </Btn>
+        )}
+        <Btn size="sm" variant="ghost" onClick={() => { setCreateMode("admin"); setCreate(true) }}>
+          + New Admin
+        </Btn>
+      </div>
+
+      {loading ? <LoadingState /> : <Table columns={columns} rows={admins} empty="No admins yet." />}
+
+      {/* Create modal */}
+      {showCreate && (
+        <Modal title={createMode === "super_admin" ? "Create Super Admin" : "Create Admin"} onClose={() => { setCreate(false); setSaResult(null); setSaError(""); setAError("") }}>
+          {saResult ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <Alert type="success">Super Admin created successfully.</Alert>
+              <Alert type="warn">
+                <strong>Secret Key — shown once only. Save it immediately.</strong>
+                <div style={{ fontFamily: "monospace", fontSize: 13, marginTop: 8, wordBreak: "break-all", background: C.surface, padding: "10px 12px", borderRadius: 6, color: C.gold }}>
+                  {saResult.secretKey}
+                </div>
+              </Alert>
+              <Btn onClick={() => { setCreate(false); setSaResult(null); setSaName(""); setSaEmail(""); setSaPassword("") }} fullWidth>Done</Btn>
+            </div>
+          ) : createMode === "super_admin" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <Alert type="warn">Requires re-authentication. The secret key will be shown once — save it immediately.</Alert>
+              <Input label="Full Name"  value={saName}     onChange={setSaName}     placeholder="Jane Smith" />
+              <Input label="Email"      value={saEmail}    onChange={setSaEmail}    placeholder="jane@silkroadgh.com" type="email" />
+              <Input label="Password"   value={saPassword} onChange={setSaPassword} placeholder="Min 12 characters" type="password" />
+              {saError && <Alert type="error">{saError}</Alert>}
+              <Btn onClick={createSuperAdmin} fullWidth>Create Super Admin</Btn>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <Input label="Full Name" value={aName}     onChange={setAName}     placeholder="John Doe" />
+              <Input label="Email"     value={aEmail}    onChange={setAEmail}    placeholder="john@silkroadgh.com" type="email" />
+              <Input label="Password"  value={aPassword} onChange={setAPassword} placeholder="Min 10 characters" type="password" />
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 11, color: C.textMid, fontWeight: 600 }}>Role</label>
+                <select value={aRole} onChange={e => setARole(e.target.value)}
+                  style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, padding: "10px 14px", borderRadius: 6, fontSize: 13, outline: "none", fontFamily: "inherit" }}>
+                  {ROLES.map(r => <option key={r} value={r}>{r.replace("_", " ")}</option>)}
+                </select>
+              </div>
+              {aError && <Alert type="error">{aError}</Alert>}
+              <Btn onClick={createAdmin} fullWidth>Create Admin</Btn>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* Delete confirm */}
+      {confirm?.action === "delete" && (
+        <Modal title="Delete Admin" onClose={() => setConfirm(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Alert type="error">Permanently delete {confirm.admin.name} ({confirm.admin.email})? This cannot be undone. Requires re-authentication.</Alert>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Btn variant="ghost" onClick={() => setConfirm(null)}>Cancel</Btn>
+              <Btn variant="danger" onClick={() => deleteAdmin(confirm.admin)}>Delete Permanently</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT LOGS TAB
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AuditTab() {
+  const [logs, setLogs]     = useState([])
+  const [total, setTotal]   = useState(0)
+  const [page, setPage]     = useState(1)
+  const [pages, setPages]   = useState(1)
+  const [loading, setLoading] = useState(false)
+
+  const load = async (p = 1) => {
+    setLoading(true)
+    const { data } = await adminFetch(`/admin/audit-logs?page=${p}&limit=50`)
+    setLogs(data.logs   || [])
+    setTotal(data.total || 0)
+    setPage(data.page   || 1)
+    setPages(data.pages || 1)
+    setLoading(false)
+  }
+
+  useEffect(() => { load(1) }, [])
+
+  const columns = [
+    { key: "at",         label: "Time",    render: l => <span style={{ fontFamily: "monospace", fontSize: 11, color: C.textDim }}>{fmt(l.at)}</span> },
+    { key: "adminEmail", label: "By",      render: l => <span style={{ fontSize: 12, color: C.textMid }}>{l.adminEmail || l.by || "—"}</span> },
+    { key: "adminRole",  label: "Role",    render: l => l.adminRole ? <Badge label={l.adminRole} color={C.blue} dim={C.blueDim} /> : "—" },
+    { key: "action",     label: "Action",  render: l => <span style={{ fontFamily: "monospace", fontSize: 12, color: C.gold }}>{l.action}</span> },
+    { key: "entity",     label: "Entity",  render: l => l.entity || "—" },
+    { key: "ip",         label: "IP",      render: l => <span style={{ fontFamily: "monospace", fontSize: 11, color: C.textDim }}>{l.ip || "—"}</span> },
+  ]
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20 }}>
+        <SectionTitle>Audit Log <span style={{ color: C.textDim, fontWeight: 400, fontSize: 14 }}>({total} entries)</span></SectionTitle>
+      </div>
+      {loading ? <LoadingState /> : <Table columns={columns} rows={logs} empty="No audit entries." />}
+      <Pagination page={page} pages={pages} onPage={p => { setPage(p); load(p) }} />
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED LAYOUT COMPONENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SectionTitle({ children }) {
+  return <h2 style={{ fontSize: 16, fontWeight: 700, color: C.text, margin: 0, letterSpacing: "-0.01em" }}>{children}</h2>
+}
+
+function LoadingState() {
+  return (
+    <div style={{ padding: "60px 0", textAlign: "center" }}>
+      <div style={{ width: 32, height: 32, border: `2px solid ${C.border}`, borderTopColor: C.gold, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+      <div style={{ fontSize: 12, color: C.textDim }}>Loading...</div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+    </div>
+  )
+}
+
+function EmptyState({ message }) {
+  return (
+    <div style={{ padding: "60px 0", textAlign: "center", color: C.textDim, fontSize: 13 }}>
+      {message}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN ADMIN PANEL
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function AdminPanel({ onClose }) {
+  const [adminUser, setAdminUser]   = useState(getAdminUser)
+  const [authed, setAuthed]         = useState(!!getAdminToken())
+  const [tab, setTab]               = useState("dashboard")
+  const [reAuthToken, setReAuthToken] = useState(null)
+  const [showReAuth, setShowReAuth] = useState(false)
+  const [reAuthCallback, setReAuthCallback] = useState(null)
+
+  const signOut = () => {
+    clearAdminSession()
+    setAdminUser(null)
+    setAuthed(false)
+    setReAuthToken(null)
+    setTab("dashboard")
+  }
+
+  const onLogin = () => {
+    setAdminUser(getAdminUser())
+    setAuthed(true)
+  }
+
+  const handleNeedReAuth = (callback) => {
+    setReAuthCallback(() => callback)
+    setShowReAuth(true)
+  }
+
+  const handleReAuthSuccess = (token) => {
+    setReAuthToken(token)
+    setShowReAuth(false)
+    if (reAuthCallback) { reAuthCallback(token); setReAuthCallback(null) }
+  }
+
+  // ── Build nav based on tier and permissions ───────────────────────────────
+  const buildNav = () => {
+    if (!adminUser) return []
+    const tier = adminUser.tier
+    const perms = adminUser.permissions || []
+    const isOwner  = tier === "owner"
+    const isSA     = tier === "super_admin"
+    const hasPerm  = (...p) => isOwner || isSA || p.some(x => perms.includes(x))
+
+    return [
+      { id: "dashboard",  label: "Dashboard",   icon: "◈",  show: true },
+      { id: "users",      label: "Users",        icon: "⊙",  show: hasPerm("view_users",     "manage_users")     },
+      { id: "listings",   label: "Listings",     icon: "⊞",  show: hasPerm("view_listings",  "manage_listings")  },
+      { id: "orders",     label: "Orders",       icon: "⊟",  show: hasPerm("view_orders",    "manage_orders", "view_payments") },
+      { id: "riders",     label: "Riders",       icon: "⊛",  show: hasPerm("view_riders",    "manage_riders")    },
+      { id: "deliveries", label: "Deliveries",   icon: "⊕",  show: hasPerm("view_deliveries","view_delivery_status") },
+      { id: "finance",    label: "Finance",      icon: "⊜",  show: hasPerm("view_financial_reports", "view_payments") },
+      { id: "security",   label: "Security",     icon: "⊘",  show: hasPerm("view_activity_logs") },
+      { id: "admins",     label: "Admin Accounts",icon: "⊗", show: isOwner || isSA },
+      { id: "audit",      label: "Audit Log",    icon: "⊙",  show: isOwner || isSA },
+    ].filter(n => n.show)
+  }
+
+  const nav = buildNav()
+
+  // ── Login gate ────────────────────────────────────────────────────────────
+  if (!authed) {
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 900 }}>
+        <style>{`* { box-sizing: border-box } input,select,button { font-family: inherit }`}</style>
+        <LoginScreen onSuccess={onLogin} />
+        {onClose && (
+          <button onClick={onClose}
+            style={{ position: "fixed", top: 20, right: 20, background: C.surface, border: `1px solid ${C.border}`, color: C.textMid, padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
+            ← Back to site
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const tierMeta = tier_meta[adminUser?.tier] || tier_meta.admin
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 900, background: C.bg, display: "flex", overflow: "hidden" }}>
+      <style>{`
+        * { box-sizing: border-box }
+        input, select, button, textarea { font-family: inherit }
+        input::placeholder { color: #444 }
+        ::-webkit-scrollbar { width: 4px }
+        ::-webkit-scrollbar-track { background: transparent }
+        ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px }
+        @keyframes spin { to { transform: rotate(360deg) } }
+      `}</style>
+
+      {/* ── Sidebar ── */}
+      <div style={{ width: 220, background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+
+        {/* Brand */}
+        <div style={{ padding: "20px 20px 16px", borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <div style={{ width: 28, height: 28, background: `linear-gradient(135deg, ${C.gold}, #9a7040)`, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{"🕸"}</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.gold, letterSpacing: "-0.01em" }}>Silk Road GH</div>
+              <div style={{ fontSize: 9, color: C.textDim, letterSpacing: ".06em" }}>ADMIN</div>
+            </div>
+          </div>
+
+          {/* Current user */}
+          <div style={{ background: C.surface2, border: `1px solid ${tierMeta.color}33`, borderRadius: 6, padding: "10px 12px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.text, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {adminUser?.name || adminUser?.email}
+            </div>
+            <Badge label={tierMeta.label} color={tierMeta.color} dim={tierMeta.dim} />
+          </div>
+        </div>
+
+        {/* Re-auth status */}
+        {reAuthToken && adminUser?.tier === "owner" && (
+          <div style={{ margin: "12px 12px 0", background: C.greenDim, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "8px 10px", fontSize: 10, color: C.green, fontWeight: 700, letterSpacing: ".04em" }}>
+            RE-AUTH ACTIVE · 5 MIN
+          </div>
+        )}
+
+        {/* Nav */}
+        <nav style={{ flex: 1, overflowY: "auto", padding: "12px 10px" }}>
+          {nav.map(item => (
+            <button key={item.id} onClick={() => setTab(item.id)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 10,
+                background: tab === item.id ? C.goldDim : "transparent",
+                border: `1px solid ${tab === item.id ? C.goldMid : "transparent"}`,
+                color: tab === item.id ? C.gold : C.textMid,
+                padding: "9px 12px", borderRadius: 6, cursor: "pointer",
+                fontSize: 12, fontWeight: tab === item.id ? 700 : 500,
+                marginBottom: 2, textAlign: "left", transition: "all .1s",
+              }}>
+              <span style={{ fontSize: 14, fontFamily: "monospace", opacity: tab === item.id ? 1 : 0.6 }}>{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Footer */}
+        <div style={{ padding: "12px 10px", borderTop: `1px solid ${C.border}` }}>
+          {adminUser?.tier === "owner" && (
+            <button onClick={() => setShowReAuth(true)}
+              style={{ width: "100%", background: "transparent", border: `1px solid ${C.border}`, color: C.textDim, padding: "8px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600, marginBottom: 6, textAlign: "left" }}>
+              Re-authenticate
+            </button>
+          )}
+          {onClose && (
+            <button onClick={onClose}
+              style={{ width: "100%", background: "transparent", border: `1px solid ${C.border}`, color: C.textDim, padding: "8px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600, marginBottom: 6, textAlign: "left" }}>
+              ← Back to site
+            </button>
+          )}
+          <button onClick={signOut}
+            style={{ width: "100%", background: C.redDim, border: `1px solid ${C.red}44`, color: C.red, padding: "8px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 700, textAlign: "left" }}>
+            Sign Out
+          </button>
+        </div>
+      </div>
+
+      {/* ── Main content ── */}
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+
+        {/* Top bar */}
+        <div style={{ padding: "16px 32px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 16, flexShrink: 0, background: C.surface }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>
+              {nav.find(n => n.id === tab)?.label || "Dashboard"}
+            </div>
+            <div style={{ fontSize: 11, color: C.textDim, marginTop: 1 }}>
+              Silk Road GH Administration
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: C.textDim, fontFamily: "monospace" }}>
+            {new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+          </div>
+        </div>
+
+        {/* Content area */}
+        <div style={{ flex: 1, padding: "32px" }}>
+          {tab === "dashboard"  && <DashboardTab />}
+          {tab === "users"      && <UsersTab />}
+          {tab === "listings"   && <ListingsTab />}
+          {tab === "orders"     && <OrdersTab />}
+          {tab === "riders"     && <RidersTab />}
+          {tab === "deliveries" && <DeliveriesTab />}
+          {tab === "finance"    && <FinanceTab />}
+          {tab === "security"   && <SecurityTab />}
+          {tab === "admins"     && (
+            <AdminsTab
+              adminUser={adminUser}
+              reAuthToken={reAuthToken}
+              onNeedReAuth={() => handleNeedReAuth(null)}
+            />
+          )}
+          {tab === "audit"      && <AuditTab />}
+        </div>
+      </div>
+
+      {/* Re-auth modal */}
+      {showReAuth && (
+        <ReAuthModal
+          onSuccess={handleReAuthSuccess}
+          onClose={() => { setShowReAuth(false); setReAuthCallback(null) }}
+        />
+      )}
     </div>
   )
 }
