@@ -17,9 +17,7 @@ import OrderTracker, {
 import RiderAuth from "./RiderAuth"
 import RiderApp from "./RiderApp"
 import { getListings } from "./api"
-
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
-
 const ALL_LISTINGS = [
   { id: 1,  title: "Calculus Textbook",       price: 380,  category: "Books",       seller: "Ahmad K.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "8th edition, some highlights but all pages intact. Perfect for MTH 151.",                       delivery: ["Pickup", "Rider"],            section: "buy" },
   { id: 2,  title: "MacBook Pro M2",           price: 8500, category: "Electronics", seller: "Priya S.",  university: "UG Legon", rating: 5.0, condition: "Excellent", desc: "Used for one semester only. Comes with original box and charger.",                            delivery: ["Pickup", "Rider", "Shipping"], section: "buy" },
@@ -46,7 +44,6 @@ const ALL_LISTINGS = [
   { id: 23, title: "Electric Kettle",          price: 120,  category: "Electronics", seller: "Abena S.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "1.5L capacity, auto shut-off. Perfect for dorm room.",                                      delivery: ["Pickup", "Rider"],            section: "buy" },
   { id: 24, title: "Basketball",               price: 90,   category: "Sports",      seller: "Kwame T.",  university: "Ashesi",   rating: 4.5, condition: "Good",      desc: "Size 7 Spalding basketball. Good grip, minor scuff marks.",                                 delivery: ["Pickup"],                     section: "buy" },
 ]
-
 const RENTALS_SEARCH = [
   { id: 101, title: "Canon EOS M50 Camera",          category: "Electronics", image: 21, section: "rent" },
   { id: 102, title: "Projector – Epson X41",         category: "Electronics", image: 22, section: "rent" },
@@ -57,7 +54,6 @@ const RENTALS_SEARCH = [
   { id: 107, title: "PS5 Console + 2 Controllers",   category: "Gaming",      image: 27, section: "rent" },
   { id: 108, title: "Scientific Calculator (Casio)", category: "Academic",    image: 28, section: "rent" },
 ]
-
 const SERVICES_SEARCH = [
   { id: 201, title: "Mathematics Private Lessons",     category: "Lessons",       image: 31, section: "service" },
   { id: 202, title: "Concert & Event Photography",     category: "Photography",   image: 32, section: "service" },
@@ -68,32 +64,27 @@ const SERVICES_SEARCH = [
   { id: 207, title: "French Language Lessons",         category: "Lessons",       image: 37, section: "service" },
   { id: 208, title: "CV & Cover Letter Writing",       category: "Career",        image: 38, section: "service" },
 ]
-
 const ALL_ITEMS = [
   ...ALL_LISTINGS.map(i => ({ ...i, imageId: i.id })),
   ...RENTALS_SEARCH.map(i => ({ ...i, imageId: i.image })),
   ...SERVICES_SEARCH.map(i => ({ ...i, imageId: i.image })),
 ]
-
 const SECTION_LABEL = { buy: "🛒 Buy Products", rent: "📦 Rent Items", service: "🛠️ Request Service" }
 const SECTION_COLOR = { buy: "#c8a97e", rent: "#93c5fd", service: "#6ee7b7" }
 const PAGE_SIZE = 16
-
 const SECTION_KEYWORDS = {
   buy:     ["buy", "purchase", "product", "products", "shop", "shopping"],
   rent:    ["rent", "rental", "rentals", "borrow", "lease", "hire"],
   service: ["service", "services", "request", "booking", "book"],
 }
-
 const DEFAULT_SITE_SETTINGS = {
   contactPhone:    "054 388 3608",
   contactWhatsApp: "233543883608",
   aboutText:       "Silk Road GH is Ghana's premier student marketplace — built by students, for students. Whether you're buying textbooks, renting equipment, requesting services, or making extra income, Silk Road GH is your go-to campus platform.",
   privacyText:     "We collect your name, contact information, location data (only during checkout), and transaction history to facilitate buying, selling, and delivery on the platform.",
   footerTagline:   "Ghana's student marketplace. Buy, sell, rent, and request services — all secured by escrow and powered by MTN MoMo.",
-  deliveryFee:     10,
+  deliveryFee:    10,
 }
-
 const parseSearch = (query) => {
   const q = query.toLowerCase().trim()
   const words = q.split(" ")
@@ -111,7 +102,6 @@ const parseSearch = (query) => {
   }
   return { detectedSection, keyword: remainingWords.join(" ").trim() }
 }
-
 // ── Product Modal ──────────────────────────────────────────────────────────────
 function ProductModal({ item, onClose, onCart, toUSD }) {
   if (!item) return null
@@ -120,39 +110,80 @@ function ProductModal({ item, onClose, onCart, toUSD }) {
   const university = isDbItem ? item.seller?.university : item.university
   const itemImage  = item.image || `https://picsum.photos/seed/${item.id}/600/350`
   const delivery   = item.delivery || []
-
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
-      <div style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
+    <div
+      style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto", border: "1px solid #1e1e1e" }}
+        onClick={e => e.stopPropagation()}
+      >
         <div style={{ position: "relative" }}>
-          <img src={itemImage} alt={item.title} style={{ width: "100%", height: "240px", objectFit: "cover", borderRadius: "16px 16px 0 0" }} />
-          <button onClick={onClose} style={{ position: "absolute", top: "12px", right: "12px", background: "#000000aa", border: "none", color: "#fff", fontSize: "18px", cursor: "pointer", width: "32px", height: "32px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          <div style={{ width: "100%", height: "240px", background: "#161616", borderRadius: "16px 16px 0 0", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+            <img
+              src={itemImage}
+              alt={item.title}
+              style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+            />
+          </div>
+          <button
+            onClick={onClose}
+            style={{ position: "absolute", top: "12px", right: "12px", background: "#000000aa", border: "none", color: "#fff", fontSize: "18px", cursor: "pointer", width: "32px", height: "32px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            ✕
+          </button>
         </div>
         <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div>
-            <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "6px" }}>{item.category}</div>
-            <h2 style={{ fontSize: "22px", fontWeight: "700", color: "#f0ede8", marginBottom: "6px" }}>{item.title}</h2>
-            <div style={{ fontSize: "13px", color: "#666" }}>Listed by <span style={{ color: "#aaa", fontWeight: "600" }}>{sellerName}</span></div>
-            {university && <div style={{ fontSize: "12px", color: "#555", marginTop: "2px" }}>🎓 {university}</div>}
+            <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "6px" }}>
+              {item.category}
+            </div>
+            <h2 style={{ fontSize: "22px", fontWeight: "700", color: "#f0ede8", marginBottom: "6px" }}>
+              {item.title}
+            </h2>
+            <div style={{ fontSize: "13px", color: "#666" }}>
+              Listed by <span style={{ color: "#aaa", fontWeight: "600" }}>{sellerName}</span>
+            </div>
+            {university && (
+              <div style={{ fontSize: "12px", color: "#555", marginTop: "2px" }}>
+                🎓 {university}
+              </div>
+            )}
           </div>
           <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
             {item.rating > 0 && (
-              <div style={{ fontSize: "14px", color: "#c8a97e" }}>{"★".repeat(Math.round(item.rating))}{"☆".repeat(5 - Math.round(item.rating))} <span style={{ color: "#666", fontSize: "13px" }}>{item.rating}</span></div>
+              <div style={{ fontSize: "14px", color: "#c8a97e" }}>
+                {"★".repeat(Math.round(item.rating))}
+                {"☆".repeat(5 - Math.round(item.rating))}
+                <span style={{ color: "#666", fontSize: "13px" }}> {item.rating}</span>
+              </div>
             )}
             {item.condition && item.condition !== "N/A" && (
-              <div style={{ fontSize: "13px", color: "#888" }}>Condition: <span style={{ color: "#f0ede8", fontWeight: "600" }}>{item.condition}</span></div>
+              <div style={{ fontSize: "13px", color: "#888" }}>
+                Condition: <span style={{ color: "#f0ede8", fontWeight: "600" }}>{item.condition}</span>
+              </div>
             )}
           </div>
           <div style={{ background: "#1a1a1a", borderRadius: "10px", padding: "14px" }}>
-            <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>About this item</div>
-            <p style={{ fontSize: "14px", color: "#aaa", lineHeight: "1.7", margin: 0 }}>{item.desc}</p>
+            <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>
+              About this item
+            </div>
+            <p style={{ fontSize: "14px", color: "#aaa", lineHeight: "1.7", margin: 0 }}>
+              {item.desc}
+            </p>
           </div>
           {delivery.length > 0 && (
             <div>
-              <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>Delivery Options</div>
+              <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                Delivery Options
+              </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 {delivery.map(d => (
-                  <span key={d} style={{ fontSize: "12px", background: "#1e1e1e", border: "1px solid #2a2a2a", color: "#aaa", padding: "5px 12px", borderRadius: "20px", fontWeight: "600" }}>
+                  <span
+                    key={d}
+                    style={{ fontSize: "12px", background: "#1e1e1e", border: "1px solid #2a2a2a", color: "#aaa", padding: "5px 12px", borderRadius: "20px", fontWeight: "600" }}
+                  >
                     {d === "Pickup" ? "📍 Campus Pickup" : d === "Rider" ? "🛵 Rider Delivery" : "📦 Shipping"}
                   </span>
                 ))}
@@ -161,10 +192,17 @@ function ProductModal({ item, onClose, onCart, toUSD }) {
           )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #1e1e1e", paddingTop: "16px" }}>
             <div>
-              <div style={{ fontSize: "26px", fontWeight: "700", color: "#c8a97e" }}>₵{(item.price || 0).toLocaleString()}</div>
-              <div style={{ fontSize: "12px", color: "#555" }}>${toUSD(item.price || 0)} USD</div>
+              <div style={{ fontSize: "26px", fontWeight: "700", color: "#c8a97e" }}>
+                ₵{(item.price || 0).toLocaleString()}
+              </div>
+              <div style={{ fontSize: "12px", color: "#555" }}>
+                ${toUSD(item.price || 0)} USD
+              </div>
             </div>
-            <button onClick={() => { onCart(item); onClose() }} style={{ background: "#c8a97e", border: "none", padding: "12px 24px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}>
+            <button
+              onClick={() => { onCart(item); onClose() }}
+              style={{ background: "#c8a97e", border: "none", padding: "12px 24px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}
+            >
               🛒 Add to Cart
             </button>
           </div>
@@ -173,7 +211,6 @@ function ProductModal({ item, onClose, onCart, toUSD }) {
     </div>
   )
 }
-
 // ── Footer Modal ───────────────────────────────────────────────────────────────
 function FooterModal({ type, onClose, siteSettings }) {
   if (!type) return null
@@ -183,18 +220,30 @@ function FooterModal({ type, onClose, siteSettings }) {
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "14px", color: "#aaa", lineHeight: "1.8" }}>
           <p>{siteSettings.aboutText}</p>
-          <p>We connect university students across Ghana to buy, sell, rent, and trade goods and services safely. Every transaction is protected by our escrow system — your money is held securely until you confirm everything is good.</p>
-          <p>Our rider network ensures fast, reliable on-campus delivery so you never have to worry about getting your items safely.</p>
+          <p>
+            We connect university students across Ghana to buy, sell, rent, and trade goods and services safely. Every transaction is protected by our escrow system — your money is held securely until you confirm everything is good.
+          </p>
+          <p>
+            Our rider network ensures fast, reliable on-campus delivery so you never have to worry about getting your items safely.
+          </p>
           <div style={{ background: "#1a1a1a", borderRadius: "10px", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
-            <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em" }}>Our Values</div>
+            <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em" }}>
+              Our Values
+            </div>
             {[
               "🔒 Security — Every payment is held in escrow until delivery is confirmed.",
               "⚡ Speed — Campus riders deliver fast within your zone.",
               "🤝 Trust — Verified student community with ratings and reviews.",
               "💰 Fairness — We only take 8% when a transaction is completed.",
-            ].map(v => <div key={v} style={{ fontSize: "13px", color: "#aaa" }}>{v}</div>)}
+            ].map(v => (
+              <div key={v} style={{ fontSize: "13px", color: "#aaa" }}>
+                {v}
+              </div>
+            ))}
           </div>
-          <p style={{ fontSize: "13px", color: "#666" }}>Silk Road GH is proudly built for Ghanaian university students. Payments powered by MTN Mobile Money.</p>
+          <p style={{ fontSize: "13px", color: "#666" }}>
+            Silk Road GH is proudly built for Ghanaian university students. Payments powered by MTN Mobile Money.
+          </p>
         </div>
       )
     },
@@ -212,29 +261,47 @@ function FooterModal({ type, onClose, siteSettings }) {
             ["📞 Contact", `For any privacy concerns, reach us at ${siteSettings.contactPhone}.`],
           ].map(([title, text]) => (
             <div key={title}>
-              <div style={{ fontWeight: "700", color: "#f0ede8", marginBottom: "6px" }}>{title}</div>
+              <div style={{ fontWeight: "700", color: "#f0ede8", marginBottom: "6px" }}>
+                {title}
+              </div>
               <p style={{ margin: 0 }}>{text}</p>
             </div>
           ))}
-          <p style={{ fontSize: "12px", color: "#555" }}>Last updated: {new Date().getFullYear()}. Silk Road GH reserves the right to update this policy.</p>
+          <p style={{ fontSize: "12px", color: "#555" }}>
+            Last updated: {new Date().getFullYear()}. Silk Road GH reserves the right to update this policy.
+          </p>
         </div>
       )
     }
   }
   const c = content[type]
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
-      <div style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "560px", maxHeight: "85vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
+    <div
+      style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "560px", maxHeight: "85vh", overflowY: "auto", border: "1px solid #1e1e1e" }}
+        onClick={e => e.stopPropagation()}
+      >
         <div style={{ padding: "20px 24px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#111", zIndex: 1 }}>
-          <span style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>{c.title}</span>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#666", fontSize: "22px", cursor: "pointer" }}>✕</button>
+          <span style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>
+            {c.title}
+          </span>
+          <button
+            onClick={onClose}
+            style={{ background: "transparent", border: "none", color: "#666", fontSize: "22px", cursor: "pointer" }}
+          >
+            ✕
+          </button>
         </div>
-        <div style={{ padding: "24px" }}>{c.body}</div>
+        <div style={{ padding: "24px" }}>
+          {c.body}
+        </div>
       </div>
     </div>
   )
 }
-
 // ── Footer ─────────────────────────────────────────────────────────────────────
 function Footer({ onOpen, siteSettings }) {
   return (
@@ -243,48 +310,74 @@ function Footer({ onOpen, siteSettings }) {
         <div style={{ display: "flex", gap: "48px", flexWrap: "wrap", marginBottom: "40px" }}>
           <div style={{ flex: 2, minWidth: "220px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-              <div style={{ width: "32px", height: "32px", background: "linear-gradient(135deg,#c8a97e,#9a7040)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>🕸</div>
-              <span style={{ fontSize: "20px", fontWeight: "700", color: "#c8a97e" }}>Silk Road GH</span>
+              <div style={{ width: "32px", height: "32px", background: "linear-gradient(135deg,#c8a97e,#9a7040)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>
+                🕸
+              </div>
+              <span style={{ fontSize: "20px", fontWeight: "700", color: "#c8a97e" }}>
+                Silk Road GH
+              </span>
             </div>
-            <p style={{ fontSize: "13px", color: "#555", lineHeight: "1.7", maxWidth: "280px" }}>{siteSettings.footerTagline}</p>
+            <p style={{ fontSize: "13px", color: "#555", lineHeight: "1.7", maxWidth: "280px" }}>
+              {siteSettings.footerTagline}
+            </p>
           </div>
           <div style={{ flex: 1, minWidth: "160px" }}>
-            <div style={{ fontSize: "12px", color: "#666", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "16px" }}>Company</div>
+            <div style={{ fontSize: "12px", color: "#666", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "16px" }}>
+              Company
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <button onClick={() => onOpen("about")} style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit" }}>About Silk Road</button>
-              <button onClick={() => onOpen("privacy")} style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit" }}>Privacy Policy</button>
+              <button onClick={() => onOpen("about")} style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit" }}>
+                About Silk Road
+              </button>
+              <button onClick={() => onOpen("privacy")} style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit" }}>
+                Privacy Policy
+              </button>
             </div>
           </div>
           <div style={{ flex: 1, minWidth: "160px" }}>
-            <div style={{ fontSize: "12px", color: "#666", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "16px" }}>Contact Us</div>
+            <div style={{ fontSize: "12px", color: "#666", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "16px" }}>
+              Contact Us
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <a href={`tel:+${siteSettings.contactWhatsApp}`} style={{ color: "#c8a97e", fontSize: "14px", textDecoration: "none", fontWeight: "600" }}>📞 {siteSettings.contactPhone}</a>
-              <a href={`https://wa.me/${siteSettings.contactWhatsApp}`} target="_blank" rel="noreferrer" style={{ color: "#888", fontSize: "14px", textDecoration: "none" }}>💬 WhatsApp Us</a>
+              <a href={`tel:+${siteSettings.contactWhatsApp}`} style={{ color: "#c8a97e", fontSize: "14px", textDecoration: "none", fontWeight: "600" }}>
+                📞 {siteSettings.contactPhone}
+              </a>
+              <a href={`https://wa.me/${siteSettings.contactWhatsApp}`} target="_blank" rel="noreferrer" style={{ color: "#888", fontSize: "14px", textDecoration: "none" }}>
+                💬 WhatsApp Us
+              </a>
             </div>
           </div>
           <div style={{ flex: 1, minWidth: "160px" }}>
-            <div style={{ fontSize: "12px", color: "#666", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "16px" }}>Payments</div>
+            <div style={{ fontSize: "12px", color: "#666", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "16px" }}>
+              Payments
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ background: "#ffd700", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: "700", color: "#1a1a00", display: "inline-flex", alignItems: "center", gap: "6px", width: "fit-content" }}>📱 MTN MoMo</div>
-              <div style={{ fontSize: "11px", color: "#555" }}>Secured escrow payments</div>
+              <div style={{ background: "#ffd700", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: "700", color: "#1a1a00", display: "inline-flex", alignItems: "center", gap: "6px", width: "fit-content" }}>
+                📱 MTN MoMo
+              </div>
+              <div style={{ fontSize: "11px", color: "#555" }}>
+                Secured escrow payments
+              </div>
             </div>
           </div>
         </div>
         <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-          <div style={{ fontSize: "12px", color: "#444" }}>© {new Date().getFullYear()} Silk Road GH. All rights reserved.</div>
-          <div style={{ fontSize: "12px", color: "#444" }}>Built for Ghanaian students 🇬🇭</div>
+          <div style={{ fontSize: "12px", color: "#444" }}>
+            © {new Date().getFullYear()} Silk Road GH. All rights reserved.
+          </div>
+          <div style={{ fontSize: "12px", color: "#444" }}>
+            Built for Ghanaian students 🇬🇭
+          </div>
         </div>
       </div>
     </footer>
   )
 }
-
 // ── Search Results ─────────────────────────────────────────────────────────────
 function SearchResults({ query, onClose, onNavigate }) {
   const { detectedSection, keyword } = parseSearch(query)
-  const [dbResults, setDbResults]   = useState([])
-  const [loading, setLoading]       = useState(true)
-
+  const [dbResults, setDbResults] = useState([])
+  const [loading, setLoading] = useState(true)
   useEffect(() => {
     setLoading(true)
     const q = keyword || query
@@ -293,33 +386,47 @@ function SearchResults({ query, onClose, onNavigate }) {
       .catch(() => setDbResults([]))
       .finally(() => setLoading(false))
   }, [query])
-
   const staticResults = ALL_ITEMS.filter(item => {
     if (item.section === "buy") return false
     const matchesSection = detectedSection ? item.section === detectedSection : true
-    const matchesKeyword = keyword ? item.title.toLowerCase().includes(keyword) || item.category.toLowerCase().includes(keyword) : true
+    const matchesKeyword = keyword
+      ? item.title.toLowerCase().includes(keyword) || item.category.toLowerCase().includes(keyword)
+      : true
     return matchesSection && matchesKeyword
   })
-
-  const dbBuyResults = (detectedSection && detectedSection !== "buy") ? [] : dbResults.map(item => ({
-    id: item._id, imageId: item._id, title: item.title,
-    category: item.category, section: "buy", image: item.image,
-  }))
-
+  const dbBuyResults = (detectedSection && detectedSection !== "buy")
+    ? []
+    : dbResults.map(item => ({
+        id: item._id,
+        imageId: item._id,
+        title: item.title,
+        category: item.category,
+        section: "buy",
+        image: item.image,
+      }))
   const results = [...dbBuyResults, ...staticResults]
   const grouped = {
-    buy:     results.filter(r => r.section === "buy"),
-    rent:    results.filter(r => r.section === "rent"),
+    buy: results.filter(r => r.section === "buy"),
+    rent: results.filter(r => r.section === "rent"),
     service: results.filter(r => r.section === "service"),
   }
-
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "80px 20px 20px" }} onClick={onClose}>
-      <div style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "680px", maxHeight: "80vh", overflowY: "auto", border: "1px solid #1e1e1e" }} onClick={e => e.stopPropagation()}>
+    <div
+      style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "80px 20px 20px" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "680px", maxHeight: "80vh", overflowY: "auto", border: "1px solid #1e1e1e" }}
+        onClick={e => e.stopPropagation()}
+      >
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#111", zIndex: 1 }}>
           <div>
             <span style={{ fontSize: "14px", color: "#888" }}>
-              {loading ? "Searching..." : `${results.length} results for`} <strong style={{ color: "#f0ede8" }}>"{query}"</strong>
+              {loading ? "Searching..." : `${results.length} results for`}
+              {" "}
+              <strong style={{ color: "#f0ede8" }}>
+                "{query}"
+              </strong>
             </span>
             {detectedSection && (
               <span style={{ marginLeft: "8px", fontSize: "11px", fontWeight: "700", color: SECTION_COLOR[detectedSection], background: `${SECTION_COLOR[detectedSection]}22`, padding: "2px 8px", borderRadius: "20px" }}>
@@ -327,7 +434,9 @@ function SearchResults({ query, onClose, onNavigate }) {
               </span>
             )}
           </div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#666", fontSize: "20px", cursor: "pointer" }}>✕</button>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#666", fontSize: "20px", cursor: "pointer" }}>
+            ✕
+          </button>
         </div>
         {loading ? (
           <div style={{ padding: "48px", textAlign: "center", color: "#555" }}>
@@ -337,27 +446,49 @@ function SearchResults({ query, onClose, onNavigate }) {
         ) : results.length === 0 ? (
           <div style={{ padding: "48px", textAlign: "center", color: "#555" }}>
             <div style={{ fontSize: "40px", marginBottom: "12px" }}>🔍</div>
-            <div style={{ fontSize: "16px", fontWeight: "600", marginBottom: "6px", color: "#888" }}>No results found</div>
-            <div style={{ fontSize: "13px" }}>Try searching for something else</div>
+            <div style={{ fontSize: "16px", fontWeight: "600", marginBottom: "6px", color: "#888" }}>
+              No results found
+            </div>
+            <div style={{ fontSize: "13px" }}>
+              Try searching for something else
+            </div>
           </div>
         ) : (
           <div style={{ padding: "16px" }}>
             {Object.entries(grouped).map(([section, items]) => items.length > 0 && (
               <div key={section} style={{ marginBottom: "24px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                  <div style={{ fontSize: "12px", fontWeight: "700", color: SECTION_COLOR[section], textTransform: "uppercase", letterSpacing: ".06em" }}>{SECTION_LABEL[section]}</div>
-                  <button onClick={() => { onNavigate(section); onClose() }} style={{ background: "transparent", border: "none", color: "#555", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>See all →</button>
+                  <div style={{ fontSize: "12px", fontWeight: "700", color: SECTION_COLOR[section], textTransform: "uppercase", letterSpacing: ".06em" }}>
+                    {SECTION_LABEL[section]}
+                  </div>
+                  <button
+                    onClick={() => { onNavigate(section); onClose() }}
+                    style={{ background: "transparent", border: "none", color: "#555", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}
+                  >
+                    See all →
+                  </button>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {items.map(item => (
-                    <div key={item.id} onClick={() => { onNavigate(item.section); onClose() }}
+                    <div
+                      key={item.id}
+                      onClick={() => { onNavigate(item.section); onClose() }}
                       style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px", borderRadius: "10px", background: "#1a1a1a", cursor: "pointer", border: "1px solid #1e1e1e" }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = "#c8a97e44"}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = "#1e1e1e"}>
-                      <img src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }} />
+                      onMouseLeave={e => e.currentTarget.style.borderColor = "#1e1e1e"}
+                    >
+                      <img
+                        src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`}
+                        alt={item.title}
+                        style={{ width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }}
+                      />
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "2px" }}>{item.title}</div>
-                        <div style={{ fontSize: "11px", color: "#666" }}>{item.category}</div>
+                        <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "2px" }}>
+                          {item.title}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#666" }}>
+                          {item.category}
+                        </div>
                       </div>
                       <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}22`, padding: "3px 10px", borderRadius: "20px", flexShrink: 0 }}>
                         {SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}
@@ -373,7 +504,6 @@ function SearchResults({ query, onClose, onNavigate }) {
     </div>
   )
 }
-
 // ── Skeleton ───────────────────────────────────────────────────────────────────
 function ListingSkeleton() {
   return (
@@ -390,7 +520,6 @@ function ListingSkeleton() {
     </div>
   )
 }
-
 // ── App ────────────────────────────────────────────────────────────────────────
 function App() {
   const [rate, setRate]                       = useState(null)
@@ -414,30 +543,29 @@ function App() {
   const [authCallback, setAuthCallback]       = useState(null)
   const [siteSettings, setSiteSettings]       = useState(DEFAULT_SITE_SETTINGS)
   const [notifTick, setNotifTick]             = useState(0)
-
-  const [riderUser, setRiderUser]         = useState(() => {
-    try { return JSON.parse(localStorage.getItem("silkroad_rider") || "null") } catch { return null }
+  const [riderUser, setRiderUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("silkroad_rider") || "null")
+    } catch {
+      return null
+    }
   })
   const [showRiderAuth, setShowRiderAuth] = useState(false)
-
   const [dbListings, setDbListings]           = useState([])
   const [listingsLoading, setListingsLoading] = useState(false)
   const [listingsPage, setListingsPage]       = useState(1)
   const [hasMoreListings, setHasMoreListings] = useState(true)
   const [loadingMore, setLoadingMore]         = useState(false)
   const [visibleCount, setVisibleCount]       = useState(PAGE_SIZE)
-
   const [dbSearchResults, setDbSearchResults] = useState([])
   const [searchLoading, setSearchLoading]     = useState(false)
-  const searchDebounceRef                     = useRef(null)
-  const bottomReachedTimerRef                 = useRef(null)
-  const isAtBottomRef                         = useRef(false)
-  const searchRef                             = useRef(null)
-
+  const searchDebounceRef     = useRef(null)
+  const bottomReachedTimerRef = useRef(null)
+  const isAtBottomRef         = useRef(false)
+  const searchRef             = useRef(null)
   const usingDb         = dbListings.length > 0
   const displayListings = usingDb ? dbListings : ALL_LISTINGS.slice(0, visibleCount)
   const hasMore         = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
-
   if (riderUser) {
     return (
       <>
@@ -453,12 +581,15 @@ function App() {
       </>
     )
   }
-
   const fetchListings = async (page = 1, reset = false) => {
     if (page === 1) setListingsLoading(true)
     else setLoadingMore(true)
     try {
-      const data = await getListings({ type: "product", page, limit: PAGE_SIZE })
+      const data = await getListings({
+        type: "product",
+        page,
+        limit: PAGE_SIZE
+      })
       if (Array.isArray(data) && data.length > 0) {
         if (reset || page === 1) setDbListings(data)
         else setDbListings(prev => [...prev, ...data])
@@ -472,177 +603,274 @@ function App() {
     setListingsLoading(false)
     setLoadingMore(false)
   }
-
   useEffect(() => {
     if (activePage === "buy") fetchListings(1, true)
     setVisibleCount(PAGE_SIZE)
   }, [activePage])
-
   useEffect(() => {
     const handleScroll = () => {
-      const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 10
+      const atBottom =
+        window.scrollY + window.innerHeight >=
+        document.documentElement.scrollHeight - 10
       if (atBottom && hasMore && !loadingMore && activePage === "buy") {
         if (!isAtBottomRef.current) {
           isAtBottomRef.current = true
           bottomReachedTimerRef.current = setTimeout(() => {
             if (isAtBottomRef.current) {
-              if (usingDb) fetchListings(listingsPage + 1)
-              else {
+              if (usingDb) {
+                fetchListings(listingsPage + 1)
+              } else {
                 setLoadingMore(true)
-                setTimeout(() => { setVisibleCount(c => Math.min(c + PAGE_SIZE, ALL_LISTINGS.length)); setLoadingMore(false) }, 600)
+                setTimeout(() => {
+                  setVisibleCount(c =>
+                    Math.min(c + PAGE_SIZE, ALL_LISTINGS.length)
+                  )
+                  setLoadingMore(false)
+                }, 600)
               }
             }
           }, 1000)
         }
       } else {
         isAtBottomRef.current = false
-        if (bottomReachedTimerRef.current) clearTimeout(bottomReachedTimerRef.current)
+        if (bottomReachedTimerRef.current) {
+          clearTimeout(bottomReachedTimerRef.current)
+        }
       }
     }
     window.addEventListener("scroll", handleScroll, { passive: true })
-    return () => { window.removeEventListener("scroll", handleScroll); if (bottomReachedTimerRef.current) clearTimeout(bottomReachedTimerRef.current) }
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+      if (bottomReachedTimerRef.current) {
+        clearTimeout(bottomReachedTimerRef.current)
+      }
+    }
   }, [hasMore, loadingMore, activePage, usingDb, listingsPage])
-
   useEffect(() => {
-    if (!searchQuery.trim()) { setDbSearchResults([]); return }
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    if (!searchQuery.trim()) {
+      setDbSearchResults([])
+      return
+    }
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current)
+    }
     searchDebounceRef.current = setTimeout(async () => {
       setSearchLoading(true)
       try {
         const { keyword } = parseSearch(searchQuery)
-        const data = await getListings({ search: keyword || searchQuery, limit: 10 })
+        const data = await getListings({
+          search: keyword || searchQuery,
+          limit: 10
+        })
         setDbSearchResults(Array.isArray(data) ? data : [])
-      } catch { setDbSearchResults([]) }
+      } catch {
+        setDbSearchResults([])
+      }
       setSearchLoading(false)
     }, 350)
-    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current)
+      }
+    }
   }, [searchQuery])
-
   useEffect(() => {
-    const handleClick = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) setShowDropdown(false) }
+    const handleClick = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setShowDropdown(false)
+      }
+    }
     document.addEventListener("mousedown", handleClick)
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
-
   useEffect(() => {
-    const handleKeyDown = (e) => { if (e.ctrlKey && e.shiftKey && e.key === "A") setShowAdmin(true) }
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === "A") {
+        setShowAdmin(true)
+      }
+    }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [])
-
-  useEffect(() => { if (window.location.pathname === "/admin") setShowAdmin(true) }, [])
-
+  useEffect(() => {
+    if (window.location.pathname === "/admin") {
+      setShowAdmin(true)
+    }
+  }, [])
   useEffect(() => {
     const token = localStorage.getItem("silkroad_token")
     if (token && !user) {
-      import("./api").then(({ getMe }) => {
-        getMe().then(data => {
-          if (data && data._id) {
-            const u = {
-              _id: data._id, name: data.name, email: data.email,
-              university: data.university, phone: data.phone, role: data.role,
-              joined: new Date(data.createdAt || Date.now()).toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
-            }
-            setUser(u)
-            connectSellerSocket(data._id)
-          }
-        }).catch(() => {})
-      })
+      import("./api")
+        .then(({ getMe }) => {
+          getMe()
+            .then(data => {
+              if (data && data._id) {
+                const u = {
+                  _id: data._id,
+                  name: data.name,
+                  email: data.email,
+                  university: data.university,
+                  phone: data.phone,
+                  role: data.role,
+                  joined: new Date(
+                    data.createdAt || Date.now()
+                  ).toLocaleDateString("en-GB", {
+                    month: "long",
+                    year: "numeric"
+                  }),
+                }
+                setUser(u)
+                connectSellerSocket(data._id)
+              }
+            })
+            .catch(() => {})
+        })
     }
   }, [])
-
   useEffect(() => {
     const handler = () => setNotifTick(t => t + 1)
     window.addEventListener("silkroad_new_order", handler)
-    return () => window.removeEventListener("silkroad_new_order", handler)
+    return () =>
+      window.removeEventListener("silkroad_new_order", handler)
   }, [])
-
   const fetchRate = async () => {
     setRateLoading(true)
     try {
-      const res = await axios.get("https://open.er-api.com/v6/latest/USD")
+      const res = await axios.get(
+        "https://open.er-api.com/v6/latest/USD"
+      )
       setRate(res.data.rates.GHS)
     } catch {}
     setRateLoading(false)
   }
-  useEffect(() => { fetchRate() }, [])
-
-  const getItemId  = (item) => item._id || item.id
-  const addToCart  = (item) => {
+  useEffect(() => {
+    fetchRate()
+  }, [])
+  const getItemId = (item) => item._id || item.id
+  const addToCart = (item) => {
     setCart(prev => {
       const id = getItemId(item)
       const exists = prev.find(i => getItemId(i) === id)
-      if (exists) return prev.map(i => getItemId(i) === id ? { ...i, qty: i.qty + 1 } : i)
+      if (exists) {
+        return prev.map(i =>
+          getItemId(i) === id
+            ? { ...i, qty: i.qty + 1 }
+            : i
+        )
+      }
       return [...prev, { ...item, qty: 1 }]
     })
     setCartOpen(true)
   }
-  const updateQty  = (id, delta) => setCart(prev => prev.map(i => getItemId(i) === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i))
-  const removeItem = (id) => setCart(prev => prev.filter(i => getItemId(i) !== id))
-  const cartTotal  = cart.reduce((sum, i) => sum + (i.price || i.dailyRate || 0) * i.qty, 0)
-  const cartCount  = cart.reduce((sum, i) => sum + i.qty, 0)
-
+  const updateQty = (id, delta) =>
+    setCart(prev =>
+      prev.map(i =>
+        getItemId(i) === id
+          ? { ...i, qty: Math.max(1, i.qty + delta) }
+          : i
+      )
+    )
+  const removeItem = (id) =>
+    setCart(prev => prev.filter(i => getItemId(i) !== id))
+  const cartTotal = cart.reduce(
+    (sum, i) => sum + (i.price || i.dailyRate || 0) * i.qty,
+    0
+  )
+  const cartCount = cart.reduce(
+    (sum, i) => sum + i.qty,
+    0
+  )
   const handleSearchKey = (e) => {
-    if (e.key === "Enter" && searchQuery.trim()) { setShowDropdown(false); setShowFullResults(true) }
+    if (e.key === "Enter" && searchQuery.trim()) {
+      setShowDropdown(false)
+      setShowFullResults(true)
+    }
   }
-
   const dropdownResults = (() => {
     if (!searchQuery.trim()) return []
     const { detectedSection, keyword } = parseSearch(searchQuery)
     const staticMatches = ALL_ITEMS.filter(item => {
       if (item.section === "buy") return false
-      const matchesSection = detectedSection ? item.section === detectedSection : true
-      const matchesKeyword = keyword ? item.title.toLowerCase().includes(keyword) || item.category.toLowerCase().includes(keyword) : true
+      const matchesSection = detectedSection
+        ? item.section === detectedSection
+        : true
+      const matchesKeyword = keyword
+        ? item.title.toLowerCase().includes(keyword) ||
+          item.category.toLowerCase().includes(keyword)
+        : true
       return matchesSection && matchesKeyword
     })
-    const dbMatches = (detectedSection && detectedSection !== "buy") ? [] : dbSearchResults.map(item => ({
-      id: item._id, imageId: item._id, title: item.title, category: item.category, section: "buy", image: item.image,
-    }))
+    const dbMatches =
+      detectedSection && detectedSection !== "buy"
+        ? []
+        : dbSearchResults.map(item => ({
+            id: item._id,
+            imageId: item._id,
+            title: item.title,
+            category: item.category,
+            section: "buy",
+            image: item.image,
+          }))
     return [...dbMatches, ...staticMatches].slice(0, 8)
   })()
-
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
       <style>{`@keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }`}</style>
-
       {/* ── NAVBAR ── */}
       <nav style={{ position: "sticky", top: 0, zIndex: 90 }}>
         <div style={{ background: "#0a0a0a", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1a1a1a" }}>
-          <h1 onClick={() => setActivePage("buy")}
-            style={{ color: "#c8a97e", fontWeight: "bold", fontSize: "20px", flexShrink: 0, cursor: "pointer", margin: 0 }}>
+          <h1
+            onClick={() => setActivePage("buy")}
+            style={{ color: "#c8a97e", fontWeight: "bold", fontSize: "20px", flexShrink: 0, cursor: "pointer", margin: 0 }}
+          >
             Silk Road
           </h1>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <button onClick={() => setShowSell(true)}
-              style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "8px 12px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+            <button
+              onClick={() => setShowSell(true)}
+              style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "8px 12px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", whiteSpace: "nowrap" }}
+            >
               + Sell
             </button>
-            <button onClick={() => setShowRiderAuth(true)}
+            <button
+              onClick={() => setShowRiderAuth(true)}
               style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
-              title="Rider Login">
+              title="Rider Login"
+            >
               🛵
             </button>
-            <button onClick={() => setShowTracker(true)}
+            <button
+              onClick={() => setShowTracker(true)}
               style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
-              title="Track Order">
+              title="Track Order"
+            >
               📦
             </button>
             {user && (
-              <NotificationBell sellerId={user._id} onClick={() => setShowAccount(true)} />
+              <NotificationBell
+                sellerId={user._id}
+                onClick={() => setShowAccount(true)}
+              />
             )}
             {user ? (
-              <button onClick={() => setShowAccount(true)}
-                style={{ background: "#c8a97e", border: "none", width: "34px", height: "34px", borderRadius: "50%", fontWeight: "800", cursor: "pointer", fontSize: "14px", color: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <button
+                onClick={() => setShowAccount(true)}
+                style={{ background: "#c8a97e", border: "none", width: "34px", height: "34px", borderRadius: "50%", fontWeight: "800", cursor: "pointer", fontSize: "14px", color: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
                 {user.name.charAt(0).toUpperCase()}
               </button>
             ) : (
-              <button onClick={() => setShowAuth(true)}
-                style={{ background: "#c8a97e", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+              <button
+                onClick={() => setShowAuth(true)}
+                style={{ background: "#c8a97e", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", whiteSpace: "nowrap" }}
+              >
                 Sign In
               </button>
             )}
-            <button onClick={() => setCartOpen(true)}
-              style={{ position: "relative", background: "transparent", border: "none", color: "#fff", fontSize: "22px", cursor: "pointer", padding: "4px" }}>
+            <button
+              onClick={() => setCartOpen(true)}
+              style={{ position: "relative", background: "transparent", border: "none", color: "#fff", fontSize: "22px", cursor: "pointer", padding: "4px" }}
+            >
               🛒
               {cartCount > 0 && (
                 <span style={{ position: "absolute", top: "-2px", right: "-2px", background: "#c8a97e", color: "#000", fontSize: "9px", fontWeight: "800", borderRadius: "50%", width: "16px", height: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -652,75 +880,120 @@ function App() {
             </button>
           </div>
         </div>
-
         <div style={{ background: "#111", borderBottom: "1px solid #1e1e1e" }}>
-          {/* ── Nav tabs — Become a Rider removed ── */}
           <div style={{ padding: "0 16px", display: "flex", gap: "4px", overflowX: "auto" }}>
             {[
-              { label: "Buy Products",    page: "buy" },
-              { label: "Rent Items",      page: "rent" },
+              { label: "Buy Products", page: "buy" },
+              { label: "Rent Items", page: "rent" },
               { label: "Request Service", page: "service" },
             ].map(link => (
-              <button key={link.page} onClick={() => setActivePage(link.page)}
-                style={{ background: "transparent", border: "none", color: activePage === link.page ? "#c8a97e" : "#aaa", cursor: "pointer", fontSize: "13px", fontWeight: "600", borderBottom: activePage === link.page ? "2px solid #c8a97e" : "2px solid transparent", padding: "12px 14px", whiteSpace: "nowrap", fontFamily: "inherit" }}>
+              <button
+                key={link.page}
+                onClick={() => setActivePage(link.page)}
+                style={{ background: "transparent", border: "none", color: activePage === link.page ? "#c8a97e" : "#aaa", cursor: "pointer", fontSize: "13px", fontWeight: "600", borderBottom: activePage === link.page ? "2px solid #c8a97e" : "2px solid transparent", padding: "12px 14px", whiteSpace: "nowrap", fontFamily: "inherit" }}
+              >
                 {link.label}
               </button>
             ))}
           </div>
-
           <div style={{ padding: "8px 16px 12px" }}>
             <div ref={searchRef} style={{ position: "relative" }}>
               <input
                 placeholder="Search e.g. 'rent guitar', 'buy electronics', 'service cleaning'..."
                 value={searchQuery}
-                onChange={e => { setSearchQuery(e.target.value); setShowDropdown(true) }}
+                onChange={e => {
+                  setSearchQuery(e.target.value)
+                  setShowDropdown(true)
+                }}
                 onKeyDown={handleSearchKey}
-                onFocus={() => searchQuery.trim() && setShowDropdown(true)}
+                onFocus={() =>
+                  searchQuery.trim() && setShowDropdown(true)
+                }
                 style={{ width: "100%", padding: "10px 36px 10px 14px", borderRadius: "8px", border: "none", background: "#1e1e1e", color: "#fff", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
               />
               {searchQuery ? (
-                <button onClick={() => { setSearchQuery(""); setShowDropdown(false); setShowFullResults(false) }}
-                  style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "15px" }}>✕</button>
+                <button
+                  onClick={() => {
+                    setSearchQuery("")
+                    setShowDropdown(false)
+                    setShowFullResults(false)
+                  }}
+                  style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "15px" }}
+                >
+                  ✕
+                </button>
               ) : (
-                <span style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "15px", opacity: .4, pointerEvents: "none" }}>🔍</span>
+                <span style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "15px", opacity: .4, pointerEvents: "none" }}>
+                  🔍
+                </span>
               )}
-
-              {showDropdown && searchQuery.trim() && dropdownResults.length > 0 && (
-                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,.6)" }}>
-                  {dropdownResults.map(item => (
-                    <div key={item.id} onClick={() => { setActivePage(item.section); setShowDropdown(false) }}
-                      style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #222" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#222"}
-                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                      <img src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`} alt={item.title} style={{ width: "34px", height: "34px", borderRadius: "6px", objectFit: "cover", flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: "13px", fontWeight: "600", color: "#f0ede8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
-                        <div style={{ fontSize: "11px", color: "#555" }}>{item.category}</div>
+              {showDropdown &&
+                searchQuery.trim() &&
+                dropdownResults.length > 0 && (
+                  <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,.6)" }}>
+                    {dropdownResults.map(item => (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          setActivePage(item.section)
+                          setShowDropdown(false)
+                        }}
+                        style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #222" }}
+                        onMouseEnter={e =>
+                          e.currentTarget.style.background = "#222"
+                        }
+                        onMouseLeave={e =>
+                          e.currentTarget.style.background = "transparent"
+                        }
+                      >
+                        <img
+                          src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`}
+                          alt={item.title}
+                          style={{ width: "34px", height: "34px", borderRadius: "6px", objectFit: "cover", flexShrink: 0 }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: "13px", fontWeight: "600", color: "#f0ede8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {item.title}
+                          </div>
+                          <div style={{ fontSize: "11px", color: "#555" }}>
+                            {item.category}
+                          </div>
+                        </div>
+                        <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}22`, padding: "2px 8px", borderRadius: "20px", flexShrink: 0 }}>
+                          {SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}
+                        </span>
                       </div>
-                      <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}22`, padding: "2px 8px", borderRadius: "20px", flexShrink: 0 }}>
-                        {SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}
-                      </span>
+                    ))}
+                    <div
+                      onClick={() => {
+                        setShowDropdown(false)
+                        setShowFullResults(true)
+                      }}
+                      style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600" }}
+                      onMouseEnter={e =>
+                        e.currentTarget.style.background = "#222"
+                      }
+                      onMouseLeave={e =>
+                        e.currentTarget.style.background = "transparent"
+                      }
+                    >
+                      See all results →
                     </div>
-                  ))}
-                  <div onClick={() => { setShowDropdown(false); setShowFullResults(true) }}
-                    style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#222"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    See all results →
                   </div>
-                </div>
-              )}
-
-              {showDropdown && searchQuery.trim() && dropdownResults.length === 0 && (
-                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, padding: "14px", textAlign: "center", color: "#555", fontSize: "13px" }}>
-                  {searchLoading ? "⏳ Searching..." : `No results for "${searchQuery}"`}
-                </div>
-              )}
+                )}
+              {showDropdown &&
+                searchQuery.trim() &&
+                dropdownResults.length === 0 && (
+                  <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, padding: "14px", textAlign: "center", color: "#555", fontSize: "13px" }}>
+                    {searchLoading
+                      ? "⏳ Searching..."
+                      : `No results for "${searchQuery}"`}
+                  </div>
+                )}
             </div>
           </div>
         </div>
       </nav>
-
       {/* ── PAGES ── */}
       <div style={{ flex: 1 }}>
         {activePage === "buy" && (
@@ -729,18 +1002,23 @@ function App() {
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: rateLoading ? "#444" : "#22c55e", animation: rateLoading ? "none" : "livePulse 2s ease infinite", flexShrink: 0 }} />
                 <span style={{ color: "#666", fontSize: "13px" }}>
-                  {rateLoading ? "Fetching live rate..." : `$1 USD = ₵${rate?.toFixed(2)} GHS`}
+                  {rateLoading
+                    ? "Fetching live rate..."
+                    : `$1 USD = ₵${rate?.toFixed(2)} GHS`}
                 </span>
               </div>
-              <button onClick={fetchRate}
-                style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "4px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>
+              <button
+                onClick={fetchRate}
+                style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "4px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}
+              >
                 ↻ Refresh
               </button>
             </div>
-
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "16px" }}>
               {listingsLoading
-                ? Array.from({ length: PAGE_SIZE }).map((_, i) => <ListingSkeleton key={i} />)
+                ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                    <ListingSkeleton key={i} />
+                  ))
                 : displayListings.map(item => {
                     const itemId     = getItemId(item)
                     const isDbItem   = !!item._id
@@ -749,72 +1027,121 @@ function App() {
                     const itemPrice  = item.price || item.dailyRate || 0
                     const itemImage  = item.image || `https://picsum.photos/seed/${item.id}/300/200`
                     return (
-                      <div key={itemId}
+                      <div
+                        key={itemId}
                         style={{ background: "#111", borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e", transition: "transform 0.2s" }}
-                        onMouseEnter={e => e.currentTarget.style.transform = "translateY(-4px)"}
-                        onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
-                        <img src={itemImage} alt={item.title} onClick={() => setSelectedProduct(item)}
-                          style={{ width: "100%", height: "180px", objectFit: "cover", cursor: "pointer", display: "block" }} />
+                        onMouseEnter={e =>
+                          e.currentTarget.style.transform = "translateY(-4px)"
+                        }
+                        onMouseLeave={e =>
+                          e.currentTarget.style.transform = "translateY(0)"
+                        }
+                      >
+                        <div
+                          style={{ width: "100%", height: "180px", background: "#161616", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", cursor: "pointer" }}
+                          onClick={() => setSelectedProduct(item)}
+                        >
+                          <img
+                            src={itemImage}
+                            alt={item.title}
+                            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                          />
+                        </div>
                         <div style={{ padding: "14px" }}>
-                          <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>{item.category}</div>
-                          <div onClick={() => setSelectedProduct(item)} style={{ fontSize: "14px", fontWeight: "600", marginBottom: "4px", color: "#f0ede8", cursor: "pointer" }}>{item.title}</div>
-                          <div style={{ fontSize: "12px", color: "#666", marginBottom: "2px" }}>by {sellerName}</div>
-                          <div style={{ fontSize: "11px", color: "#555", marginBottom: "6px" }}>🎓 {university} · {item.condition || "N/A"}</div>
+                          <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>
+                            {item.category}
+                          </div>
+                          <div
+                            onClick={() => setSelectedProduct(item)}
+                            style={{ fontSize: "14px", fontWeight: "600", marginBottom: "4px", color: "#f0ede8", cursor: "pointer" }}
+                          >
+                            {item.title}
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#666", marginBottom: "2px" }}>
+                            by {sellerName}
+                          </div>
+                          <div style={{ fontSize: "11px", color: "#555", marginBottom: "6px" }}>
+                            🎓 {university} · {item.condition || "N/A"}
+                          </div>
                           {item.rating > 0 && (
-                            <div style={{ fontSize: "13px", color: "#aaa", marginBottom: "10px" }}>{"★".repeat(Math.round(item.rating))} {item.rating}</div>
+                            <div style={{ fontSize: "13px", color: "#aaa", marginBottom: "10px" }}>
+                              {"★".repeat(Math.round(item.rating))} {item.rating}
+                            </div>
                           )}
                           <div style={{ fontSize: "18px", fontWeight: "700", color: "#c8a97e" }}>
                             ₵{itemPrice.toLocaleString()}
-                            <span style={{ fontSize: "13px", color: "#666", fontWeight: "400" }}> (${(itemPrice / (rate || 1)).toFixed(2)})</span>
+                            <span style={{ fontSize: "13px", color: "#666", fontWeight: "400" }}>
+                              {" "}
+                              (${(itemPrice / (rate || 1)).toFixed(2)})
+                            </span>
                           </div>
-                          <button onClick={() => addToCart(item)}
-                            style={{ marginTop: "10px", width: "100%", background: "#c8a97e", border: "none", padding: "9px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px" }}>
+                          <button
+                            onClick={() => addToCart(item)}
+                            style={{ marginTop: "10px", width: "100%", background: "#c8a97e", border: "none", padding: "9px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px" }}
+                          >
                             Add to Cart
                           </button>
                         </div>
                       </div>
                     )
-                  })
-              }
+                  })}
             </div>
-
             {loadingMore && (
-              <div style={{ padding: "32px 0", textAlign: "center", color: "#555", fontSize: "13px" }}>⏳ Loading more listings...</div>
+              <div style={{ padding: "32px 0", textAlign: "center", color: "#555", fontSize: "13px" }}>
+                ⏳ Loading more listings...
+              </div>
             )}
             {!hasMore && displayListings.length > PAGE_SIZE && (
-              <div style={{ padding: "24px 0", textAlign: "center", color: "#333", fontSize: "12px" }}>You've seen all listings</div>
+              <div style={{ padding: "24px 0", textAlign: "center", color: "#333", fontSize: "12px" }}>
+                You've seen all listings
+              </div>
             )}
           </div>
         )}
-
-        {activePage === "rent"    && <RentItems rate={rate} />}
+        {activePage === "rent" && <RentItems rate={rate} />}
         {activePage === "service" && <RequestService rate={rate} />}
       </div>
-
       <Footer onOpen={setFooterModal} siteSettings={siteSettings} />
-
-      <FooterModal type={footerModal} onClose={() => setFooterModal(null)} siteSettings={siteSettings} />
-
+      <FooterModal
+        type={footerModal}
+        onClose={() => setFooterModal(null)}
+        siteSettings={siteSettings}
+      />
       {showFullResults && searchQuery.trim() && (
-        <SearchResults query={searchQuery} onClose={() => setShowFullResults(false)} onNavigate={(section) => { setActivePage(section); setShowFullResults(false) }} />
+        <SearchResults
+          query={searchQuery}
+          onClose={() => setShowFullResults(false)}
+          onNavigate={section => {
+            setActivePage(section)
+            setShowFullResults(false)
+          }}
+        />
       )}
-
       {selectedProduct && (
-        <ProductModal item={selectedProduct} onClose={() => setSelectedProduct(null)} onCart={addToCart} toUSD={(ghs) => (ghs / (rate || 1)).toFixed(2)} />
+        <ProductModal
+          item={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          onCart={addToCart}
+          toUSD={ghs => (ghs / (rate || 1)).toFixed(2)}
+        />
       )}
-
       {showAuth && (
         <Auth
-          onAuth={(userData) => {
+          onAuth={userData => {
             setUser(userData)
             setShowAuth(false)
             connectSellerSocket(userData._id)
-            if (authCallback) { authCallback(); setAuthCallback(null) }
+            if (authCallback) {
+              authCallback()
+              setAuthCallback(null)
+            }
           }}
-          onClose={() => { setShowAuth(false); setAuthCallback(null) }}
+          onClose={() => {
+            setShowAuth(false)
+            setAuthCallback(null)
+          }}
         />
       )}
-
       {showAccount && user && (
         <Account
           user={user}
@@ -825,19 +1152,24 @@ function App() {
             localStorage.removeItem("silkroad_token")
           }}
           onClose={() => setShowAccount(false)}
-          onUserUpdate={(updatedUser) => setUser(updatedUser)}
+          onUserUpdate={updatedUser => setUser(updatedUser)}
           notifTick={notifTick}
         />
       )}
-
       {showSell && (
         <SellListing
           user={user}
-          onRequestAuth={(cb) => { setAuthCallback(() => cb); setShowSell(false); setShowAuth(true) }}
-          onClose={() => { setShowSell(false); fetchListings(1, true) }}
+          onRequestAuth={cb => {
+            setAuthCallback(() => cb)
+            setShowSell(false)
+            setShowAuth(true)
+          }}
+          onClose={() => {
+            setShowSell(false)
+            fetchListings(1, true)
+          }}
         />
       )}
-
       {showAdmin && (
         <AdminPanel
           onClose={() => setShowAdmin(false)}
@@ -845,21 +1177,19 @@ function App() {
           onUpdateSiteSettings={setSiteSettings}
         />
       )}
-
       {showTracker && (
         <OrderTracker
           onClose={() => setShowTracker(false)}
-          onOpenOrder={(order) => {
+          onOpenOrder={order => {
             setTrackedOrder(order)
             setShowTracker(false)
             setCheckoutOpen(true)
           }}
         />
       )}
-
       {showRiderAuth && (
         <RiderAuth
-          onAuth={(rider) => {
+          onAuth={rider => {
             localStorage.setItem("silkroad_rider", JSON.stringify(rider))
             setRiderUser(rider)
             setShowRiderAuth(false)
@@ -867,57 +1197,109 @@ function App() {
           onClose={() => setShowRiderAuth(false)}
         />
       )}
-
       {cartOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex" }}>
-          <div onClick={() => setCartOpen(false)} style={{ flex: 1, background: "#000000aa" }} />
+          <div
+            onClick={() => setCartOpen(false)}
+            style={{ flex: 1, background: "#000000aa" }}
+          />
           <div style={{ width: "340px", background: "#111", borderLeft: "1px solid #1e1e1e", display: "flex", flexDirection: "column", height: "100vh", animation: "slideIn 0.3s ease" }}>
             <style>{`@keyframes slideIn { from { transform: translateX(100%) } to { transform: translateX(0) } }`}</style>
             <div style={{ padding: "20px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "18px", fontWeight: "700" }}>Your Cart ({cartCount})</span>
-              <button onClick={() => setCartOpen(false)} style={{ background: "transparent", border: "none", color: "#666", fontSize: "22px", cursor: "pointer" }}>✕</button>
+              <span style={{ fontSize: "18px", fontWeight: "700" }}>
+                Your Cart ({cartCount})
+              </span>
+              <button
+                onClick={() => setCartOpen(false)}
+                style={{ background: "transparent", border: "none", color: "#666", fontSize: "22px", cursor: "pointer" }}
+              >
+                ✕
+              </button>
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
               {cart.length === 0 ? (
                 <div style={{ textAlign: "center", color: "#555", paddingTop: "60px" }}>
-                  <div style={{ fontSize: "40px", marginBottom: "12px" }}>🛒</div>
+                  <div style={{ fontSize: "40px", marginBottom: "12px" }}>
+                    🛒
+                  </div>
                   <div>Your cart is empty</div>
                 </div>
-              ) : cart.map(item => {
-                const itemId    = getItemId(item)
-                const itemPrice = item.price || item.dailyRate || 0
-                const itemImage = item.image || `https://picsum.photos/seed/${item.id}/300/200`
-                return (
-                  <div key={itemId} style={{ display: "flex", gap: "12px", padding: "14px 0", borderBottom: "1px solid #1e1e1e", alignItems: "center" }}>
-                    <img src={itemImage} alt={item.title} style={{ width: "56px", height: "56px", objectFit: "cover", borderRadius: "8px" }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px" }}>{item.title}</div>
-                      <div style={{ fontSize: "13px", color: "#c8a97e", fontWeight: "700" }}>
-                        ₵{(itemPrice * item.qty).toLocaleString()}
-                        <span style={{ color: "#555", fontWeight: "400" }}> (${(itemPrice * item.qty / (rate || 1)).toFixed(2)})</span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
-                        <button onClick={() => updateQty(itemId, -1)} style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}>−</button>
-                        <span style={{ fontSize: "13px" }}>{item.qty}</span>
-                        <button onClick={() => updateQty(itemId, 1)} style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}>+</button>
-                        <button onClick={() => removeItem(itemId)} style={{ marginLeft: "8px", background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "12px" }}>Remove</button>
+              ) : (
+                cart.map(item => {
+                  const itemId    = getItemId(item)
+                  const itemPrice = item.price || item.dailyRate || 0
+                  const itemImage = item.image || `https://picsum.photos/seed/${item.id}/300/200`
+                  return (
+                    <div
+                      key={itemId}
+                      style={{ display: "flex", gap: "12px", padding: "14px 0", borderBottom: "1px solid #1e1e1e", alignItems: "center" }}
+                    >
+                      <img
+                        src={itemImage}
+                        alt={item.title}
+                        style={{ width: "56px", height: "56px", objectFit: "cover", borderRadius: "8px" }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px" }}>
+                          {item.title}
+                        </div>
+                        <div style={{ fontSize: "13px", color: "#c8a97e", fontWeight: "700" }}>
+                          ₵{(itemPrice * item.qty).toLocaleString()}
+                          <span style={{ color: "#555", fontWeight: "400" }}>
+                            {" "}
+                            (${(itemPrice * item.qty / (rate || 1)).toFixed(2)})
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
+                          <button
+                            onClick={() => updateQty(itemId, -1)}
+                            style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}
+                          >
+                            −
+                          </button>
+                          <span style={{ fontSize: "13px" }}>
+                            {item.qty}
+                          </span>
+                          <button
+                            onClick={() => updateQty(itemId, 1)}
+                            style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}
+                          >
+                            +
+                          </button>
+                          <button
+                            onClick={() => removeItem(itemId)}
+                            style={{ marginLeft: "8px", background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "12px" }}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })
+              )}
             </div>
             {cart.length > 0 && (
               <div style={{ padding: "20px", borderTop: "1px solid #1e1e1e" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
-                  <span style={{ color: "#888" }}>Total</span>
+                  <span style={{ color: "#888" }}>
+                    Total
+                  </span>
                   <span style={{ fontSize: "18px", fontWeight: "700", color: "#c8a97e" }}>
                     ₵{cartTotal.toLocaleString()}
-                    <span style={{ fontSize: "13px", color: "#555" }}> (${(cartTotal / (rate || 1)).toFixed(2)})</span>
+                    <span style={{ fontSize: "13px", color: "#555" }}>
+                      {" "}
+                      (${(cartTotal / (rate || 1)).toFixed(2)})
+                    </span>
                   </span>
                 </div>
-                <button onClick={() => { setCartOpen(false); setCheckoutOpen(true) }}
-                  style={{ width: "100%", background: "#c8a97e", border: "none", padding: "14px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}>
+                <button
+                  onClick={() => {
+                    setCartOpen(false)
+                    setCheckoutOpen(true)
+                  }}
+                  style={{ width: "100%", background: "#c8a97e", border: "none", padding: "14px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}
+                >
                   📱 Checkout with MTN MoMo
                 </button>
               </div>
@@ -925,20 +1307,20 @@ function App() {
           </div>
         </div>
       )}
-
       {checkoutOpen && (
         <Checkout
           cart={trackedOrder?.cart || cart}
           rate={rate}
-          onClose={() => { setCheckoutOpen(false); setTrackedOrder(null) }}
+          onClose={() => {
+            setCheckoutOpen(false)
+            setTrackedOrder(null)
+          }}
           initialOrder={trackedOrder}
           siteSettings={siteSettings}
         />
       )}
-
       <ToastContainer />
     </div>
   )
 }
-
 export default App
