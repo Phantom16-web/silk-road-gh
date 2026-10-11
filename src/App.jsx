@@ -17,6 +17,7 @@ import OrderTracker, {
 import RiderAuth from "./RiderAuth"
 import RiderApp from "./RiderApp"
 import { getListings } from "./api"
+import ProductCard from "./ProductCard"
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 const ALL_LISTINGS = [
   { id: 1,  title: "Calculus Textbook",       price: 380,  category: "Books",       seller: "Ahmad K.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "8th edition, some highlights but all pages intact. Perfect for MTH 151.",                       delivery: ["Pickup", "Rider"],            section: "buy" },
@@ -1019,72 +1020,15 @@ function App() {
                 ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
                     <ListingSkeleton key={i} />
                   ))
-                : displayListings.map(item => {
-                    const itemId     = getItemId(item)
-                    const isDbItem   = !!item._id
-                    const sellerName = isDbItem ? item.seller?.name : item.seller
-                    const university = isDbItem ? item.seller?.university : item.university
-                    const itemPrice  = item.price || item.dailyRate || 0
-                    const itemImage  = item.image || `https://picsum.photos/seed/${item.id}/300/200`
-                    return (
-                      <div
-                        key={itemId}
-                        style={{ background: "#111", borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e", transition: "transform 0.2s" }}
-                        onMouseEnter={e =>
-                          e.currentTarget.style.transform = "translateY(-4px)"
-                        }
-                        onMouseLeave={e =>
-                          e.currentTarget.style.transform = "translateY(0)"
-                        }
-                      >
-                        <div
-                          style={{ width: "100%", height: "180px", background: "#161616", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", cursor: "pointer" }}
-                          onClick={() => setSelectedProduct(item)}
-                        >
-                          <img
-                            src={itemImage}
-                            alt={item.title}
-                            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-                          />
-                        </div>
-                        <div style={{ padding: "14px" }}>
-                          <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>
-                            {item.category}
-                          </div>
-                          <div
-                            onClick={() => setSelectedProduct(item)}
-                            style={{ fontSize: "14px", fontWeight: "600", marginBottom: "4px", color: "#f0ede8", cursor: "pointer" }}
-                          >
-                            {item.title}
-                          </div>
-                          <div style={{ fontSize: "12px", color: "#666", marginBottom: "2px" }}>
-                            by {sellerName}
-                          </div>
-                          <div style={{ fontSize: "11px", color: "#555", marginBottom: "6px" }}>
-                            🎓 {university} · {item.condition || "N/A"}
-                          </div>
-                          {item.rating > 0 && (
-                            <div style={{ fontSize: "13px", color: "#aaa", marginBottom: "10px" }}>
-                              {"★".repeat(Math.round(item.rating))} {item.rating}
-                            </div>
-                          )}
-                          <div style={{ fontSize: "18px", fontWeight: "700", color: "#c8a97e" }}>
-                            ₵{itemPrice.toLocaleString()}
-                            <span style={{ fontSize: "13px", color: "#666", fontWeight: "400" }}>
-                              {" "}
-                              (${(itemPrice / (rate || 1)).toFixed(2)})
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => addToCart(item)}
-                            style={{ marginTop: "10px", width: "100%", background: "#c8a97e", border: "none", padding: "9px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px" }}
-                          >
-                            Add to Cart
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
+                : displayListings.map(item => (
+                    <ProductCard
+                      key={getItemId(item)}
+                      item={item}
+                      rate={rate}
+                      onSelect={() => setSelectedProduct(item)}
+                      onAddToCart={() => addToCart(item)}
+                    />
+                  ))}
             </div>
             {loadingMore && (
               <div style={{ padding: "32px 0", textAlign: "center", color: "#555", fontSize: "13px" }}>
