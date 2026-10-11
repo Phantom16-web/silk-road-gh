@@ -18,6 +18,7 @@ import RiderAuth from "./RiderAuth"
 import RiderApp from "./RiderApp"
 import { getListings } from "./api"
 import ProductCard from "./ProductCard"
+import ProductModal from "./ProductModal"
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 const ALL_LISTINGS = [
   { id: 1,  title: "Calculus Textbook",       price: 380,  category: "Books",       seller: "Ahmad K.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "8th edition, some highlights but all pages intact. Perfect for MTH 151.",                       delivery: ["Pickup", "Rider"],            section: "buy" },
@@ -104,114 +105,6 @@ const parseSearch = (query) => {
   return { detectedSection, keyword: remainingWords.join(" ").trim() }
 }
 // ── Product Modal ──────────────────────────────────────────────────────────────
-function ProductModal({ item, onClose, onCart, toUSD }) {
-  if (!item) return null
-  const isDbItem   = !!item._id
-  const sellerName = isDbItem ? item.seller?.name : item.seller
-  const university = isDbItem ? item.seller?.university : item.university
-  const itemImage  = item.image || `https://picsum.photos/seed/${item.id}/600/350`
-  const delivery   = item.delivery || []
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto", border: "1px solid #1e1e1e" }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div style={{ position: "relative" }}>
-          <div style={{ width: "100%", height: "240px", background: "#161616", borderRadius: "16px 16px 0 0", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            <img
-              src={itemImage}
-              alt={item.title}
-              style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-            />
-          </div>
-          <button
-            onClick={onClose}
-            style={{ position: "absolute", top: "12px", right: "12px", background: "#000000aa", border: "none", color: "#fff", fontSize: "18px", cursor: "pointer", width: "32px", height: "32px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}
-          >
-            ✕
-          </button>
-        </div>
-        <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "14px" }}>
-          <div>
-            <div style={{ fontSize: "11px", color: "#c8a97e", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "6px" }}>
-              {item.category}
-            </div>
-            <h2 style={{ fontSize: "22px", fontWeight: "700", color: "#f0ede8", marginBottom: "6px" }}>
-              {item.title}
-            </h2>
-            <div style={{ fontSize: "13px", color: "#666" }}>
-              Listed by <span style={{ color: "#aaa", fontWeight: "600" }}>{sellerName}</span>
-            </div>
-            {university && (
-              <div style={{ fontSize: "12px", color: "#555", marginTop: "2px" }}>
-                🎓 {university}
-              </div>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
-            {item.rating > 0 && (
-              <div style={{ fontSize: "14px", color: "#c8a97e" }}>
-                {"★".repeat(Math.round(item.rating))}
-                {"☆".repeat(5 - Math.round(item.rating))}
-                <span style={{ color: "#666", fontSize: "13px" }}> {item.rating}</span>
-              </div>
-            )}
-            {item.condition && item.condition !== "N/A" && (
-              <div style={{ fontSize: "13px", color: "#888" }}>
-                Condition: <span style={{ color: "#f0ede8", fontWeight: "600" }}>{item.condition}</span>
-              </div>
-            )}
-          </div>
-          <div style={{ background: "#1a1a1a", borderRadius: "10px", padding: "14px" }}>
-            <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>
-              About this item
-            </div>
-            <p style={{ fontSize: "14px", color: "#aaa", lineHeight: "1.7", margin: 0 }}>
-              {item.desc}
-            </p>
-          </div>
-          {delivery.length > 0 && (
-            <div>
-              <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>
-                Delivery Options
-              </div>
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                {delivery.map(d => (
-                  <span
-                    key={d}
-                    style={{ fontSize: "12px", background: "#1e1e1e", border: "1px solid #2a2a2a", color: "#aaa", padding: "5px 12px", borderRadius: "20px", fontWeight: "600" }}
-                  >
-                    {d === "Pickup" ? "📍 Campus Pickup" : d === "Rider" ? "🛵 Rider Delivery" : "📦 Shipping"}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #1e1e1e", paddingTop: "16px" }}>
-            <div>
-              <div style={{ fontSize: "26px", fontWeight: "700", color: "#c8a97e" }}>
-                ₵{(item.price || 0).toLocaleString()}
-              </div>
-              <div style={{ fontSize: "12px", color: "#555" }}>
-                ${toUSD(item.price || 0)} USD
-              </div>
-            </div>
-            <button
-              onClick={() => { onCart(item); onClose() }}
-              style={{ background: "#c8a97e", border: "none", padding: "12px 24px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}
-            >
-              🛒 Add to Cart
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 // ── Footer Modal ───────────────────────────────────────────────────────────────
 function FooterModal({ type, onClose, siteSettings }) {
   if (!type) return null
