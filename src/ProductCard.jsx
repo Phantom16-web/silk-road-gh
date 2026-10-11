@@ -1,58 +1,56 @@
-function ProductCard({
-  item,
-  rate,
-  onSelect,
-  onAddToCart,
-}) {
-  const isDbItem = !!item._id
+function ProductCard({ item, rate, onSelect, onAddToCart }) {
+  const isDbItem = Boolean(item?._id)
 
-  const sellerName = isDbItem
-    ? item.seller?.name
-    : item.seller
-
-  const university = isDbItem
-    ? item.seller?.university
-    : item.university
-
-  const itemPrice = item.price || item.dailyRate || 0
-
-  const itemImage =
-    item.image ||
-    `https://picsum.photos/seed/${item.id}/300/200`
+  const sellerName = isDbItem ? item.seller?.name : item.seller
+  const university = isDbItem ? item.seller?.university : item.university
+  const itemPrice = Number(item.price || item.dailyRate || 0)
+  const itemImage = item.image || `https://picsum.photos/seed/${item.id || item._id || "listing"}/600/450`
+  const usdPrice = itemPrice / (Number(rate) || 1)
 
   return (
-    <div
+    <article
       style={{
+        minWidth: 0,
         background: "#111",
         borderRadius: "12px",
         overflow: "hidden",
         border: "1px solid #1e1e1e",
-        transition: "transform 0.2s",
+        transition: "transform 0.2s, border-color 0.2s",
+        display: "flex",
+        flexDirection: "column",
       }}
       onMouseEnter={e => {
-        e.currentTarget.style.transform = "translateY(-4px)"
+        e.currentTarget.style.transform = "translateY(-3px)"
+        e.currentTarget.style.borderColor = "#383127"
       }}
       onMouseLeave={e => {
         e.currentTarget.style.transform = "translateY(0)"
+        e.currentTarget.style.borderColor = "#1e1e1e"
       }}
     >
-      {/* Product image */}
-      <div
+      {/* Product image: show the whole image without cropping. */}
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-label={`View ${item.title || "product details"}`}
         style={{
-          width: "100%",
-          height: "180px",
-          background: "#161616",
+          appearance: "none",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          overflow: "hidden",
+          width: "100%",
+          height: "clamp(130px, 42vw, 180px)",
+          padding: 0,
+          background: "#161616",
+          border: "none",
           cursor: "pointer",
+          overflow: "hidden",
         }}
-        onClick={onSelect}
       >
         <img
           src={itemImage}
-          alt={item.title}
+          alt={item.title || "Marketplace listing"}
+          loading="lazy"
           style={{
             width: "100%",
             height: "100%",
@@ -60,114 +58,137 @@ function ProductCard({
             display: "block",
           }}
         />
-      </div>
+      </button>
 
-      {/* Product information */}
-      <div style={{ padding: "14px" }}>
-        {/* Category */}
+      <div
+        style={{
+          padding: "clamp(9px, 3vw, 14px)",
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
         <div
           style={{
-            fontSize: "11px",
+            fontSize: "10px",
             color: "#c8a97e",
-            fontWeight: "600",
+            fontWeight: 700,
             textTransform: "uppercase",
-            marginBottom: "4px",
+            letterSpacing: "0.04em",
+            marginBottom: "5px",
+            overflowWrap: "anywhere",
           }}
         >
-          {item.category}
+          {item.category || "Marketplace"}
         </div>
 
-        {/* Product title */}
-        <div
+        <button
+          type="button"
           onClick={onSelect}
           style={{
-            fontSize: "14px",
-            fontWeight: "600",
-            marginBottom: "4px",
+            appearance: "none",
+            padding: 0,
+            border: 0,
+            background: "transparent",
             color: "#f0ede8",
             cursor: "pointer",
+            textAlign: "left",
+            fontFamily: "inherit",
+            fontSize: "clamp(12px, 3.5vw, 14px)",
+            lineHeight: 1.4,
+            fontWeight: 650,
+            marginBottom: "6px",
+            overflowWrap: "anywhere",
           }}
         >
-          {item.title}
-        </div>
+          {item.title || "Untitled listing"}
+        </button>
 
-        {/* Seller */}
         <div
           style={{
             fontSize: "12px",
-            color: "#666",
-            marginBottom: "2px",
+            color: "#777",
+            marginBottom: "3px",
+            overflowWrap: "anywhere",
           }}
         >
-          by {sellerName}
+          by {sellerName || "Seller"}
         </div>
 
-        {/* University and condition */}
         <div
           style={{
             fontSize: "11px",
-            color: "#555",
-            marginBottom: "6px",
+            color: "#666",
+            marginBottom: "8px",
+            overflowWrap: "anywhere",
           }}
         >
-          🎓 {university} · {item.condition || "N/A"}
+          {university ? `🎓 ${university} · ` : ""}{item.condition || "N/A"}
         </div>
 
-        {/* Rating */}
-        {item.rating > 0 && (
+        {Number(item.rating) > 0 && (
           <div
-            style={{
-              fontSize: "13px",
-              color: "#aaa",
-              marginBottom: "10px",
-            }}
+            aria-label={`Rating ${item.rating} out of 5`}
+            style={{ fontSize: "12px", color: "#aaa", marginBottom: "9px" }}
           >
-            {"★".repeat(Math.round(item.rating))}{" "}
+            <span style={{ color: "#c8a97e" }}>
+              {"★".repeat(Math.max(0, Math.min(5, Math.round(Number(item.rating)))))}
+            </span>{" "}
             {item.rating}
           </div>
         )}
 
-        {/* Price */}
         <div
           style={{
-            fontSize: "18px",
-            fontWeight: "700",
-            color: "#c8a97e",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "baseline",
+            columnGap: "6px",
+            rowGap: "2px",
+            marginTop: "auto",
+            minWidth: 0,
           }}
         >
-          ₵{itemPrice.toLocaleString()}
-
           <span
             style={{
-              fontSize: "13px",
-              color: "#666",
-              fontWeight: "400",
+              fontSize: "clamp(15px, 4.2vw, 18px)",
+              lineHeight: 1.3,
+              fontWeight: 750,
+              color: "#c8a97e",
+              overflowWrap: "anywhere",
             }}
           >
-            {" "}
-            (${(itemPrice / (rate || 1)).toFixed(2)})
+            ₵{itemPrice.toLocaleString()}
+          </span>
+          <span style={{ fontSize: "12px", color: "#777", fontWeight: 400 }}>
+            (${usdPrice.toFixed(2)})
           </span>
         </div>
 
-        {/* Add to cart */}
         <button
+          type="button"
           onClick={onAddToCart}
           style={{
-            marginTop: "10px",
+            marginTop: "11px",
             width: "100%",
+            minHeight: "42px",
             background: "#c8a97e",
+            color: "#17130e",
             border: "none",
-            padding: "9px",
+            padding: "10px 8px",
             borderRadius: "8px",
-            fontWeight: "700",
+            fontWeight: 750,
             cursor: "pointer",
             fontSize: "13px",
+            fontFamily: "inherit",
+            touchAction: "manipulation",
           }}
         >
           Add to Cart
         </button>
       </div>
-    </div>
+    </article>
   )
 }
 
