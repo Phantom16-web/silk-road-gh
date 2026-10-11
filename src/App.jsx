@@ -908,7 +908,7 @@ function App() {
                 ↻ Refresh
               </button>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "16px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 130px), 1fr))", gap: "12px" }}>
               {listingsLoading
                 ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
                     <ListingSkeleton key={i} />
