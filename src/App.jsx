@@ -422,6 +422,7 @@ function App() {
   const [cartOpen, setCartOpen]               = useState(false)
   const [checkoutOpen, setCheckoutOpen]       = useState(false)
   const [activePage, setActivePage]           = useState("buy")
+  const [mobileMenuOpen, setMobileMenuOpen]   = useState(false)
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [footerModal, setFooterModal]         = useState(null)
   const [searchQuery, setSearchQuery]         = useState("")
@@ -709,17 +710,35 @@ function App() {
   })()
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
-      <style>{`@keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }`}</style>
+      <style>{`
+        @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+        .sr-desktop-actions { display: flex; align-items: center; gap: 6px; }
+        .sr-mobile-controls { display: none; align-items: center; gap: 8px; }
+        .sr-mobile-menu { display: none; }
+        .sr-mobile-action { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px; background: #151515; border: 1px solid #292929; border-radius: 9px; color: #eee; text-align: left; font: inherit; cursor: pointer; }
+        .sr-mobile-action-primary { color: #c8a97e; font-weight: 700; }
+        @media (max-width: 640px) {
+          .sr-desktop-actions { display: none !important; }
+          .sr-mobile-controls { display: flex; }
+          .sr-mobile-menu { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: #0d0d0d; border-bottom: 1px solid #292929; }
+          .sr-topbar { padding: 10px 12px !important; }
+          .sr-brand { font-size: 18px !important; }
+          .sr-nav-links { padding: 0 10px !important; }
+          .sr-nav-links button { padding: 11px 12px !important; font-size: 12px !important; }
+          .sr-search-wrap { padding: 8px 12px 10px !important; }
+        }
+      `}</style>
       {/* ── NAVBAR ── */}
       <nav style={{ position: "sticky", top: 0, zIndex: 90 }}>
-        <div style={{ background: "#0a0a0a", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1a1a1a" }}>
+        <div className="sr-topbar" style={{ background: "#0a0a0a", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1a1a1a" }}>
           <h1
-            onClick={() => setActivePage("buy")}
+            className="sr-brand"
+            onClick={() => { setActivePage("buy"); setMobileMenuOpen(false) }}
             style={{ color: "#c8a97e", fontWeight: "bold", fontSize: "20px", flexShrink: 0, cursor: "pointer", margin: 0 }}
           >
             Silk Road
           </h1>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <div className="sr-desktop-actions" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <button
               onClick={() => setShowSell(true)}
               style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "8px 12px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", whiteSpace: "nowrap" }}
@@ -773,9 +792,40 @@ function App() {
               )}
             </button>
           </div>
+          <div className="sr-mobile-controls">
+            <button
+              onClick={() => setCartOpen(true)}
+              aria-label={`Open cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}
+              style={{ position: "relative", background: "transparent", border: "1px solid #333", borderRadius: "8px", color: "#fff", fontSize: "21px", cursor: "pointer", padding: "6px 9px", minWidth: "42px", minHeight: "40px" }}
+            >
+              🛒
+              {cartCount > 0 && <span style={{ position: "absolute", top: "-4px", right: "-4px", background: "#c8a97e", color: "#000", fontSize: "9px", fontWeight: "800", borderRadius: "50%", width: "16px", height: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>{cartCount}</span>}
+            </button>
+            <button
+              onClick={() => setMobileMenuOpen(open => !open)}
+              aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={mobileMenuOpen}
+              style={{ background: mobileMenuOpen ? "#292929" : "#151515", border: "1px solid #333", borderRadius: "8px", color: "#eee", fontSize: "21px", cursor: "pointer", padding: "6px 10px", minWidth: "42px", minHeight: "40px" }}
+            >
+              {mobileMenuOpen ? "✕" : "☰"}
+            </button>
+          </div>
         </div>
+        {mobileMenuOpen && (
+          <div className="sr-mobile-menu">
+            <button className="sr-mobile-action sr-mobile-action-primary" onClick={() => { setShowSell(true); setMobileMenuOpen(false) }}>＋ Sell an item</button>
+            <button className="sr-mobile-action" onClick={() => { setShowTracker(true); setMobileMenuOpen(false) }}>📦 Track an order</button>
+            <button className="sr-mobile-action" onClick={() => { setShowRiderAuth(true); setMobileMenuOpen(false) }}>🛵 Rider login</button>
+            {user ? (
+              <button className="sr-mobile-action" onClick={() => { setShowAccount(true); setMobileMenuOpen(false) }}>👤 My account ({user.name})</button>
+            ) : (
+              <button className="sr-mobile-action sr-mobile-action-primary" onClick={() => { setShowAuth(true); setMobileMenuOpen(false) }}>↪ Sign in / Create account</button>
+            )}
+            {user && <button className="sr-mobile-action" onClick={() => { setShowAccount(true); setMobileMenuOpen(false) }}>🔔 Notifications</button>}
+          </div>
+        )}
         <div style={{ background: "#111", borderBottom: "1px solid #1e1e1e" }}>
-          <div style={{ padding: "0 16px", display: "flex", gap: "4px", overflowX: "auto" }}>
+          <div className="sr-nav-links" style={{ padding: "0 16px", display: "flex", gap: "4px", overflowX: "auto" }}>
             {[
               { label: "Buy Products", page: "buy" },
               { label: "Rent Items", page: "rent" },
@@ -783,17 +833,17 @@ function App() {
             ].map(link => (
               <button
                 key={link.page}
-                onClick={() => setActivePage(link.page)}
+                onClick={() => { setActivePage(link.page); setMobileMenuOpen(false) }}
                 style={{ background: "transparent", border: "none", color: activePage === link.page ? "#c8a97e" : "#aaa", cursor: "pointer", fontSize: "13px", fontWeight: "600", borderBottom: activePage === link.page ? "2px solid #c8a97e" : "2px solid transparent", padding: "12px 14px", whiteSpace: "nowrap", fontFamily: "inherit" }}
               >
                 {link.label}
               </button>
             ))}
           </div>
-          <div style={{ padding: "8px 16px 12px" }}>
+          <div className="sr-search-wrap" style={{ padding: "8px 16px 12px" }}>
             <div ref={searchRef} style={{ position: "relative" }}>
               <input
-                placeholder="Search e.g. 'rent guitar', 'buy electronics', 'service cleaning'..."
+                placeholder="Search products, rentals, services..."
                 value={searchQuery}
                 onChange={e => {
                   setSearchQuery(e.target.value)
