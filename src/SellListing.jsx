@@ -15,7 +15,7 @@ const IMAGE_WIDTH = 1200
 const IMAGE_HEIGHT = 900
 
 const DEFAULT_IMAGE_SETTINGS = {
-  fit: "contain",
+  fit: "cover",
   zoom: 1,
   positionX: 50,
   positionY: 50,
@@ -23,113 +23,684 @@ const DEFAULT_IMAGE_SETTINGS = {
 }
 
 const IMAGE_BACKGROUNDS = [
-  { name: "Warm Ivory", value: "#f3f0ea" },
-  { name: "White", value: "#ffffff" },
-  { name: "Soft Grey", value: "#e5e7eb" },
-  { name: "Dark", value: "#18181c" },
-  { name: "Black", value: "#000000" },
+  { label: "Cream", value: "#f3f0ea" },
+  { label: "White", value: "#ffffff" },
+  { label: "Dark", value: "#1a1a1a" },
+  { label: "Gold", value: "#c8a97e" },
 ]
 
-// ── Image processing ────────────────────────────────────────────────────────
-// Produces a real JPEG image using the seller's selected presentation.
-// The exported file is what gets uploaded to the existing listing API.
+const GOLD = "#c8a97e"
 
-function processProductImage(source, settings) {
+// ── Image Processing ────────────────────────────────────────────────────────
+
+function loadImageFromFile(file) {
   return new Promise((resolve, reject) => {
-    if (!source) {
-      reject(new Error("No image was selected."))
-      return
-    }
-
+    const objectUrl = URL.createObjectURL(file)
     const image = new Image()
 
     image.onload = () => {
-      try {
-        const canvas = document.createElement("canvas")
-        canvas.width = IMAGE_WIDTH
-        canvas.height = IMAGE_HEIGHT
-
-        const context = canvas.getContext("2d")
-
-        if (!context) {
-          reject(new Error("Image editing is not supported by this browser."))
-          return
-        }
-
-        context.fillStyle = settings.background
-        context.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT)
-
-        const sourceWidth = image.naturalWidth
-        const sourceHeight = image.naturalHeight
-
-        if (!sourceWidth || !sourceHeight) {
-          reject(new Error("The selected image could not be processed."))
-          return
-        }
-
-        const scaleX = IMAGE_WIDTH / sourceWidth
-        const scaleY = IMAGE_HEIGHT / sourceHeight
-
-        const baseScale = settings.fit === "cover"
-          ? Math.max(scaleX, scaleY)
-          : Math.min(scaleX, scaleY)
-
-        const scale = baseScale * settings.zoom
-
-        const drawWidth = sourceWidth * scale
-        const drawHeight = sourceHeight * scale
-
-        const drawX =
-          (IMAGE_WIDTH - drawWidth) * (settings.positionX / 100)
-
-        const drawY =
-          (IMAGE_HEIGHT - drawHeight) * (settings.positionY / 100)
-
-        context.imageSmoothingEnabled = true
-        context.imageSmoothingQuality = "high"
-
-        context.drawImage(
-          image,
-          drawX,
-          drawY,
-          drawWidth,
-          drawHeight
-        )
-
-        canvas.toBlob(
-          blob => {
-            if (!blob) {
-              reject(new Error("Could not export the edited image."))
-              return
-            }
-
-            const file = new File(
-              [blob],
-              "silk-road-product.jpg",
-              {
-                type: "image/jpeg",
-                lastModified: Date.now(),
-              }
-            )
-
-            const preview = canvas.toDataURL("image/jpeg", 0.92)
-
-            resolve({ file, preview })
-          },
-          "image/jpeg",
-          0.92
-        )
-      } catch (error) {
-        reject(error)
-      }
+      URL.revokeObjectURL(objectUrl)
+      resolve(image)
     }
 
     image.onerror = () => {
-      reject(new Error("Could not read the selected image."))
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error("Could not load this image. Please choose another one."))
     }
 
-    image.src = source
+    image.src = objectUrl
   })
+}
+
+function drawEditedImage(canvas, image, settings) {
+  const ctx = canvas.getContext("2d")
+
+  if (!ctx) {
+    throw new Error("Your browser could not process this image.")
+  }
+
+  canvas.width = IMAGE_WIDTH
+  canvas.height = IMAGE_HEIGHT
+
+  // Fill the complete frame with the chosen background.
+  ctx.fillStyle = settings.background
+  ctx.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT)
+
+  const imageWidth = image.naturalWidth
+  const imageHeight = image.naturalHeight
+
+  if (!imageWidth || !imageHeight) {
+    throw new Error("This image has invalid dimensions.")
+  }
+
+  const scaleX = IMAGE_WIDTH / imageWidth
+  const scaleY = IMAGE_HEIGHT / imageHeight
+
+  const baseScale =
+    settings.fit === "cover"
+      ? Math.max(scaleX, scaleY)
+      : Math.min(scaleX, scaleY)
+
+  const scale = baseScale * settings.zoom
+  const drawWidth = imageWidth * scale
+  const drawHeight = imageHeight * scale
+
+  // The position sliders determine where the image sits in the frame.
+  const drawX = (IMAGE_WIDTH - drawWidth) * (settings.positionX / 100)
+  const drawY = (IMAGE_HEIGHT - drawHeight) * (settings.positionY / 100)
+
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = "high"
+
+  ctx.drawImage(
+    image,
+    drawX,
+    drawY,
+    drawWidth,
+    drawHeight
+  )
+}
+
+async function renderEditedImage(file, settings, createFile = false) {
+  const image = await loadImageFromFile(file)
+
+  const canvas = document.createElement("canvas")
+  drawEditedImage(canvas, image, settings)
+
+  const previewUrl = canvas.toDataURL("image/jpeg", 0.92)
+
+  if (!createFile) {
+    return { previewUrl }
+  }
+
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(
+      result => {
+        if (result) {
+          resolve(result)
+        } else {
+          reject(new Error("Could not export the edited image."))
+        }
+      },
+      "image/jpeg",
+      0.92
+    )
+  })
+
+  const originalName = file.name.replace(/\.[^.]+$/, "") || "listing-photo"
+
+  const editedFile = new File(
+    [blob],
+    `${originalName}-edited.jpg`,
+    {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    }
+  )
+
+  return {
+    file: editedFile,
+    previewUrl,
+  }
+}
+
+// ── Shared Styles ───────────────────────────────────────────────────────────
+
+const buttonBase = {
+  fontFamily: "inherit",
+  borderRadius: "9px",
+  fontWeight: "600",
+  cursor: "pointer",
+}
+
+const secondaryButton = {
+  ...buttonBase,
+  background: "#1e1e1e",
+  border: "1px solid #333",
+  color: "#c8a97e",
+  padding: "10px 14px",
+  fontSize: "13px",
+}
+
+function SectionLabel({ children }) {
+  return (
+    <div
+      style={{
+        fontSize: "12px",
+        color: "#888",
+        fontWeight: "600",
+        marginBottom: "8px",
+        textTransform: "uppercase",
+        letterSpacing: ".06em",
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+// ── Image Editor ────────────────────────────────────────────────────────────
+
+function ImageEditor({
+  originalPreview,
+  editedPreview,
+  settings,
+  onSettingsChange,
+  onReset,
+  onChooseImage,
+  onTakePhoto,
+  inputRef,
+  onFileChange,
+  error,
+}) {
+  const change = (field, value) => {
+    onSettingsChange(previous => ({
+      ...previous,
+      [field]: value,
+    }))
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "16px",
+      }}
+    >
+      <div>
+        <SectionLabel>Listing photo</SectionLabel>
+
+        <div
+          style={{
+            color: "#777",
+            fontSize: "12px",
+            lineHeight: "1.6",
+            marginBottom: "12px",
+          }}
+        >
+          Choose a photo, then adjust how it appears on the marketplace.
+          Your original photo stays unchanged while you edit.
+        </div>
+
+        <input
+          type="file"
+          accept="image/*"
+          ref={inputRef}
+          onChange={onFileChange}
+          style={{ display: "none" }}
+        />
+
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            flexWrap: "wrap",
+          }}
+        >
+          <button
+            type="button"
+            onClick={onChooseImage}
+            style={secondaryButton}
+          >
+            📁 Choose from Device
+          </button>
+
+          <button
+            type="button"
+            onClick={onTakePhoto}
+            style={secondaryButton}
+          >
+            📸 Take a Photo
+          </button>
+        </div>
+      </div>
+
+      {originalPreview && (
+        <>
+          <div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "10px",
+                marginBottom: "10px",
+              }}
+            >
+              <SectionLabel>Live marketplace preview</SectionLabel>
+
+              <span
+                style={{
+                  fontSize: "11px",
+                  color: "#6ee7b7",
+                  background: "#064e3b33",
+                  borderRadius: "20px",
+                  padding: "5px 8px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                4:3 frame
+              </span>
+            </div>
+
+            <div
+              style={{
+                width: "100%",
+                aspectRatio: "4 / 3",
+                background: settings.background,
+                borderRadius: "12px",
+                overflow: "hidden",
+                border: "1px solid #333",
+                position: "relative",
+              }}
+            >
+              {editedPreview ? (
+                <img
+                  src={editedPreview}
+                  alt="Edited listing preview"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#777",
+                    fontSize: "13px",
+                  }}
+                >
+                  Preparing preview…
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                fontSize: "11px",
+                color: "#666",
+                marginTop: "8px",
+                lineHeight: "1.5",
+              }}
+            >
+              This preview shows the edited image that will be uploaded.
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: "#181818",
+              border: "1px solid #292929",
+              borderRadius: "12px",
+              padding: "16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "18px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "700",
+                    color: "#f0ede8",
+                  }}
+                >
+                  Adjust your photo
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "11px",
+                    color: "#777",
+                    marginTop: "4px",
+                  }}
+                >
+                  The default settings are optimized for a marketplace card.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onReset}
+                style={{
+                  ...buttonBase,
+                  background: "transparent",
+                  border: "1px solid #444",
+                  color: "#c8a97e",
+                  padding: "8px 10px",
+                  fontSize: "11px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ↺ Reset
+              </button>
+            </div>
+
+            {/* Fit mode */}
+            <div>
+              <SectionLabel>Image display</SectionLabel>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "8px",
+                }}
+              >
+                {[
+                  {
+                    value: "cover",
+                    title: "Fill frame",
+                    description: "Fills the card; edges may be cropped.",
+                  },
+                  {
+                    value: "contain",
+                    title: "Show whole image",
+                    description: "Keeps the whole image visible.",
+                  },
+                ].map(option => {
+                  const selected = settings.fit === option.value
+
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => change("fit", option.value)}
+                      style={{
+                        ...buttonBase,
+                        padding: "12px",
+                        textAlign: "left",
+                        border: `1px solid ${
+                          selected ? GOLD : "#333"
+                        }`,
+                        background: selected ? "#c8a97e18" : "#202020",
+                        color: selected ? GOLD : "#aaa",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: "700",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        {option.title}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          lineHeight: "1.5",
+                          color: selected ? "#d7c3a8" : "#777",
+                          fontWeight: "400",
+                        }}
+                      >
+                        {option.description}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Zoom */}
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "8px",
+                }}
+              >
+                <SectionLabel>Zoom</SectionLabel>
+
+                <span
+                  style={{
+                    color: GOLD,
+                    fontSize: "12px",
+                    fontWeight: "700",
+                  }}
+                >
+                  {settings.zoom.toFixed(2)}×
+                </span>
+              </div>
+
+              <input
+                aria-label="Image zoom"
+                type="range"
+                min="1"
+                max="2"
+                step="0.05"
+                value={settings.zoom}
+                onChange={event =>
+                  change("zoom", Number(event.target.value))
+                }
+                style={{
+                  width: "100%",
+                  accentColor: GOLD,
+                  cursor: "pointer",
+                }}
+              />
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: "11px",
+                  color: "#666",
+                }}
+              >
+                <span>Normal</span>
+                <span>Zoom in</span>
+              </div>
+            </div>
+
+            {/* Horizontal position */}
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "8px",
+                }}
+              >
+                <SectionLabel>Horizontal position</SectionLabel>
+
+                <span style={{ fontSize: "11px", color: GOLD }}>
+                  {settings.positionX}%
+                </span>
+              </div>
+
+              <input
+                aria-label="Horizontal image position"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={settings.positionX}
+                onChange={event =>
+                  change("positionX", Number(event.target.value))
+                }
+                style={{
+                  width: "100%",
+                  accentColor: GOLD,
+                  cursor: "pointer",
+                }}
+              />
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: "11px",
+                  color: "#666",
+                }}
+              >
+                <span>Left</span>
+                <span>Centered at 50%</span>
+                <span>Right</span>
+              </div>
+            </div>
+
+            {/* Vertical position */}
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "8px",
+                }}
+              >
+                <SectionLabel>Vertical position</SectionLabel>
+
+                <span style={{ fontSize: "11px", color: GOLD }}>
+                  {settings.positionY}%
+                </span>
+              </div>
+
+              <input
+                aria-label="Vertical image position"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={settings.positionY}
+                onChange={event =>
+                  change("positionY", Number(event.target.value))
+                }
+                style={{
+                  width: "100%",
+                  accentColor: GOLD,
+                  cursor: "pointer",
+                }}
+              />
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: "11px",
+                  color: "#666",
+                }}
+              >
+                <span>Top</span>
+                <span>Centered at 50%</span>
+                <span>Bottom</span>
+              </div>
+            </div>
+
+            {/* Background */}
+            <div>
+              <SectionLabel>Background</SectionLabel>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                }}
+              >
+                {IMAGE_BACKGROUNDS.map(background => {
+                  const selected =
+                    settings.background === background.value
+
+                  return (
+                    <button
+                      key={background.value}
+                      type="button"
+                      title={background.label}
+                      aria-label={`${background.label} background`}
+                      aria-pressed={selected}
+                      onClick={() =>
+                        change("background", background.value)
+                      }
+                      style={{
+                        ...buttonBase,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: "6px",
+                        background: "transparent",
+                        border: "none",
+                        color: selected ? GOLD : "#888",
+                        padding: "0",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          width: "34px",
+                          height: "34px",
+                          borderRadius: "50%",
+                          background: background.value,
+                          border: selected
+                            ? `3px solid ${GOLD}`
+                            : "2px solid #444",
+                          boxSizing: "border-box",
+                          boxShadow: selected
+                            ? "0 0 0 2px #c8a97e33"
+                            : "none",
+                        }}
+                      />
+
+                      <span style={{ fontSize: "11px" }}>
+                        {background.label}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div
+                style={{
+                  color: "#666",
+                  fontSize: "11px",
+                  lineHeight: "1.5",
+                  marginTop: "10px",
+                }}
+              >
+                The background is most visible when using “Show whole image”
+                with photos that do not fill the frame.
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {error && (
+        <div
+          style={{
+            background: "#7f1d1d22",
+            border: "1px solid #7f1d1d",
+            borderRadius: "8px",
+            padding: "10px",
+            color: "#fca5a5",
+            fontSize: "12px",
+          }}
+        >
+          ⚠️ {error}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Webcam Modal ────────────────────────────────────────────────────────────
@@ -138,10 +709,10 @@ function WebcamModal({ onCapture, onClose }) {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
+
   const [ready, setReady] = useState(false)
   const [error, setError] = useState("")
   const [captured, setCaptured] = useState(null)
-  const [capturing, setCapturing] = useState(false)
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -151,15 +722,15 @@ function WebcamModal({ onCapture, onClose }) {
   }, [])
 
   const startCamera = useCallback(async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setError("Camera access is unavailable in this browser.")
-      return
-    }
-
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError("Camera access is not supported by this browser.")
+        return
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: { ideal: "environment" },
+          facingMode: "environment",
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
@@ -169,9 +740,10 @@ function WebcamModal({ onCapture, onClose }) {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream
+
         videoRef.current.onloadedmetadata = async () => {
           try {
-            await videoRef.current?.play()
+            await videoRef.current.play()
             setReady(true)
           } catch {
             setError("Could not start the camera preview.")
@@ -184,9 +756,9 @@ function WebcamModal({ onCapture, onClose }) {
           "Camera access denied. Please allow camera access in your browser settings."
         )
       } else if (err.name === "NotFoundError") {
-        setError("No camera was found on this device.")
+        setError("No camera found on this device.")
       } else {
-        setError("Could not access the camera: " + err.message)
+        setError("Could not access camera: " + err.message)
       }
     }
   }, [])
@@ -205,29 +777,32 @@ function WebcamModal({ onCapture, onClose }) {
     const video = videoRef.current
     const canvas = canvasRef.current
 
-    if (!video.videoWidth || !video.videoHeight) return
+    if (!video.videoWidth || !video.videoHeight) {
+      setError("The camera is not ready yet. Please try again.")
+      return
+    }
 
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
 
-    const context = canvas.getContext("2d")
+    const ctx = canvas.getContext("2d")
 
-    if (!context) return
+    if (!ctx) {
+      setError("Could not capture the photo.")
+      return
+    }
 
-    context.drawImage(video, 0, 0)
+    ctx.drawImage(video, 0, 0)
 
     setCaptured(canvas.toDataURL("image/jpeg", 0.92))
   }
 
   const handleUse = () => {
-    if (!canvasRef.current || !captured || capturing) return
-
-    setCapturing(true)
+    if (!canvasRef.current || !captured) return
 
     canvasRef.current.toBlob(blob => {
       if (!blob) {
-        setCapturing(false)
-        setError("Could not save the photo. Please try again.")
+        setError("Could not prepare the captured photo.")
         return
       }
 
@@ -291,7 +866,7 @@ function WebcamModal({ onCapture, onClose }) {
             style={{
               background: "transparent",
               border: "none",
-              color: "#888",
+              color: "#666",
               fontSize: "22px",
               cursor: "pointer",
             }}
@@ -336,12 +911,13 @@ function WebcamModal({ onCapture, onClose }) {
                 onClick={handleClose}
                 style={{
                   marginTop: "12px",
-                  background: "#c8a97e",
+                  background: GOLD,
                   border: "none",
                   padding: "10px 20px",
                   borderRadius: "8px",
                   fontWeight: "700",
                   cursor: "pointer",
+                  fontSize: "13px",
                 }}
               >
                 Close
@@ -351,12 +927,9 @@ function WebcamModal({ onCapture, onClose }) {
             <>
               <img
                 src={captured}
-                alt="Captured product"
+                alt="Captured"
                 style={{
                   width: "100%",
-                  maxHeight: "360px",
-                  objectFit: "contain",
-                  background: "#18181c",
                   borderRadius: "10px",
                   display: "block",
                 }}
@@ -366,14 +939,12 @@ function WebcamModal({ onCapture, onClose }) {
                 <button
                   onClick={() => setCaptured(null)}
                   style={{
+                    ...buttonBase,
                     flex: 1,
                     background: "#1e1e1e",
                     border: "1px solid #333",
                     color: "#aaa",
                     padding: "12px",
-                    borderRadius: "10px",
-                    fontWeight: "700",
-                    cursor: "pointer",
                   }}
                 >
                   🔄 Retake
@@ -381,19 +952,17 @@ function WebcamModal({ onCapture, onClose }) {
 
                 <button
                   onClick={handleUse}
-                  disabled={capturing}
                   style={{
+                    ...buttonBase,
                     flex: 2,
-                    background: "#c8a97e",
+                    background: GOLD,
                     border: "none",
                     color: "#000",
                     padding: "12px",
-                    borderRadius: "10px",
-                    fontWeight: "700",
-                    cursor: capturing ? "wait" : "pointer",
+                    fontSize: "14px",
                   }}
                 >
-                  {capturing ? "Saving..." : "✅ Use This Photo"}
+                  ✅ Use This Photo
                 </button>
               </div>
             </>
@@ -405,7 +974,7 @@ function WebcamModal({ onCapture, onClose }) {
                   background: "#000",
                   borderRadius: "10px",
                   overflow: "hidden",
-                  aspectRatio: "16/9",
+                  aspectRatio: "16 / 9",
                 }}
               >
                 <video
@@ -416,7 +985,7 @@ function WebcamModal({ onCapture, onClose }) {
                   style={{
                     width: "100%",
                     height: "100%",
-                    objectFit: "contain",
+                    objectFit: "cover",
                     display: "block",
                   }}
                 />
@@ -430,7 +999,7 @@ function WebcamModal({ onCapture, onClose }) {
                       alignItems: "center",
                       justifyContent: "center",
                       background: "#000",
-                      color: "#888",
+                      color: "#666",
                       fontSize: "13px",
                     }}
                   >
@@ -439,18 +1008,20 @@ function WebcamModal({ onCapture, onClose }) {
                 )}
               </div>
 
-              <canvas ref={canvasRef} style={{ display: "none" }} />
+              <canvas
+                ref={canvasRef}
+                style={{ display: "none" }}
+              />
 
               <button
                 onClick={handleCapture}
                 disabled={!ready}
                 style={{
-                  background: ready ? "#c8a97e" : "#1e1e1e",
+                  ...buttonBase,
+                  background: ready ? GOLD : "#1e1e1e",
                   border: "none",
                   color: ready ? "#000" : "#555",
                   padding: "14px",
-                  borderRadius: "10px",
-                  fontWeight: "700",
                   cursor: ready ? "pointer" : "not-allowed",
                   fontSize: "15px",
                 }}
@@ -465,521 +1036,7 @@ function WebcamModal({ onCapture, onClose }) {
   )
 }
 
-// ── Image Studio ────────────────────────────────────────────────────────────
-
-function ImageStudio({
-  image,
-  settings,
-  onSettingsChange,
-  onChooseImage,
-  onTakePhoto,
-  inputRef,
-  error,
-}) {
-  const changeSetting = (field, value) => {
-    onSettingsChange(previous => ({
-      ...previous,
-      [field]: value,
-    }))
-  }
-
-  const resetSettings = () => {
-    onSettingsChange({ ...DEFAULT_IMAGE_SETTINGS })
-  }
-
-  const rangeStyle = {
-    width: "100%",
-    accentColor: "#c8a97e",
-    cursor: "pointer",
-  }
-
-  const labelStyle = {
-    display: "block",
-    fontSize: "12px",
-    color: "#aaa",
-    fontWeight: "600",
-    marginBottom: "8px",
-  }
-
-  const buttonStyle = active => ({
-    flex: 1,
-    background: active ? "#c8a97e22" : "#1a1a1a",
-    border: `1px solid ${active ? "#c8a97e" : "#333"}`,
-    color: active ? "#c8a97e" : "#aaa",
-    borderRadius: "9px",
-    padding: "11px 8px",
-    fontSize: "12px",
-    fontWeight: "700",
-    cursor: "pointer",
-    fontFamily: "inherit",
-  })
-
-  return (
-    <div
-      style={{
-        background: "#151515",
-        border: `1px solid ${error ? "#991b1b" : "#292929"}`,
-        borderRadius: "14px",
-        padding: "16px",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: "12px",
-          marginBottom: "14px",
-        }}
-      >
-        <div>
-          <div
-            style={{
-              fontSize: "15px",
-              fontWeight: "700",
-              color: "#f0ede8",
-            }}
-          >
-            🖼️ Image Studio
-          </div>
-
-          <div
-            style={{
-              fontSize: "12px",
-              color: "#777",
-              marginTop: "4px",
-              lineHeight: "1.5",
-            }}
-          >
-            Make your product photo look its best.
-          </div>
-        </div>
-
-        {image && (
-          <button
-            type="button"
-            onClick={resetSettings}
-            style={{
-              background: "transparent",
-              border: "1px solid #333",
-              color: "#c8a97e",
-              borderRadius: "8px",
-              padding: "7px 10px",
-              fontSize: "11px",
-              fontWeight: "700",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Reset
-          </button>
-        )}
-      </div>
-
-      <input
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-        ref={inputRef}
-        style={{ display: "none" }}
-        onChange={onChooseImage}
-      />
-
-      {!image ? (
-        <div
-          style={{
-            border: "1px dashed #444",
-            borderRadius: "12px",
-            padding: "30px 16px",
-            textAlign: "center",
-            background: "#111",
-          }}
-        >
-          <div style={{ fontSize: "36px", marginBottom: "10px" }}>
-            📷
-          </div>
-
-          <div
-            style={{
-              fontSize: "14px",
-              fontWeight: "700",
-              color: "#eee",
-              marginBottom: "6px",
-            }}
-          >
-            Add your product photo
-          </div>
-
-          <div
-            style={{
-              fontSize: "12px",
-              color: "#777",
-              marginBottom: "16px",
-              lineHeight: "1.5",
-            }}
-          >
-            Your image will appear in a clean, consistent frame.
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              flexWrap: "wrap",
-              justifyContent: "center",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              style={buttonStyle(false)}
-            >
-              📁 Choose Image
-            </button>
-
-            <button
-              type="button"
-              onClick={onTakePhoto}
-              style={buttonStyle(false)}
-            >
-              📸 Take Photo
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* Live editing preview */}
-          <div
-            style={{
-              position: "relative",
-              width: "100%",
-              aspectRatio: "4 / 3",
-              overflow: "hidden",
-              borderRadius: "10px",
-              background: settings.background,
-              border: "1px solid #333",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <img
-              src={image}
-              alt="Product image being edited"
-              draggable={false}
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: settings.fit,
-                objectPosition: `${settings.positionX}% ${settings.positionY}%`,
-                transform: `scale(${settings.zoom})`,
-                transformOrigin: `${settings.positionX}% ${settings.positionY}%`,
-                display: "block",
-                userSelect: "none",
-              }}
-            />
-
-            <div
-              style={{
-                position: "absolute",
-                bottom: "10px",
-                left: "10px",
-                background: "#000000b8",
-                border: "1px solid #ffffff22",
-                color: "#fff",
-                padding: "6px 9px",
-                borderRadius: "7px",
-                fontSize: "10px",
-                fontWeight: "700",
-                pointerEvents: "none",
-              }}
-            >
-              LIVE PREVIEW
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              marginTop: "12px",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              style={buttonStyle(false)}
-            >
-              🔄 Change Image
-            </button>
-
-            <button
-              type="button"
-              onClick={onTakePhoto}
-              style={buttonStyle(false)}
-            >
-              📸 Take Photo
-            </button>
-          </div>
-
-          {/* Image fitting */}
-          <div style={{ marginTop: "20px" }}>
-            <label style={labelStyle}>IMAGE FIT</label>
-
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                type="button"
-                onClick={() => changeSetting("fit", "contain")}
-                style={buttonStyle(settings.fit === "contain")}
-              >
-                ⊞ Fit Entire Image
-              </button>
-
-              <button
-                type="button"
-                onClick={() => changeSetting("fit", "cover")}
-                style={buttonStyle(settings.fit === "cover")}
-              >
-                ▣ Fill Frame
-              </button>
-            </div>
-
-            <div
-              style={{
-                color: "#777",
-                fontSize: "11px",
-                lineHeight: "1.5",
-                marginTop: "8px",
-              }}
-            >
-              {settings.fit === "contain"
-                ? "The complete photo remains visible. Background space is filled with your selected colour."
-                : "The frame is filled edge-to-edge. Some parts of the original photo may be cropped."}
-            </div>
-          </div>
-
-          {/* Zoom */}
-          <div style={{ marginTop: "20px" }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "8px",
-              }}
-            >
-              <label style={{ ...labelStyle, marginBottom: 0 }}>
-                ZOOM
-              </label>
-
-              <span style={{ fontSize: "12px", color: "#c8a97e" }}>
-                {Math.round(settings.zoom * 100)}%
-              </span>
-            </div>
-
-            <input
-              type="range"
-              min="1"
-              max="2.5"
-              step="0.05"
-              value={settings.zoom}
-              onChange={e =>
-                changeSetting("zoom", Number(e.target.value))
-              }
-              style={rangeStyle}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: "10px",
-                color: "#666",
-              }}
-            >
-              <span>Normal</span>
-              <span>Zoom in</span>
-            </div>
-          </div>
-
-          {/* Horizontal position */}
-          <div style={{ marginTop: "20px" }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "8px",
-              }}
-            >
-              <label style={{ ...labelStyle, marginBottom: 0 }}>
-                HORIZONTAL POSITION
-              </label>
-
-              <span style={{ fontSize: "12px", color: "#c8a97e" }}>
-                {settings.positionX}%
-              </span>
-            </div>
-
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value={settings.positionX}
-              onChange={e =>
-                changeSetting("positionX", Number(e.target.value))
-              }
-              style={rangeStyle}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: "10px",
-                color: "#666",
-              }}
-            >
-              <span>Left</span>
-              <span>Centre</span>
-              <span>Right</span>
-            </div>
-          </div>
-
-          {/* Vertical position */}
-          <div style={{ marginTop: "20px" }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "8px",
-              }}
-            >
-              <label style={{ ...labelStyle, marginBottom: 0 }}>
-                VERTICAL POSITION
-              </label>
-
-              <span style={{ fontSize: "12px", color: "#c8a97e" }}>
-                {settings.positionY}%
-              </span>
-            </div>
-
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value={settings.positionY}
-              onChange={e =>
-                changeSetting("positionY", Number(e.target.value))
-              }
-              style={rangeStyle}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: "10px",
-                color: "#666",
-              }}
-            >
-              <span>Top</span>
-              <span>Centre</span>
-              <span>Bottom</span>
-            </div>
-          </div>
-
-          {/* Background */}
-          <div style={{ marginTop: "20px" }}>
-            <label style={labelStyle}>BACKGROUND COLOUR</label>
-
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "12px",
-                alignItems: "center",
-              }}
-            >
-              {IMAGE_BACKGROUNDS.map(background => (
-                <button
-                  key={background.value}
-                  type="button"
-                  title={background.name}
-                  aria-label={background.name}
-                  aria-pressed={settings.background === background.value}
-                  onClick={() =>
-                    changeSetting("background", background.value)
-                  }
-                  style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "50%",
-                    background: background.value,
-                    border: settings.background === background.value
-                      ? "3px solid #c8a97e"
-                      : "2px solid #444",
-                    outline: settings.background === background.value
-                      ? "2px solid #c8a97e55"
-                      : "none",
-                    cursor: "pointer",
-                    boxSizing: "border-box",
-                  }}
-                />
-              ))}
-            </div>
-
-            <div
-              style={{
-                fontSize: "11px",
-                color: "#777",
-                marginTop: "9px",
-              }}
-            >
-              {IMAGE_BACKGROUNDS.find(
-                item => item.value === settings.background
-              )?.name || "Custom background"}
-            </div>
-          </div>
-
-          <div
-            style={{
-              marginTop: "20px",
-              background: "#064e3b22",
-              border: "1px solid #065f463f",
-              borderRadius: "10px",
-              padding: "12px",
-              color: "#a7f3d0",
-              fontSize: "12px",
-              lineHeight: "1.6",
-            }}
-          >
-            ✓ Your adjustments will be applied to the image before it is
-            uploaded. You can change them at any time before publishing.
-          </div>
-        </>
-      )}
-
-      {error && (
-        <div
-          style={{
-            marginTop: "10px",
-            color: "#fca5a5",
-            fontSize: "12px",
-          }}
-        >
-          ⚠️ {error}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Main SellListing Component ───────────────────────────────────────────────
+// ── Main Listing Component ──────────────────────────────────────────────────
 
 export default function SellListing({ user, onRequestAuth, onClose }) {
   const [listingType, setListingType] = useState(null)
@@ -1009,10 +1066,14 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
     ...DEFAULT_IMAGE_SETTINGS,
   })
 
+  const [editedPhotoPreview, setEditedPhotoPreview] = useState(null)
+  const [imageProcessing, setImageProcessing] = useState(false)
+
   const [errors, setErrors] = useState({})
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState("")
   const [showWebcam, setShowWebcam] = useState(false)
+
   const fileInputRef = useRef(null)
 
   const update = (field, value) => {
@@ -1022,62 +1083,31 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
     }))
   }
 
-  const toggleDelivery = value => {
+  const toggleDelivery = deliveryOption => {
     setForm(previous => ({
       ...previous,
-      delivery: previous.delivery.includes(value)
-        ? previous.delivery.filter(item => item !== value)
-        : [...previous.delivery, value],
+      delivery: previous.delivery.includes(deliveryOption)
+        ? previous.delivery.filter(item => item !== deliveryOption)
+        : [...previous.delivery, deliveryOption],
     }))
   }
 
-  // ── Image selection ───────────────────────────────────────────────────────
-
-  const acceptImage = (file, preview) => {
-    setForm(previous => ({
-      ...previous,
-      photo: file,
-      photoPreview: preview,
-    }))
-
+  const resetImageSettings = () => {
     setImageSettings({ ...DEFAULT_IMAGE_SETTINGS })
-
-    setErrors(previous => ({
-      ...previous,
-      photo: null,
-    }))
-
-    setPublishError("")
   }
 
   const handlePhoto = event => {
     const file = event.target.files?.[0]
 
-    // Allow selecting the same image again later.
+    // Allow selecting the same file again later.
     event.target.value = ""
 
     if (!file) return
 
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-      "image/gif",
-      "image/avif",
-    ]
-
-    if (!allowedTypes.includes(file.type)) {
+    if (!file.type.startsWith("image/")) {
       setErrors(previous => ({
         ...previous,
-        photo: "Please select a JPEG, PNG, WebP, GIF or AVIF image.",
-      }))
-      return
-    }
-
-    if (file.size > 15 * 1024 * 1024) {
-      setErrors(previous => ({
-        ...previous,
-        photo: "Please select an image smaller than 15 MB.",
+        photo: "Please select a valid image.",
       }))
       return
     }
@@ -1085,21 +1115,25 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
     const reader = new FileReader()
 
     reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        setErrors(previous => ({
-          ...previous,
-          photo: "Could not read the selected image.",
-        }))
-        return
-      }
+      setForm(previous => ({
+        ...previous,
+        photo: file,
+        photoPreview: reader.result,
+      }))
 
-      acceptImage(file, reader.result)
+      setImageSettings({ ...DEFAULT_IMAGE_SETTINGS })
+      setEditedPhotoPreview(null)
+
+      setErrors(previous => ({
+        ...previous,
+        photo: null,
+      }))
     }
 
     reader.onerror = () => {
       setErrors(previous => ({
         ...previous,
-        photo: "Could not read the selected image.",
+        photo: "Could not read this image. Please try another file.",
       }))
     }
 
@@ -1107,138 +1141,174 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
   }
 
   const handleWebcamCapture = (file, dataUrl) => {
-    acceptImage(file, dataUrl)
+    setForm(previous => ({
+      ...previous,
+      photo: file,
+      photoPreview: dataUrl,
+    }))
+
+    setImageSettings({ ...DEFAULT_IMAGE_SETTINGS })
+    setEditedPhotoPreview(null)
+
+    setErrors(previous => ({
+      ...previous,
+      photo: null,
+    }))
+
     setShowWebcam(false)
   }
 
-  // ── Validation ────────────────────────────────────────────────────────────
+  // Keep the preview synchronized with the editor settings.
+  useEffect(() => {
+    if (!form.photo) {
+      setEditedPhotoPreview(null)
+      setImageProcessing(false)
+      return
+    }
+
+    let cancelled = false
+
+    setImageProcessing(true)
+
+    renderEditedImage(form.photo, imageSettings)
+      .then(result => {
+        if (!cancelled) {
+          setEditedPhotoPreview(result.previewUrl)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEditedPhotoPreview(null)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setImageProcessing(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [form.photo, imageSettings])
 
   const validate = () => {
-    const validationErrors = {}
+    const nextErrors = {}
 
-    if (!form.photoPreview || !form.photo) {
-      validationErrors.photo = "Please upload a product photo."
+    if (!form.photo) {
+      nextErrors.photo = "Please upload a photo."
     }
 
     if (!form.title.trim()) {
-      validationErrors.title = "Please enter a title."
+      nextErrors.title = "Please enter a title."
     }
 
     if (listingType === "product") {
       if (!form.price || Number(form.price) <= 0) {
-        validationErrors.price = "Please enter a valid price."
+        nextErrors.price = "Please enter a valid price."
       }
 
       if (!form.category) {
-        validationErrors.category = "Please select a category."
+        nextErrors.category = "Please select a category."
       }
 
       if (!form.condition) {
-        validationErrors.condition = "Please select a condition."
+        nextErrors.condition = "Please select a condition."
       }
 
       if (!form.desc.trim()) {
-        validationErrors.desc = "Please add a description."
+        nextErrors.desc = "Please add a description."
       }
 
       if (form.delivery.length === 0) {
-        validationErrors.delivery =
+        nextErrors.delivery =
           "Please select at least one delivery option."
       }
     }
 
     if (listingType === "rent") {
       if (!form.dailyRate || Number(form.dailyRate) <= 0) {
-        validationErrors.dailyRate = "Please enter a valid daily rate."
+        nextErrors.dailyRate = "Please enter a valid daily rate."
       }
 
       if (!form.maxDays || Number(form.maxDays) <= 0) {
-        validationErrors.maxDays = "Please enter valid maximum rental days."
+        nextErrors.maxDays = "Please enter valid maximum rental days."
       }
 
       if (!form.category) {
-        validationErrors.category = "Please select a category."
+        nextErrors.category = "Please select a category."
       }
 
       if (!form.condition) {
-        validationErrors.condition = "Please select a condition."
+        nextErrors.condition = "Please select a condition."
       }
 
       if (!form.desc.trim()) {
-        validationErrors.desc = "Please add a description."
+        nextErrors.desc = "Please add a description."
       }
 
-      if (form.accountability) {
-        const percentage = Number(form.accountabilityPct)
-
-        if (
+      if (
+        form.accountability &&
+        (
           form.accountabilityPct === "" ||
-          !Number.isFinite(percentage) ||
-          percentage <= 0 ||
-          percentage > 100
-        ) {
-          validationErrors.accountabilityPct =
-            "Enter a deposit percentage between 1 and 100."
-        }
+          Number(form.accountabilityPct) < 0 ||
+          Number(form.accountabilityPct) > 100
+        )
+      ) {
+        nextErrors.accountabilityPct =
+          "Enter an accountability percentage between 0 and 100."
       }
     }
 
     if (listingType === "service") {
       if (!form.price || Number(form.price) <= 0) {
-        validationErrors.price = "Please enter a valid price."
+        nextErrors.price = "Please enter a valid price."
       }
 
       if (!form.category) {
-        validationErrors.category = "Please select a service category."
+        nextErrors.category = "Please select a service category."
       }
 
       if (!form.desc.trim()) {
-        validationErrors.desc = "Please add a description."
+        nextErrors.desc = "Please add a description."
       }
 
       if (!form.liveSession) {
         if (!form.contactMethod.trim()) {
-          validationErrors.contactMethod =
+          nextErrors.contactMethod =
             "Please enter your contact method."
         }
 
         if (!form.contactDetail.trim()) {
-          validationErrors.contactDetail =
-            "Please enter your contact details."
+          nextErrors.contactDetail =
+            "Please enter your contact detail."
         }
       }
     }
 
-    return validationErrors
+    setErrors(nextErrors)
+
+    return nextErrors
   }
 
   const handlePreview = () => {
-    const validationErrors = validate()
+    const nextErrors = validate()
 
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors)
-      return
-    }
+    if (Object.keys(nextErrors).length > 0) return
 
-    setErrors({})
     setPublishError("")
     setStep(2)
   }
 
-  // ── Publishing ────────────────────────────────────────────────────────────
-
   const handlePublish = async () => {
-    if (publishing) return
-
     if (!user) {
       onRequestAuth(() => setStep(3))
       return
     }
 
-    const validationErrors = validate()
+    const nextErrors = validate()
 
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors)
+    if (Object.keys(nextErrors).length > 0) {
       setStep(1)
       return
     }
@@ -1247,20 +1317,26 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
     setPublishError("")
 
     try {
-      // Convert the seller's image settings into an actual image file.
-      const processedImage = await processProductImage(
-        form.photoPreview,
-        imageSettings
+      if (!form.photo) {
+        throw new Error("Please choose a listing photo.")
+      }
+
+      // Export the user's edits into a real image file.
+      // The backend receives this processed file, not the original.
+      const editedImage = await renderEditedImage(
+        form.photo,
+        imageSettings,
+        true
       )
 
       const formData = new FormData()
 
-      formData.append("image", processedImage.file)
+      formData.append("image", editedImage.file)
 
       const listingData = {
         type: listingType,
-        title: form.title.trim(),
-        desc: form.desc.trim(),
+        title: form.title,
+        desc: form.desc,
         category: form.category,
 
         ...(listingType === "product" && {
@@ -1295,33 +1371,22 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
 
       if (data?.message) {
         setPublishError(data.message)
+        setPublishing(false)
         return
       }
 
-      // Display the same processed image that was uploaded.
-      setForm(previous => ({
-        ...previous,
-        photo: processedImage.file,
-        photoPreview: processedImage.preview,
-      }))
-
+      // Show the actual exported image on the success screen.
+      setEditedPhotoPreview(editedImage.previewUrl)
       setStep(3)
     } catch (error) {
-      console.error("Listing publication failed:", error)
-
       setPublishError(
-        error?.message === "Could not read the selected image." ||
-        error?.message === "Could not export the edited image." ||
-        error?.message === "Image editing is not supported by this browser."
-          ? error.message
-          : "Something went wrong while publishing. Please try again."
+        error?.message ||
+        "Something went wrong. Please try again."
       )
     } finally {
       setPublishing(false)
     }
   }
-
-  // ── Shared UI helpers ─────────────────────────────────────────────────────
 
   const ErrorMsg = ({ field }) =>
     errors[field] ? (
@@ -1349,58 +1414,43 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
     fontFamily: "inherit",
   })
 
-  const sectionLabel = {
-    fontSize: "12px",
-    color: "#888",
-    fontWeight: "600",
-    marginBottom: "8px",
-    textTransform: "uppercase",
-    letterSpacing: ".06em",
-  }
-
-  const modalStyle = {
-    position: "fixed",
-    inset: 0,
-    background: "#000000cc",
-    zIndex: 300,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "20px",
-  }
-
-  const panelStyle = {
-    background: "#111",
-    borderRadius: "16px",
-    width: "100%",
-    maxWidth: "520px",
-    maxHeight: "92vh",
-    overflowY: "auto",
-    border: "1px solid #1e1e1e",
-  }
-
-  const headerStyle = {
-    padding: "20px 24px",
-    borderBottom: "1px solid #1e1e1e",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    position: "sticky",
-    top: 0,
-    background: "#111",
-    zIndex: 1,
-  }
-
-  // ── STEP 0: Listing type ──────────────────────────────────────────────────
+  // ── STEP 0: Choose Listing Type ───────────────────────────────────────────
 
   if (step === 0) {
     return (
-      <div style={modalStyle} onClick={onClose}>
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "#000000cc",
+          zIndex: 300,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+        }}
+        onClick={onClose}
+      >
         <div
-          style={{ ...panelStyle, maxWidth: "480px" }}
+          style={{
+            background: "#111",
+            borderRadius: "16px",
+            width: "100%",
+            maxWidth: "480px",
+            border: "1px solid #1e1e1e",
+            overflow: "hidden",
+          }}
           onClick={event => event.stopPropagation()}
         >
-          <div style={headerStyle}>
+          <div
+            style={{
+              padding: "20px 24px",
+              borderBottom: "1px solid #1e1e1e",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
             <span style={{ fontSize: "18px", fontWeight: "700" }}>
               Create a Listing
             </span>
@@ -1410,7 +1460,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
               style={{
                 background: "transparent",
                 border: "none",
-                color: "#888",
+                color: "#666",
                 fontSize: "22px",
                 cursor: "pointer",
               }}
@@ -1457,9 +1507,8 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                   desc: "Tutoring, design, cleaning, photography and more.",
                 },
               ].map(option => (
-                <button
+                <div
                   key={option.type}
-                  type="button"
                   onClick={() => {
                     setListingType(option.type)
                     setStep(1)
@@ -1473,10 +1522,13 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                     display: "flex",
                     alignItems: "center",
                     gap: "16px",
-                    textAlign: "left",
-                    color: "#f0ede8",
-                    fontFamily: "inherit",
-                    width: "100%",
+                    transition: "border .2s",
+                  }}
+                  onMouseEnter={event => {
+                    event.currentTarget.style.borderColor = "#c8a97e55"
+                  }}
+                  onMouseLeave={event => {
+                    event.currentTarget.style.borderColor = "#2a2a2a"
                   }}
                 >
                   <div style={{ fontSize: "32px" }}>
@@ -1488,6 +1540,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                       style={{
                         fontSize: "15px",
                         fontWeight: "700",
+                        color: "#f0ede8",
                         marginBottom: "4px",
                       }}
                     >
@@ -1497,8 +1550,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                     <div
                       style={{
                         fontSize: "13px",
-                        color: "#888",
-                        lineHeight: "1.5",
+                        color: "#666",
                       }}
                     >
                       {option.desc}
@@ -1508,13 +1560,13 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                   <div
                     style={{
                       marginLeft: "auto",
-                      color: "#777",
+                      color: "#555",
                       fontSize: "18px",
                     }}
                   >
                     →
                   </div>
-                </button>
+                </div>
               ))}
             </div>
 
@@ -1525,7 +1577,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                 borderRadius: "10px",
                 padding: "14px",
                 fontSize: "13px",
-                color: "#888",
+                color: "#666",
                 textAlign: "center",
               }}
             >
@@ -1537,7 +1589,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
     )
   }
 
-  // ── STEP 1: Listing details and Image Studio ──────────────────────────────
+  // ── STEP 1: Listing Details and Image Editor ──────────────────────────────
 
   if (step === 1) {
     return (
@@ -1549,12 +1601,44 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
           />
         )}
 
-        <div style={modalStyle} onClick={onClose}>
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "#000000cc",
+            zIndex: 300,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={onClose}
+        >
           <div
-            style={panelStyle}
+            style={{
+              background: "#111",
+              borderRadius: "16px",
+              width: "100%",
+              maxWidth: "560px",
+              maxHeight: "92vh",
+              overflowY: "auto",
+              border: "1px solid #1e1e1e",
+            }}
             onClick={event => event.stopPropagation()}
           >
-            <div style={headerStyle}>
+            <div
+              style={{
+                padding: "20px 24px",
+                borderBottom: "1px solid #1e1e1e",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                position: "sticky",
+                top: 0,
+                background: "#111",
+                zIndex: 1,
+              }}
+            >
               <div
                 style={{
                   display: "flex",
@@ -1589,7 +1673,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                 style={{
                   background: "transparent",
                   border: "none",
-                  color: "#888",
+                  color: "#666",
                   fontSize: "22px",
                   cursor: "pointer",
                 }}
@@ -1606,14 +1690,17 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                 gap: "22px",
               }}
             >
-              {/* Image Studio */}
-              <ImageStudio
-                image={form.photoPreview}
+              {/* Photo editor */}
+              <ImageEditor
+                originalPreview={form.photoPreview}
+                editedPreview={editedPhotoPreview}
                 settings={imageSettings}
                 onSettingsChange={setImageSettings}
-                inputRef={fileInputRef}
-                onChooseImage={handlePhoto}
+                onReset={resetImageSettings}
+                onChooseImage={() => fileInputRef.current?.click()}
                 onTakePhoto={() => setShowWebcam(true)}
+                inputRef={fileInputRef}
+                onFileChange={handlePhoto}
                 error={errors.photo}
               />
 
@@ -1621,7 +1708,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
 
               {/* Title */}
               <div>
-                <div style={sectionLabel}>Title</div>
+                <SectionLabel>Title</SectionLabel>
 
                 <input
                   placeholder={
@@ -1632,7 +1719,6 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                         : "e.g. Mathematics Private Lessons"
                   }
                   value={form.title}
-                  maxLength={120}
                   onChange={event => update("title", event.target.value)}
                   style={inputStyle("title")}
                 />
@@ -1640,15 +1726,15 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                 <ErrorMsg field="title" />
               </div>
 
-              {/* Product or service price */}
+              {/* Price */}
               {(listingType === "product" || listingType === "service") && (
                 <div>
-                  <div style={sectionLabel}>Price (GHS ₵)</div>
+                  <SectionLabel>Price (GHS ₵)</SectionLabel>
 
                   <input
                     placeholder="e.g. 150"
                     type="number"
-                    min="0.01"
+                    min="0"
                     step="0.01"
                     value={form.price}
                     onChange={event => update("price", event.target.value)}
@@ -1673,7 +1759,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                 </div>
               )}
 
-              {/* Rental pricing */}
+              {/* Rental details */}
               {listingType === "rent" && (
                 <div
                   style={{
@@ -1683,12 +1769,12 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                   }}
                 >
                   <div>
-                    <div style={sectionLabel}>Daily Rate (₵)</div>
+                    <SectionLabel>Daily Rate (₵)</SectionLabel>
 
                     <input
                       placeholder="e.g. 80"
                       type="number"
-                      min="0.01"
+                      min="0"
                       step="0.01"
                       value={form.dailyRate}
                       onChange={event =>
@@ -1701,7 +1787,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                   </div>
 
                   <div>
-                    <div style={sectionLabel}>Max Days</div>
+                    <SectionLabel>Max Days</SectionLabel>
 
                     <input
                       placeholder="e.g. 7"
@@ -1722,7 +1808,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
 
               {/* Category */}
               <div>
-                <div style={sectionLabel}>Category</div>
+                <SectionLabel>Category</SectionLabel>
 
                 <div
                   style={{
@@ -1740,21 +1826,19 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                       type="button"
                       onClick={() => update("category", category)}
                       style={{
-                        padding: "8px 14px",
+                        ...buttonBase,
+                        padding: "7px 14px",
                         borderRadius: "100px",
                         border: `1.5px solid ${
-                          form.category === category ? "#c8a97e" : "#333"
+                          form.category === category ? GOLD : "#2a2a2a"
                         }`,
                         background: form.category === category
                           ? "#c8a97e22"
                           : "#1a1a1a",
                         color: form.category === category
-                          ? "#c8a97e"
-                          : "#aaa",
-                        cursor: "pointer",
-                        fontWeight: "600",
+                          ? GOLD
+                          : "#888",
                         fontSize: "12px",
-                        fontFamily: "inherit",
                       }}
                     >
                       {category}
@@ -1768,7 +1852,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
               {/* Condition */}
               {(listingType === "product" || listingType === "rent") && (
                 <div>
-                  <div style={sectionLabel}>Condition</div>
+                  <SectionLabel>Condition</SectionLabel>
 
                   <div style={{ display: "flex", gap: "10px" }}>
                     {["Excellent", "Good", "Fair"].map(condition => (
@@ -1777,24 +1861,19 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                         type="button"
                         onClick={() => update("condition", condition)}
                         style={{
+                          ...buttonBase,
                           flex: 1,
-                          padding: "10px 6px",
-                          borderRadius: "10px",
+                          padding: "10px",
                           border: `1.5px solid ${
-                            form.condition === condition
-                              ? "#c8a97e"
-                              : "#333"
+                            form.condition === condition ? GOLD : "#2a2a2a"
                           }`,
                           background: form.condition === condition
                             ? "#c8a97e22"
                             : "#1a1a1a",
                           color: form.condition === condition
-                            ? "#c8a97e"
-                            : "#aaa",
-                          cursor: "pointer",
-                          fontWeight: "600",
-                          fontSize: "12px",
-                          fontFamily: "inherit",
+                            ? GOLD
+                            : "#888",
+                          fontSize: "13px",
                         }}
                       >
                         {condition}
@@ -1808,18 +1887,17 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
 
               {/* Description */}
               <div>
-                <div style={sectionLabel}>Description</div>
+                <SectionLabel>Description</SectionLabel>
 
                 <textarea
                   placeholder={
                     listingType === "product"
-                      ? "Describe your item — its condition, what's included, and why you're selling..."
+                      ? "Describe your item — condition details, what's included, why you're selling..."
                       : listingType === "rent"
-                        ? "Describe the item, what's included, and any rental rules..."
-                        : "Describe your service, your experience, and turnaround time..."
+                        ? "Describe the item — what's included, any rules for renters..."
+                        : "Describe your service — what's included, your experience, turnaround time..."
                   }
                   value={form.desc}
-                  maxLength={5000}
                   onChange={event => update("desc", event.target.value)}
                   rows={4}
                   style={{
@@ -1834,7 +1912,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
               {/* Delivery options */}
               {listingType === "product" && (
                 <div>
-                  <div style={sectionLabel}>Delivery Options</div>
+                  <SectionLabel>Delivery Options</SectionLabel>
 
                   <div
                     style={{
@@ -1853,25 +1931,20 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                         type="button"
                         onClick={() => toggleDelivery(value)}
                         style={{
-                          flex: "1 1 120px",
+                          ...buttonBase,
+                          flex: 1,
+                          minWidth: "120px",
                           padding: "12px 10px",
-                          borderRadius: "10px",
                           border: `1.5px solid ${
-                            form.delivery.includes(value)
-                              ? "#c8a97e"
-                              : "#333"
+                            form.delivery.includes(value) ? GOLD : "#2a2a2a"
                           }`,
                           background: form.delivery.includes(value)
                             ? "#c8a97e22"
                             : "#1a1a1a",
-                          cursor: "pointer",
-                          fontSize: "12px",
-                          fontWeight: "600",
                           color: form.delivery.includes(value)
-                            ? "#c8a97e"
-                            : "#aaa",
-                          textAlign: "center",
-                          fontFamily: "inherit",
+                            ? GOLD
+                            : "#888",
+                          fontSize: "13px",
                         }}
                       >
                         {label}
@@ -1883,7 +1956,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                 </div>
               )}
 
-              {/* Rental deposit */}
+              {/* Rental accountability deposit */}
               {listingType === "rent" && (
                 <div>
                   <div
@@ -1891,13 +1964,10 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      gap: "12px",
                       marginBottom: "8px",
                     }}
                   >
-                    <div style={sectionLabel}>
-                      Accountability Deposit
-                    </div>
+                    <SectionLabel>Accountability Deposit</SectionLabel>
 
                     <button
                       type="button"
@@ -1908,11 +1978,9 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                         update("accountability", !form.accountability)
                       }
                       style={{
-                        width: "44px",
-                        height: "24px",
-                        background: form.accountability
-                          ? "#c8a97e"
-                          : "#333",
+                        width: "40px",
+                        height: "22px",
+                        background: form.accountability ? GOLD : "#2a2a2a",
                         border: "none",
                         borderRadius: "20px",
                         position: "relative",
@@ -1923,8 +1991,8 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                       <span
                         style={{
                           position: "absolute",
-                          top: "4px",
-                          left: form.accountability ? "24px" : "4px",
+                          top: "3px",
+                          left: form.accountability ? "20px" : "3px",
                           width: "16px",
                           height: "16px",
                           background: "#fff",
@@ -1940,7 +2008,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                       <input
                         placeholder="Damage deposit % e.g. 50"
                         type="number"
-                        min="1"
+                        min="0"
                         max="100"
                         value={form.accountabilityPct}
                         onChange={event =>
@@ -1954,12 +2022,10 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                           fontSize: "12px",
                           color: "#fcd34d",
                           marginTop: "5px",
-                          lineHeight: "1.5",
                         }}
                       >
-                        ⚠️ The renter pays this percentage on top of the rental
-                        fee. Deposit handling and refund eligibility remain
-                        subject to your rental policies.
+                        ⚠️ Renter pays this percentage on top of the rental
+                        fee. Refund terms should be clearly explained.
                       </div>
 
                       <ErrorMsg field="accountabilityPct" />
@@ -1972,7 +2038,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
               {listingType === "service" && (
                 <>
                   <div>
-                    <div style={sectionLabel}>Service Type</div>
+                    <SectionLabel>Service Type</SectionLabel>
 
                     <div style={{ display: "flex", gap: "10px" }}>
                       {[
@@ -1982,28 +2048,21 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                         <button
                           key={value}
                           type="button"
-                          onClick={() =>
-                            update("serviceDelivery", value)
-                          }
+                          onClick={() => update("serviceDelivery", value)}
                           style={{
+                            ...buttonBase,
                             flex: 1,
                             padding: "12px",
-                            borderRadius: "10px",
                             border: `1.5px solid ${
-                              form.serviceDelivery === value
-                                ? "#c8a97e"
-                                : "#333"
+                              form.serviceDelivery === value ? GOLD : "#2a2a2a"
                             }`,
                             background: form.serviceDelivery === value
                               ? "#c8a97e22"
                               : "#1a1a1a",
                             color: form.serviceDelivery === value
-                              ? "#c8a97e"
-                              : "#aaa",
-                            cursor: "pointer",
-                            fontWeight: "600",
+                              ? GOLD
+                              : "#888",
                             fontSize: "13px",
-                            fontFamily: "inherit",
                           }}
                         >
                           {label}
@@ -2022,18 +2081,26 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                       }}
                     >
                       <div>
-                        <div style={sectionLabel}>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#888",
+                            fontWeight: "600",
+                            textTransform: "uppercase",
+                            letterSpacing: ".06em",
+                          }}
+                        >
                           Enable Live Session
                         </div>
 
                         <div
                           style={{
                             fontSize: "11px",
-                            color: "#777",
-                            lineHeight: "1.5",
+                            color: "#555",
+                            marginTop: "4px",
                           }}
                         >
-                          For tutoring, lessons, or services needing a video call.
+                          For tutoring, lessons, or services needing a video call
                         </div>
                       </div>
 
@@ -2046,11 +2113,9 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                           update("liveSession", !form.liveSession)
                         }
                         style={{
-                          width: "44px",
-                          height: "24px",
-                          background: form.liveSession
-                            ? "#c8a97e"
-                            : "#333",
+                          width: "40px",
+                          height: "22px",
+                          background: form.liveSession ? GOLD : "#2a2a2a",
                           border: "none",
                           borderRadius: "20px",
                           position: "relative",
@@ -2061,8 +2126,8 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                         <span
                           style={{
                             position: "absolute",
-                            top: "4px",
-                            left: form.liveSession ? "24px" : "4px",
+                            top: "3px",
+                            left: form.liveSession ? "20px" : "3px",
                             width: "16px",
                             height: "16px",
                             background: "#fff",
@@ -2085,17 +2150,15 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                       <div
                         style={{
                           fontSize: "12px",
-                          color: "#777",
-                          lineHeight: "1.5",
+                          color: "#555",
                         }}
                       >
-                        Contact details are intended to be revealed to the
-                        buyer only after payment, according to your existing
-                        application rules.
+                        Contact details revealed to the buyer only according
+                        to the platform's payment and access rules.
                       </div>
 
                       <div>
-                        <div style={sectionLabel}>Contact Method</div>
+                        <SectionLabel>Contact Method</SectionLabel>
 
                         <input
                           placeholder="e.g. WhatsApp, Phone, Instagram, Email..."
@@ -2110,7 +2173,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                       </div>
 
                       <div>
-                        <div style={sectionLabel}>Contact Detail</div>
+                        <SectionLabel>Contact Detail</SectionLabel>
 
                         <input
                           placeholder="e.g. +233 24 567 8901, @yourhandle..."
@@ -2125,9 +2188,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                       </div>
 
                       <div>
-                        <div style={sectionLabel}>
-                          Note for Buyer (Optional)
-                        </div>
+                        <SectionLabel>Note for Buyer (Optional)</SectionLabel>
 
                         <input
                           placeholder="e.g. Message me first with your requirements..."
@@ -2143,18 +2204,27 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                 </>
               )}
 
+              {imageProcessing && (
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "#888",
+                    textAlign: "center",
+                  }}
+                >
+                  Preparing your image preview…
+                </div>
+              )}
+
               <button
                 onClick={handlePreview}
                 style={{
-                  background: "#c8a97e",
-                  color: "#111",
+                  ...buttonBase,
+                  background: GOLD,
                   border: "none",
+                  color: "#000",
                   padding: "14px",
-                  borderRadius: "10px",
-                  fontWeight: "700",
-                  cursor: "pointer",
                   fontSize: "15px",
-                  fontFamily: "inherit",
                   marginTop: "4px",
                 }}
               >
@@ -2167,23 +2237,50 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
     )
   }
 
-  // ── STEP 2: Listing preview ───────────────────────────────────────────────
+  // ── STEP 2: Listing Preview ───────────────────────────────────────────────
 
   if (step === 2) {
-    const displayedPrice = listingType === "rent"
-      ? `₵${form.dailyRate}/day`
-      : `₵${form.price}`
+    const previewImage = editedPhotoPreview || form.photoPreview
 
     return (
-      <div style={modalStyle} onClick={onClose}>
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "#000000cc",
+          zIndex: 300,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+        }}
+        onClick={onClose}
+      >
         <div
           style={{
-            ...panelStyle,
+            background: "#111",
+            borderRadius: "16px",
+            width: "100%",
             maxWidth: "600px",
+            maxHeight: "92vh",
+            overflowY: "auto",
+            border: "1px solid #1e1e1e",
           }}
           onClick={event => event.stopPropagation()}
         >
-          <div style={headerStyle}>
+          <div
+            style={{
+              padding: "20px 24px",
+              borderBottom: "1px solid #1e1e1e",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              position: "sticky",
+              top: 0,
+              background: "#111",
+              zIndex: 1,
+            }}
+          >
             <div
               style={{
                 display: "flex",
@@ -2214,7 +2311,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
               style={{
                 background: "transparent",
                 border: "none",
-                color: "#888",
+                color: "#666",
                 fontSize: "22px",
                 cursor: "pointer",
               }}
@@ -2231,20 +2328,10 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
               gap: "24px",
             }}
           >
-            {/* Marketplace card */}
             <div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "#777",
-                  fontWeight: "600",
-                  textTransform: "uppercase",
-                  letterSpacing: ".06em",
-                  marginBottom: "12px",
-                }}
-              >
+              <SectionLabel>
                 How it looks on the marketplace
-              </div>
+              </SectionLabel>
 
               <div
                 style={{
@@ -2252,37 +2339,37 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                   borderRadius: "12px",
                   overflow: "hidden",
                   border: "1px solid #2a2a2a",
+                  width: "100%",
                   maxWidth: "300px",
                 }}
               >
                 <div
                   style={{
-                    position: "relative",
+                    width: "100%",
                     aspectRatio: "4 / 3",
                     background: imageSettings.background,
-                    overflow: "hidden",
                   }}
                 >
                   <img
-                    src={form.photoPreview}
-                    alt={form.title || "Product preview"}
+                    src={previewImage}
+                    alt="Listing preview"
                     style={{
                       width: "100%",
                       height: "100%",
+                      objectFit: "cover",
                       display: "block",
-                      objectFit: "contain",
                     }}
                   />
                 </div>
 
-                <div style={{ padding: "14px" }}>
+                <div style={{ padding: "12px" }}>
                   <div
                     style={{
                       fontSize: "11px",
-                      color: "#c8a97e",
+                      color: GOLD,
                       fontWeight: "600",
                       textTransform: "uppercase",
-                      marginBottom: "5px",
+                      marginBottom: "4px",
                     }}
                   >
                     {form.category}
@@ -2290,11 +2377,10 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
 
                   <div
                     style={{
-                      fontSize: "14px",
+                      fontSize: "13px",
                       fontWeight: "600",
                       color: "#f0ede8",
-                      marginBottom: "5px",
-                      overflowWrap: "anywhere",
+                      marginBottom: "4px",
                     }}
                   >
                     {form.title}
@@ -2303,36 +2389,34 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                   <div
                     style={{
                       fontSize: "11px",
-                      color: "#777",
-                      marginBottom: "8px",
+                      color: "#666",
+                      marginBottom: "6px",
                     }}
                   >
-                    by {user?.name || "You"}
-                    {form.condition ? ` · ${form.condition}` : ""}
+                    by {user?.name || "You"} · {form.condition || "N/A"}
                   </div>
 
                   <div
                     style={{
-                      fontSize: "17px",
+                      fontSize: "15px",
                       fontWeight: "700",
-                      color: "#c8a97e",
+                      color: GOLD,
                     }}
                   >
-                    {displayedPrice}
+                    {listingType === "rent"
+                      ? `₵${form.dailyRate}/day`
+                      : `₵${form.price}`}
                   </div>
 
-                  <div
+                  <button
                     style={{
-                      marginTop: "10px",
+                      marginTop: "8px",
                       width: "100%",
-                      background: "#c8a97e",
-                      color: "#111",
-                      padding: "9px",
+                      background: GOLD,
+                      border: "none",
+                      padding: "7px",
                       borderRadius: "7px",
                       fontWeight: "700",
-                      fontSize: "12px",
-                      textAlign: "center",
-                      boxSizing: "border-box",
                     }}
                   >
                     {listingType === "product"
@@ -2340,37 +2424,28 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                       : listingType === "rent"
                         ? "Rent This"
                         : "Book Now"}
-                  </div>
+                  </button>
                 </div>
               </div>
 
-              <div
+              <button
+                onClick={() => setStep(1)}
                 style={{
-                  fontSize: "11px",
-                  color: "#777",
-                  marginTop: "10px",
-                  lineHeight: "1.6",
+                  ...buttonBase,
+                  marginTop: "12px",
+                  background: "#1e1e1e",
+                  border: "1px solid #333",
+                  color: GOLD,
+                  padding: "10px 14px",
+                  fontSize: "12px",
                 }}
               >
-                Your edited image is exported at 1200 × 900 pixels.
-                The published image will use this processed version.
-              </div>
+                ✏️ Adjust Photo or Edit Details
+              </button>
             </div>
 
-            {/* Listing summary */}
             <div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "#777",
-                  fontWeight: "600",
-                  textTransform: "uppercase",
-                  letterSpacing: ".06em",
-                  marginBottom: "12px",
-                }}
-              >
-                Full Listing Summary
-              </div>
+              <SectionLabel>Full listing summary</SectionLabel>
 
               <div
                 style={{
@@ -2379,8 +2454,8 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                   padding: "18px",
                   display: "flex",
                   flexDirection: "column",
-                  gap: "12px",
-                  border: "1px solid #252525",
+                  gap: "10px",
+                  border: "1px solid #1e1e1e",
                 }}
               >
                 {[
@@ -2393,12 +2468,12 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                         : "🛠️ Service",
                   ],
                   ["Title", form.title],
-                  [
-                    listingType === "rent" ? "Daily Rate" : "Price",
-                    listingType === "rent"
-                      ? `₵${form.dailyRate}/day · Max ${form.maxDays} days`
-                      : `₵${form.price}`,
-                  ],
+                  listingType === "rent"
+                    ? [
+                        "Daily Rate",
+                        `₵${form.dailyRate}/day · Max ${form.maxDays} days`,
+                      ]
+                    : ["Price", `₵${form.price}`],
                   ["Category", form.category],
                   form.condition
                     ? ["Condition", form.condition]
@@ -2421,7 +2496,7 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                   listingType === "service"
                     ? [
                         "Live Session",
-                        form.liveSession ? "Enabled" : "Disabled",
+                        form.liveSession ? "✅ Enabled" : "❌ Disabled",
                       ]
                     : null,
                   listingType === "service" && !form.liveSession
@@ -2430,72 +2505,39 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                         `${form.contactMethod} · ${form.contactDetail}`,
                       ]
                     : null,
-                  [
-                    "Image Fit",
-                    imageSettings.fit === "contain"
-                      ? "Entire image"
-                      : "Fill frame",
-                  ],
-                  ["Image Zoom", `${Math.round(imageSettings.zoom * 100)}%`],
-                  [
-                    "Image Background",
-                    IMAGE_BACKGROUNDS.find(
-                      background =>
-                        background.value === imageSettings.background
-                    )?.name || "Custom",
-                  ],
-                ].filter(Boolean).map(([label, value]) => (
-                  <div
-                    key={label}
-                    style={{
-                      display: "flex",
-                      gap: "12px",
-                      fontSize: "13px",
-                      lineHeight: "1.5",
-                    }}
-                  >
-                    <span
+                ]
+                  .filter(Boolean)
+                  .map(([label, value]) => (
+                    <div
+                      key={label}
                       style={{
-                        color: "#777",
-                        minWidth: "105px",
-                        fontWeight: "600",
+                        display: "flex",
+                        gap: "12px",
+                        fontSize: "13px",
                       }}
                     >
-                      {label}
-                    </span>
+                      <span
+                        style={{
+                          color: "#555",
+                          minWidth: "120px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        {label}
+                      </span>
 
-                    <span
-                      style={{
-                        color: "#f0ede8",
-                        flex: 1,
-                        overflowWrap: "anywhere",
-                        whiteSpace: "pre-wrap",
-                      }}
-                    >
-                      {value}
-                    </span>
-                  </div>
-                ))}
+                      <span
+                        style={{
+                          color: "#f0ede8",
+                          flex: 1,
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {value}
+                      </span>
+                    </div>
+                  ))}
               </div>
-
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                style={{
-                  marginTop: "12px",
-                  width: "100%",
-                  background: "#1e1e1e",
-                  border: "1px solid #333",
-                  color: "#c8a97e",
-                  padding: "12px",
-                  borderRadius: "10px",
-                  fontWeight: "700",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
-                🎨 Adjust Photo or Edit Listing
-              </button>
             </div>
 
             <div
@@ -2506,11 +2548,10 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                 padding: "14px",
                 fontSize: "13px",
                 color: "#6ee7b7",
-                lineHeight: "1.6",
               }}
             >
-              💰 Silk Road GH takes 8% only when you make a sale.
-              Listing is completely free.
+              💰 Silk Road GH takes 8% only when you make a sale. Listing is
+              completely free.
             </div>
 
             {!user && (
@@ -2524,13 +2565,12 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                   color: "#fcd34d",
                 }}
               >
-                👤 You'll need a free account to publish.
+                👤 You'll need a free account to publish. It only takes a minute.
               </div>
             )}
 
             {publishError && (
               <div
-                role="alert"
                 style={{
                   background: "#7f1d1d22",
                   border: "1px solid #7f1d1d",
@@ -2538,7 +2578,6 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                   padding: "12px",
                   fontSize: "13px",
                   color: "#fca5a5",
-                  overflowWrap: "anywhere",
                 }}
               >
                 🚫 {publishError}
@@ -2548,18 +2587,14 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
             <div style={{ display: "flex", gap: "12px" }}>
               <button
                 onClick={() => setStep(1)}
-                disabled={publishing}
                 style={{
+                  ...buttonBase,
                   flex: 1,
                   background: "#1e1e1e",
                   border: "1px solid #333",
                   color: "#aaa",
                   padding: "13px",
-                  borderRadius: "10px",
-                  fontWeight: "700",
-                  cursor: publishing ? "not-allowed" : "pointer",
                   fontSize: "14px",
-                  fontFamily: "inherit",
                 }}
               >
                 ← Edit
@@ -2569,20 +2604,19 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
                 onClick={handlePublish}
                 disabled={publishing}
                 style={{
+                  ...buttonBase,
                   flex: 2,
-                  background: publishing ? "#806b4f" : "#c8a97e",
-                  color: "#111",
+                  background: GOLD,
                   border: "none",
+                  color: "#000",
                   padding: "13px",
-                  borderRadius: "10px",
-                  fontWeight: "700",
+                  fontSize: "15px",
                   cursor: publishing ? "wait" : "pointer",
-                  fontSize: "14px",
-                  fontFamily: "inherit",
+                  opacity: publishing ? 0.7 : 1,
                 }}
               >
                 {publishing
-                  ? "⏳ Processing & Publishing..."
+                  ? "⏳ Preparing & Publishing..."
                   : user
                     ? "🚀 Publish Listing"
                     : "🔐 Sign Up & Publish"}
@@ -2597,13 +2631,30 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
   // ── STEP 3: Success ───────────────────────────────────────────────────────
 
   if (step === 3) {
+    const successImage = editedPhotoPreview || form.photoPreview
+
     return (
-      <div style={modalStyle} onClick={onClose}>
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "#000000cc",
+          zIndex: 300,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+        }}
+        onClick={onClose}
+      >
         <div
           style={{
-            ...panelStyle,
+            background: "#111",
+            borderRadius: "16px",
+            width: "100%",
             maxWidth: "440px",
-            padding: "36px 28px",
+            border: "1px solid #1e1e1e",
+            padding: "40px 32px",
             textAlign: "center",
             display: "flex",
             flexDirection: "column",
@@ -2618,40 +2669,40 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
               aspectRatio: "4 / 3",
               borderRadius: "12px",
               overflow: "hidden",
-              border: "2px solid #c8a97e",
-              background: "#18181c",
+              border: `2px solid ${GOLD}`,
+              background: imageSettings.background,
             }}
           >
             <img
-              src={form.photoPreview}
+              src={successImage}
               alt="Published listing"
               style={{
                 width: "100%",
                 height: "100%",
-                objectFit: "contain",
+                objectFit: "cover",
                 display: "block",
               }}
             />
           </div>
 
-          <div style={{ fontSize: "44px" }}>🎉</div>
+          <div style={{ fontSize: "42px" }}>🎉</div>
 
           <h2
             style={{
               fontSize: "24px",
               fontWeight: "700",
-              color: "#c8a97e",
+              color: GOLD,
               margin: 0,
             }}
           >
-            Listing Published!
+            Listing Live!
           </h2>
 
           <p
             style={{
-              color: "#aaa",
+              color: "#888",
               fontSize: "14px",
-              lineHeight: "1.7",
+              lineHeight: "1.6",
               margin: 0,
             }}
           >
@@ -2669,13 +2720,12 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
               width: "100%",
               boxSizing: "border-box",
               fontSize: "13px",
-              color: "#aaa",
-              lineHeight: "1.8",
+              color: "#888",
             }}
           >
             <div>
               Type:{" "}
-              <span style={{ color: "#c8a97e", fontWeight: "600" }}>
+              <span style={{ color: GOLD, fontWeight: "600" }}>
                 {listingType === "product"
                   ? "Product"
                   : listingType === "rent"
@@ -2684,9 +2734,9 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
               </span>
             </div>
 
-            <div>
+            <div style={{ marginTop: "4px" }}>
               Price:{" "}
-              <span style={{ color: "#c8a97e", fontWeight: "600" }}>
+              <span style={{ color: GOLD, fontWeight: "600" }}>
                 {listingType === "rent"
                   ? `₵${form.dailyRate}/day`
                   : `₵${form.price}`}
@@ -2697,16 +2747,13 @@ export default function SellListing({ user, onRequestAuth, onClose }) {
           <button
             onClick={onClose}
             style={{
-              background: "#c8a97e",
-              color: "#111",
+              ...buttonBase,
+              background: GOLD,
               border: "none",
               padding: "13px 28px",
-              borderRadius: "10px",
-              fontWeight: "700",
-              cursor: "pointer",
               fontSize: "15px",
-              fontFamily: "inherit",
               width: "100%",
+              color: "#000",
             }}
           >
             Back to Marketplace
