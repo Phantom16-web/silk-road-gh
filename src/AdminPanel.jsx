@@ -389,7 +389,7 @@ function LoginScreen({ onSuccess }) {
   const tc = tierConfig[tier]
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+    <div style={{ minHeight: "100vh", width: "100%", boxSizing: "border-box", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 20px 40px" }}>
       <div style={{ width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -1247,7 +1247,7 @@ export default function AdminPanel({ onClose }) {
 
   if (!authed) {
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 900 }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 900, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", background: C.bg }}>
         <style>{`* { box-sizing: border-box } input, select, button { font-family: inherit } input::placeholder { color: #444 }`}</style>
         <LoginScreen onSuccess={onLogin} />
         {onClose && (
