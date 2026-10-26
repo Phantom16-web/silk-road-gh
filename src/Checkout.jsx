@@ -244,7 +244,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       }
       setConfirmedTotal(serverTotal)
       saveOrder({ ...order, total: serverTotal, backendOrderId: data.orders[0].orderId,
-        checkoutId: data.checkoutId, backendOrders: data.orders, paymentRef: data.paymentReference })
+        checkoutId: data.checkoutId, checkoutClaimToken: data.claimToken, backendOrders: data.orders, paymentRef: data.paymentReference })
       setPaymentRef(data.paymentReference)
       setStep(3)
     } catch (err) {
