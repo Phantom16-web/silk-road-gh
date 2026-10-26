@@ -1177,6 +1177,119 @@ function AuditTab() {
   )
 }
 
+function GroupPaymentQueueTab() {
+  const [groups, setGroups] = useState([])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const [amounts, setAmounts] = useState({})
+  const [refs, setRefs] = useState({})
+  const [networks, setNetworks] = useState({})
+  const [recipients, setRecipients] = useState({})
+  const load = useCallback(async () => {
+    setBusy(true); setError("")
+    try {
+      const { ok, data } = await adminFetch("/checkout-payments/admin/submitted")
+      if (!ok) throw new Error(data.message || "Could not load queue")
+      setGroups(data.groups || [])
+    } catch (err) { setError(err.message) }
+    finally { setBusy(false) }
+  }, [])
+  useEffect(() => { load() }, [load])
+  const verify = async group => {
+    if (!window.confirm("Only proceed after checking the receiving MoMo account's credited transaction, exact reference, and exact amount independently. Verify this checkout?")) return
+    setBusy(true); setError("")
+    try {
+      const { ok, data } = await adminFetch(`/checkout-payments/${encodeURIComponent(group._id)}/verify`, {
+        method: "PUT", body: JSON.stringify({ confirmedAmount: Number(amounts[group._id]), confirmedReference: (refs[group._id] || "").trim(), confirmedNetwork: (networks[group._id] || "").trim(), recipientAccount: (recipients[group._id] || "").trim() }),
+      })
+      if (!ok) throw new Error(data.message || "Verification failed")
+      await load()
+    } catch (err) { setError(err.message) }
+    finally { setBusy(false) }
+  }
+  return <div style={{ display: "grid", gap: 16 }}>
+    <SectionTitle>Grouped Mobile Money verification</SectionTitle>
+    <Alert type="warn">Verify against the actual credited receiving account, not the buyer's screenshot or claim alone. Never confirm testing transactions here.</Alert>
+    {error && <Alert type="error">{error}</Alert>}
+    <Btn onClick={load} disabled={busy}>Refresh queue</Btn>
+    {!groups.length && <EmptyState message={busy ? "Loading..." : "No submitted grouped payments."} />}
+    {groups.map(group => <div key={group._id} style={{ border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, display: "grid", gap: 10 }}>
+      <div style={{ color: C.gold, fontWeight: 700 }}>{group._id}</div>
+      <div style={{ color: C.textMid, fontSize: 12 }}>Claimed reference: {group.buyerReference} · Expected amount: GHS {Number(group.amount).toFixed(2)} · {group.orderIds?.length || 0} seller orders</div>
+      <Input label="Independently confirmed amount (GHS)" type="number" value={amounts[group._id] ?? ""} onChange={v => setAmounts(prev => ({ ...prev, [group._id]: v }))} />
+      <Input label="Independently confirmed transaction reference" value={refs[group._id] ?? ""} onChange={v => setRefs(prev => ({ ...prev, [group._id]: v }))} />
+      <Input label="Confirmed sending network (e.g. MTN, TELECEL, AT)" value={networks[group._id] ?? ""} onChange={v => setNetworks(prev => ({ ...prev, [group._id]: v }))} />
+      <Input label="Actual credited receiving account number" value={recipients[group._id] ?? ""} onChange={v => setRecipients(prev => ({ ...prev, [group._id]: v }))} />
+      <Btn disabled={busy || !refs[group._id] || !amounts[group._id] || !networks[group._id] || !recipients[group._id]} onClick={() => verify(group)}>Verify credited funds and allocate</Btn>
+    </div>)}
+  </div>
+}
+
+
+// Finance actions are records of transfers independently confirmed outside Silk Road.
+function GroupSettlementTab() {
+  const [groups,setGroups]=useState([])
+  const [loading,setLoading]=useState(false)
+  const [error,setError]=useState("")
+  const [notice,setNotice]=useState("")
+  const [drafts,setDrafts]=useState({})
+  const [confirming,setConfirming]=useState("")
+  const load=useCallback(async()=>{
+    setLoading(true);setError("")
+    try {
+      const {ok,data}=await adminFetch("/group-lifecycle/admin/settlement-queue")
+      if(!ok)throw new Error(data.message||"Could not load settlement queue")
+      setGroups(data.groups||[])
+    }catch(e){setError(e.message)}finally{setLoading(false)}
+  },[])
+  useEffect(()=>{load()},[load])
+  const field=(key,name,value)=>setDrafts(prev=>({...prev,[key]:{...(prev[key]||{}),[name]:value}}))
+  const record=async(group,order)=>{
+    const key=order?order.orderId:group.checkoutId
+    const d=drafts[key]||{}
+    const expected=order?Number(order.sellerAmount):Number(group.amount)
+    if(!Number.isFinite(Number(d.confirmedAmount))||Math.round(Number(d.confirmedAmount)*100)!==Math.round(expected*100))return setError("Confirmed amount must match the displayed allocation exactly.")
+    if(!/^[A-Za-z0-9_-]{6,120}$/.test((d.externalReference||"").trim())|| !/^[A-Za-z0-9_-]{2,32}$/.test((d.network||"").trim()) || !/^[+0-9]{8,18}$/.test((d.recipient||"").trim()))return setError("Enter a valid external transfer reference, network, and recipient number.")
+    const message=order?`Record an independently CONFIRMED seller payout of GHS ${expected.toFixed(2)}? This does not send money.`:`Record an independently CONFIRMED full buyer refund of GHS ${expected.toFixed(2)}? This does not send money.`
+    if(!window.confirm(message))return
+    setConfirming(key);setError("");setNotice("")
+    try{
+      const path=order?`/group-lifecycle/${encodeURIComponent(group.checkoutId)}/orders/${encodeURIComponent(order.orderId)}/record-payout`:`/group-lifecycle/${encodeURIComponent(group.checkoutId)}/record-refund`
+      const {ok,data}=await adminFetch(path,{method:"POST",body:JSON.stringify({confirmedAmount:Number(d.confirmedAmount),externalReference:d.externalReference.trim(),network:d.network.trim(),recipient:d.recipient.trim(),notes:(d.notes||"").trim()})})
+      if(!ok)throw new Error(data.message||"Unable to record transfer")
+      setNotice(data.message||"Transfer evidence recorded")
+      await load()
+    }catch(e){setError(e.message)}finally{setConfirming("")}
+  }
+  const editor=(group,order)=>{
+    const key=order?order.orderId:group.checkoutId
+    const d=drafts[key]||{}
+    const expected=order?Number(order.sellerAmount):Number(group.amount)
+    return <div key={key} style={{padding:16,border:`1px solid ${C.border}`,borderRadius:10,display:"grid",gap:10}}>
+      <div style={{fontWeight:700,color:C.text}}>{order?"Seller payout":"Full buyer refund"} · GHS {expected.toFixed(2)}</div>
+      <div style={{color:C.textMid,fontSize:12,overflowWrap:"anywhere"}}>{order?`Order ${order.orderId} · Seller ${order.sellerId}`:`Checkout ${group.checkoutId}`}</div>
+      <Input label="Independently confirmed amount (GHS)" type="number" value={d.confirmedAmount??""} onChange={v=>field(key,"confirmedAmount",v)}/>
+      <Input label="External transfer reference (not a proposed reference)" value={d.externalReference??""} onChange={v=>field(key,"externalReference",v)}/>
+      <Input label="Transfer network" value={d.network??""} onChange={v=>field(key,"network",v)}/>
+      <Input label="Actual recipient account / phone" value={d.recipient??""} onChange={v=>field(key,"recipient",v)}/>
+      <Input label="Reconciliation notes" value={d.notes??""} onChange={v=>field(key,"notes",v)}/>
+      <Btn disabled={!!confirming||loading} onClick={()=>record(group,order)}>{confirming===key?"Recording...":"Record independently confirmed transfer"}</Btn>
+    </div>
+  }
+  return <div style={{display:"grid",gap:14,marginTop:36}}>
+    <SectionTitle>Grouped settlement and refunds</SectionTitle>
+    <Alert type="warn">These controls only record transfers already independently confirmed in the receiving or sending financial account. They do not initiate payouts or refunds. Verify the beneficiary outside this form before recording.</Alert>
+    {error&&<Alert type="error">{error}</Alert>}
+    {notice&&<Alert type="success">{notice}</Alert>}
+    <Btn onClick={load} disabled={loading||!!confirming}>{loading?"Loading...":"Refresh settlement queue"}</Btn>
+    {!groups.length&&!loading&&<EmptyState message="No eligible grouped payouts or full refunds."/>}
+    {groups.map(g=><div key={g.checkoutId} style={{display:"grid",gap:12}}>
+      <div style={{color:C.gold,fontWeight:700,overflowWrap:"anywhere"}}>{g.checkoutId} · {g.status}</div>
+      {g.status==="verified"?g.orders.filter(o=>o.paymentStatus==="release_pending"&&o.fulfillmentStatus==="completed").map(o=>editor(g,o)):g.status==="refund_pending"?editor(g,null):null}
+    </div>)}
+  </div>
+}
+
 function PaymentSettingsTab({ onNeedReAuth }) {
   const [settings, setSettings] = useState(null)
   const [error, setError] = useState("")
@@ -1435,7 +1548,7 @@ export default function AdminPanel({ onClose }) {
           {tab === "orders"     && <OrdersTab />}
           {tab === "riders"     && <RidersTab />}
           {tab === "deliveries" && <DeliveriesTab />}
-          {tab === "finance"    && <FinanceTab />}
+          {tab === "finance"    && <><FinanceTab /><div style={{ marginTop: 36 }}><GroupPaymentQueueTab /><GroupSettlementTab /></div></>}
           {tab === "security"   && <SecurityTab />}
           {tab === "admins"     && <AdminsTab adminUser={adminUser} reAuthToken={reAuthToken} onNeedReAuth={() => handleNeedReAuth(null)} />}
           {tab === "audit"      && <AuditTab />}

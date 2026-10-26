@@ -56,6 +56,36 @@ function StatCard({ icon, label, value, sub, accent }) {
   )
 }
 
+// Seller code entry for verified grouped checkouts; requires the normal buyer/seller login token.
+function GroupedSellerConfirmations({onConfirmed}) {
+  const [orders,setOrders]=useState([]),[codes,setCodes]=useState({}),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false)
+  const getToken=()=>localStorage.getItem("silkroad_token")||localStorage.getItem("token")||""
+  const load=async()=>{
+    const token=getToken();if(!token){setError("Sign in to view grouped deliveries.");return}
+    setBusy(true);setError("")
+    try{const r=await fetch(`${API_URL}/group-lifecycle/seller/orders`,{headers:{Authorization:`Bearer ${token}`}});const d=await r.json();if(!r.ok)throw Error(d.message||"Unable to load deliveries");setOrders(d.orders||[])}catch(e){setError(e.message)}finally{setBusy(false)}
+  }
+  useEffect(()=>{load()},[])
+  const confirm=async o=>{
+    const code=(codes[o.orderId]||"").trim();if(!/^\d{6}$/.test(code)){setError("Enter the six-digit code from the buyer.");return}
+    if(!window.confirm("Only confirm after handing over the correct order and the buyer has inspected it. This does not release payment."))return
+    setBusy(true);setError("");setNotice("")
+    try{const r=await fetch(`${API_URL}/group-lifecycle/${encodeURIComponent(o.checkoutId)}/orders/${encodeURIComponent(o.orderId)}/confirm-delivery`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${getToken()}`},body:JSON.stringify({deliveryCode:code})});const d=await r.json();if(!r.ok||!d.verified)throw Error(d.message||"Code not accepted");setNotice("Delivery verified. Seller payout is still pending independent finance processing.");setCodes(v=>({...v,[o.orderId]:""}));await load();onConfirmed?.()}catch(e){setError(e.message)}finally{setBusy(false)}
+  }
+  return <section style={{background:"#141414",border:"1px solid #28231c",padding:18,borderRadius:14,marginBottom:22,display:"grid",gap:12}}>
+    <h3 style={{margin:0,color:"#c8a97e",fontSize:15}}>Grouped delivery confirmations</h3>
+    <p style={{margin:0,color:"#888",fontSize:12}}>Only enter the buyer's code after delivering the correct items. Confirmation does not mean funds have been paid out.</p>
+    {error&&<p style={{color:"#fca5a5",fontSize:12}}>{error}</p>}{notice&&<p style={{color:"#6ee7b7",fontSize:12}}>{notice}</p>}
+    <button onClick={load} disabled={busy} style={{padding:10,background:"#222",color:"#ddd",border:"1px solid #444",borderRadius:8,cursor:"pointer"}}>Refresh grouped sales</button>
+    {orders.filter(o=>o.paymentStatus==="escrow_held"&&o.groupStatus==="verified").map(o=><div key={o.orderId} style={{padding:12,border:"1px solid #333",borderRadius:9,display:"grid",gap:8}}>
+      <span style={{fontSize:12,color:"#ccc",overflowWrap:"anywhere"}}>Order {o.orderId} · Seller allocation GHS {Number(o.sellerAmount).toFixed(2)}</span>
+      <input aria-label={`Delivery code for ${o.orderId}`} inputMode="numeric" maxLength={6} placeholder="Six-digit buyer code" value={codes[o.orderId]||""} onChange={e=>setCodes(v=>({...v,[o.orderId]:e.target.value.replace(/\D/g,"").slice(0,6)}))} style={inp(false)}/>
+      <button disabled={busy||(codes[o.orderId]||"").length!==6} onClick={()=>confirm(o)} style={{padding:10,background:"#c8a97e",color:"#000",border:0,borderRadius:8,fontWeight:700,cursor:"pointer"}}>Confirm this seller order's delivery</button>
+    </div>)}
+    {!orders.some(o=>o.paymentStatus==="escrow_held"&&o.groupStatus==="verified")&&!busy&&<span style={{fontSize:12,color:"#777"}}>No funded grouped orders awaiting your delivery code.</span>}
+  </section>
+}
+
 // ── Active Rentals ─────────────────────────────────────────────────────────────
 function ActiveRentals() {
   const [rentals, setRentals]       = useState(() => {
@@ -1068,6 +1098,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
                   </div>
                 ) : (
                   <>
+                    <GroupedSellerConfirmations onConfirmed={async () => { try { const updated = await getSellingOrders(); if (Array.isArray(updated)) setSellingOrders(updated) } catch {} }} />
                     {sellingOrders.length > 0 && (
                       <div style={{ marginBottom: "32px" }}>
                         <div style={{ fontSize: "11px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "14px" }}>My Sales ({sellingOrders.length})</div>

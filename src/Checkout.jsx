@@ -30,6 +30,16 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const [orderId]                           = useState(initialOrder?.id || generateOrderId())
   const [saving, setSaving]                 = useState(false)
   const [confirmedTotal, setConfirmedTotal] = useState(initialOrder?.total ?? null)
+  const [checkoutId, setCheckoutId] = useState(initialOrder?.checkoutId || null)
+  const [claimToken, setClaimToken] = useState(initialOrder?.checkoutClaimToken || null)
+  const [paymentEvidence, setPaymentEvidence] = useState("")
+  const [evidenceBusy, setEvidenceBusy] = useState(false)
+  const [evidenceMessage, setEvidenceMessage] = useState("")
+  const [groupPaymentStatus, setGroupPaymentStatus] = useState("pending")
+  const [sellerOrders, setSellerOrders] = useState(initialOrder?.backendOrders || [])
+  const [deliveryCodes, setDeliveryCodes] = useState({})
+  const [deliveryBusy, setDeliveryBusy] = useState(null)
+  const [deliveryError, setDeliveryError] = useState("")
   const [copied, setCopied]                 = useState(false)
   const [deliveryMethod, setDeliveryMethod] = useState(initialOrder?.deliveryMethod || "pickup")
   const [promoCode, setPromoCode]           = useState("")
@@ -239,12 +249,36 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
         throw new Error("Server did not confirm all seller orders. Contact support before retrying.")
       }
       const serverTotal = Number(data.total)
-      if (!Number.isFinite(serverTotal) || Math.abs(serverTotal - total) > 0.01) {
-        alert(`Your final server-verified total is ₵${serverTotal.toFixed(2)} (the cart estimate was ₵${total.toFixed(2)}). Review this amount before sending any money.`)
+      if (!Number.isFinite(serverTotal) || serverTotal <= 0) {
+        throw new Error("Server returned an invalid total. Do not send money.")
+      }
+      if (Math.abs(serverTotal - total) > 0.01) {
+        const accepted = window.confirm(
+          `The server calculated ₵${serverTotal.toFixed(2)}, but your cart displayed ₵${total.toFixed(2)}. ` +
+          "No payment has been verified. Select OK only if you accept the corrected total; otherwise select Cancel and contact support."
+        )
+        if (!accepted) {
+          // The group may already exist on the server. Preserve its claim token
+          // and never silently create another group on a second click.
+          setCheckoutId(data.checkoutId)
+          setClaimToken(data.claimToken)
+          setSellerOrders(data.orders)
+          setPaymentRef(data.paymentReference)
+          setConfirmedTotal(serverTotal)
+          saveOrder({ ...order, total: serverTotal, checkoutId: data.checkoutId,
+            checkoutClaimToken: data.claimToken, backendOrders: data.orders,
+            backendOrderId: data.orders[0].orderId, paymentRef: data.paymentReference,
+            status: "Price Review Required" })
+          alert("Checkout saved for review. Do not transfer money. Close this window and contact support or cancel the pending checkout.")
+          return
+        }
       }
       setConfirmedTotal(serverTotal)
       saveOrder({ ...order, total: serverTotal, backendOrderId: data.orders[0].orderId,
         checkoutId: data.checkoutId, checkoutClaimToken: data.claimToken, backendOrders: data.orders, paymentRef: data.paymentReference })
+      setSellerOrders(data.orders)
+      setCheckoutId(data.checkoutId)
+      setClaimToken(data.claimToken)
       setPaymentRef(data.paymentReference)
       setStep(3)
     } catch (err) {
@@ -255,6 +289,58 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     }
   }
 
+  const submitPaymentEvidence = async () => {
+    if (!checkoutId || !claimToken || !paymentEvidence.trim()) {
+      setEvidenceMessage("Enter your actual Mobile Money transaction reference."); return
+    }
+    setEvidenceBusy(true); setEvidenceMessage("")
+    try {
+      const response = await fetch(`${API_URL}/checkout-payments/${encodeURIComponent(checkoutId)}/submit`, {
+        method: "POST", headers: { "Content-Type": "application/json", "x-checkout-token": claimToken },
+        body: JSON.stringify({ buyerReference: paymentEvidence.trim() }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(result.message || "Submission failed")
+      setGroupPaymentStatus(result.status || "submitted")
+      setEvidenceMessage("Evidence submitted for independent verification. Payment is NOT yet confirmed.")
+    } catch (err) { setEvidenceMessage(err.message) }
+    finally { setEvidenceBusy(false) }
+  }
+
+  const refreshPaymentStatus = async () => {
+    if (!checkoutId || !claimToken) return
+    try {
+      const response = await fetch(`${API_URL}/checkout-payments/${encodeURIComponent(checkoutId)}/status`, {
+        headers: { "x-checkout-token": claimToken },
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(result.message || "Unable to check payment")
+      setGroupPaymentStatus(result.status)
+      setEvidenceMessage(result.status === "verified" ? "Payment independently verified. Each seller order is now funded." : `Current status: ${result.status}. Do not arrange fulfillment until verified.`)
+    } catch (err) { setEvidenceMessage(err.message) }
+  }
+
+  const refreshSellerOrders = async () => {
+    if (!checkoutId || !claimToken) return
+    setDeliveryError("")
+    try {
+      const res = await fetch(`${API_URL}/group-lifecycle/${encodeURIComponent(checkoutId)}/orders`, { headers: { "x-checkout-token": claimToken } })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || "Could not load seller orders")
+      setSellerOrders(old => data.orders.map(o => ({ ...old.find(i => i.orderId === o.orderId), ...o })))
+      setGroupPaymentStatus(data.status)
+    } catch (err) { setDeliveryError(err.message) }
+  }
+  const generateSellerCode = async orderId => {
+    setDeliveryBusy(orderId); setDeliveryError("")
+    try {
+      const res = await fetch(`${API_URL}/group-lifecycle/${encodeURIComponent(checkoutId)}/orders/${encodeURIComponent(orderId)}/delivery-code`, { method: "POST", headers: { "x-checkout-token": claimToken } })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || "Unable to generate code")
+      setDeliveryCodes(prev => ({ ...prev, [orderId]: data }))
+    } catch (err) { setDeliveryError(err.message) }
+    finally { setDeliveryBusy(null) }
+  }
   const handleConfirmDelivery = () => {
     setDelivered(true)
     updateOrder(orderId, { delivered: true, status: "Completed" })
@@ -515,6 +601,24 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     {paymentRef && <div style={{ fontSize: "10px", color: "#444", fontFamily: "monospace", marginTop: "4px" }}>Ref: {paymentRef}</div>}
                   </div>
 
+                  {checkoutId && claimToken && (
+                    <div style={{ background: "#151515", border: "1px solid #36302a", padding: 16, borderRadius: 12, display: "grid", gap: 10 }}>
+                      <strong style={{ color: "#c8a97e" }}>Mobile Money payment verification</strong>
+                      <div style={{ color: "#aaa", fontSize: 12 }}>Checkout reference: {checkoutId}</div>
+                      <div style={{ color: "#aaa", fontSize: 12 }}>Payment status: <strong>{groupPaymentStatus}</strong></div>
+                      {groupPaymentStatus === "pending" && (
+                        <>
+                          <label style={{ fontSize: 12, color: "#aaa" }}>Transaction reference from your Mobile Money receipt</label>
+                          <input value={paymentEvidence} onChange={e => setPaymentEvidence(e.target.value)} placeholder="Actual transaction ID (not the checkout ID)" style={inp} />
+                          <button disabled={evidenceBusy || paymentEvidence.trim().length < 5} onClick={submitPaymentEvidence} className="btn-gold" style={{ padding: 12 }}>{evidenceBusy ? "Submitting..." : "Submit payment reference for review"}</button>
+                        </>
+                      )}
+                      <button onClick={refreshPaymentStatus} className="btn-ghost" style={{ padding: 10 }}>Refresh payment status</button>
+                      {evidenceMessage && <div role="status" style={{ fontSize: 12, color: "#eabf78" }}>{evidenceMessage}</div>}
+                      <div style={{ fontSize: 11, color: "#888" }}>Submission is not payment confirmation. Admins must independently confirm credited funds.</div>
+                    </div>
+                  )}
+
                   {/* ── RIDER — OTP section ── */}
                   {deliveryMethod === "rider" && (
                     otp ? (
@@ -549,26 +653,24 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                     )
                   )}
 
-                  {/* Pickup confirm */}
-                  {deliveryMethod !== "rider" && (
-                    <>
-                      <button onClick={handleConfirmDelivery}
-                        style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "15px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "15px", fontFamily: "inherit" }}>
-                        ✅ I've Received My Order — Release Payment
-                      </button>
-                      <button onClick={handleCancelDelivery}
-                        style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "13px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-                        ❌ Cancel — Refund Me
-                      </button>
-                    </>
-                  )}
-
-                  {/* Cancel for rider before OTP arrives */}
-                  {deliveryMethod === "rider" && !otp && (
-                    <button onClick={handleCancelDelivery}
-                      style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "13px", borderRadius: "14px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-                      ❌ Cancel Order — Refund Me
-                    </button>
+                  {/* Grouped checkout must never use legacy local-only delivery or cancellation buttons. */}
+                  {checkoutId && claimToken ? (
+                    <div style={{ display: "grid", gap: 12, background: "#151515", border: "1px solid #36302a", padding: 16, borderRadius: 12 }}>
+                      <strong style={{ color: "#c8a97e" }}>Delivery by seller</strong>
+                      <p style={{ color: "#aaa", fontSize: 12 }}>Only generate a code after receiving and inspecting that seller's items. Delivery confirmation does not mean a payout has been sent.</p>
+                      <button className="btn-ghost" style={{ padding: 10 }} onClick={refreshSellerOrders}>Refresh seller order status</button>
+                      {sellerOrders.map(o => <div key={o.orderId} style={{ border: "1px solid #343434", borderRadius: 10, padding: 12, display: "grid", gap: 7 }}>
+                        <strong style={{ color: "#eee" }}>{o.title || `Order ${o.orderId?.slice(-8)}`}</strong>
+                        <span style={{ color: "#aaa", fontSize: 12 }}>GHS {Number(o.amount || 0).toFixed(2)} · {o.paymentStatus || groupPaymentStatus} · {o.fulfillmentStatus || "Awaiting payment"}</span>
+                        {o.paymentStatus === "escrow_held" && <button className="btn-gold" style={{ padding: 10 }} disabled={deliveryBusy === o.orderId} onClick={() => generateSellerCode(o.orderId)}>Generate seller delivery code</button>}
+                        {deliveryCodes[o.orderId] && <div style={{ color: "#c8a97e", fontSize: 22, fontWeight: 800, letterSpacing: 3 }}>{deliveryCodes[o.orderId].deliveryCode}<div style={{ color: "#888", fontSize: 11, letterSpacing: 0 }}>Expires {new Date(deliveryCodes[o.orderId].expiresAt).toLocaleTimeString()}. Share only with this seller after receiving the item.</div></div>}
+                        {o.paymentStatus === "release_pending" && <span style={{ color: "#eabf78", fontSize: 12 }}>Delivery confirmed; seller payout pending.</span>}
+                        {o.paymentStatus === "released" && <span style={{ color: "#6ee7b7", fontSize: 12 }}>Seller payout recorded.</span>}
+                      </div>)}
+                      {deliveryError && <div role="alert" style={{ color: "#fca5a5", fontSize: 12 }}>{deliveryError}</div>}
+                    </div>
+                  ) : (
+                    <div style={{ color: "#aaa", fontSize: 12 }}>Legacy order: delivery and cancellation must be verified through support. No automatic release or refund is promised.</div>
                   )}
 
                   {mapEmbedUrl && (
@@ -585,11 +687,11 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                   <div style={{ fontSize: "72px" }}>🎉</div>
                   <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#6ee7b7" }}>Delivery Complete!</h3>
                   <p style={{ color: "#888", fontSize: "14px", lineHeight: "1.7" }}>
-                    Your order has been delivered and confirmed. Payment has been released to the seller.
+                    Your order has been delivered and confirmed. Payout status must be checked with the platform.
                   </p>
                   <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px", color: "#6ee7b7" }}>
                     <div>✅ Delivery confirmed via OTP</div>
-                    <div>💰 Payment of ₵{total.toLocaleString()} released to seller</div>
+                    <div>💰 Delivery status recorded; payout verification may still be pending</div>
                     {cart.length > 0 && <div>📦 {cart.map(i => i.title).join(", ")}</div>}
                   </div>
                   <button className="btn-gold" onClick={onClose} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>
