@@ -5,7 +5,7 @@ const API_URL        = import.meta.env.VITE_API_URL || "http://localhost:5000/ap
 const SOCKET_URL     = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace("/api", "")
   : "http://localhost:5000"
-const SILK_ROAD_MOMO = "0543883608"
+const SILK_ROAD_MOMO = "0543883608" // Verify recipient network and number before launch
 const SILK_ROAD_NAME = "Silk Road GH"
 const STEPS          = ["Location", "Confirm Order", "Payment", "Track"]
 
@@ -29,6 +29,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const [paymentRef, setPaymentRef]         = useState(initialOrder?.paymentRef || null)
   const [orderId]                           = useState(initialOrder?.id || generateOrderId())
   const [saving, setSaving]                 = useState(false)
+  const [confirmedTotal, setConfirmedTotal] = useState(initialOrder?.total ?? null)
   const [copied, setCopied]                 = useState(false)
   const [deliveryMethod, setDeliveryMethod] = useState(initialOrder?.deliveryMethod || "pickup")
   const [promoCode, setPromoCode]           = useState("")
@@ -217,38 +218,34 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       createdAt:     Date.now(),
       expiresAt:     Date.now() + 48 * 60 * 60 * 1000,
     }
-    // Backend currently supports one listing per order. Do not silently charge
-    // for a full cart while creating an order for only its first listing.
-    if (cart.length !== 1 || Number(cart[0]?.quantity || 1) !== 1) {
-      setSaving(false)
-      alert("This checkout currently supports one item per order. Please check out each item separately until multi-item orders are enabled.")
-      return
-    }
-
     try {
-      const firstItem = cart[0]
-      const listingId = firstItem?._id && isMongoId(firstItem._id) ? firstItem._id : null
-      const rawSellerId = firstItem?.seller?._id || firstItem?.seller
-      const sellerId = rawSellerId && isMongoId(String(rawSellerId)) ? String(rawSellerId) : null
-      if (!listingId) throw new Error("This listing cannot be checked out because it has no valid database ID.")
-
-      const res = await fetch(`${API_URL}/orders`, {
+      const items = cart.map(item => ({ listingId: item._id || item.id, quantity: Number(item.qty || 1) }))
+      if (items.some(item => !isMongoId(item.listingId) || !Number.isInteger(item.quantity) || item.quantity < 1)) {
+        throw new Error("Your cart contains an invalid listing or quantity.")
+      }
+      const res = await fetch(`${API_URL}/orders/checkout`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          listingId, sellerId, localOrderId: orderId,
-          type: "product", amount: total,
+          items, localOrderId: orderId,
           location: location ? `${location.lat},${location.lng}` : manualLocation,
           landmark, extraInfo, contactInfo, payerName, payerPhone,
           promoCode: promoApplied?.code || null,
-          discount, deliveryMethod, paymentMethod: "manual_momo",
+          deliveryMethod,
         }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.message || `Order creation failed (${res.status}).`)
-      const backendOrderId = data.orderId || data._id || data.order?._id
-      if (!backendOrderId) throw new Error("Server did not confirm the order ID. Please contact support before retrying to avoid a duplicate order.")
-      saveOrder({ ...order, backendOrderId })
-      setPaymentRef(ref)
+      if (!res.ok) throw new Error(data.message || `Checkout failed (${res.status}).`)
+      if (!data.checkoutId || !Array.isArray(data.orders) || !data.orders.length) {
+        throw new Error("Server did not confirm all seller orders. Contact support before retrying.")
+      }
+      const serverTotal = Number(data.total)
+      if (!Number.isFinite(serverTotal) || Math.abs(serverTotal - total) > 0.01) {
+        alert(`Your final server-verified total is ₵${serverTotal.toFixed(2)} (the cart estimate was ₵${total.toFixed(2)}). Review this amount before sending any money.`)
+      }
+      setConfirmedTotal(serverTotal)
+      saveOrder({ ...order, total: serverTotal, backendOrderId: data.orders[0].orderId,
+        checkoutId: data.checkoutId, backendOrders: data.orders, paymentRef: data.paymentReference })
+      setPaymentRef(data.paymentReference)
       setStep(3)
     } catch (err) {
       console.error("Backend order creation failed:", err)
@@ -483,7 +480,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 <button className="btn-ghost" onClick={() => setStep(1)} style={{ flex: 1, padding: "13px", borderRadius: "12px" }}>← Back</button>
                 <button onClick={handlePay} disabled={saving}
                   style={{ flex: 2, background: "#c8a97e", border: "none", padding: "13px", borderRadius: "12px", fontWeight: "700", cursor: saving ? "not-allowed" : "pointer", fontSize: "15px", color: "#000", opacity: saving ? 0.7 : 1, fontFamily: "inherit" }}>
-                  {saving ? "⏳ Saving..." : "✅ I've Sent the Money"}
+                  {saving ? "⏳ Saving..." : "Create Orders (Payment Pending)"}
                 </button>
               </div>
             </>
@@ -497,9 +494,9 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 <>
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: "56px", marginBottom: "10px" }}>✅</div>
-                    <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", marginBottom: "8px" }}>Payment Submitted!</h3>
+                    <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", marginBottom: "8px" }}>Orders Created — Payment Pending</h3>
                     <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.7" }}>
-                      Your order is with the seller.{" "}
+                      Your orders are recorded, but payment has not been verified. Do not arrange delivery until an administrator confirms receipt.{" "}
                       {deliveryMethod === "rider"
                         ? "When the rider delivers your package, a 6-digit OTP will appear below. Read it to the rider to complete delivery."
                         : "Contact the seller to arrange pickup."}
@@ -510,7 +507,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
 
                   <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", fontSize: "13px", color: "#666", display: "flex", flexDirection: "column", gap: "8px" }}>
                     {cart.length > 0 && <div>📦 <span style={{ color: "#c8a97e", fontWeight: "700" }}>{cart.map(i => i.title).join(", ")}</span></div>}
-                    <div>💰 Total: <span style={{ color: "#aaa" }}>₵{total.toLocaleString()}</span></div>
+                    <div>💰 Total: <span style={{ color: "#aaa" }}>₵{(confirmedTotal ?? total).toLocaleString()}</span></div>
                     {location ? <div>📍 GPS: <span style={{ color: "#aaa" }}>{location.lat}, {location.lng}</span></div>
                       : manualLocation ? <div>📍 <span style={{ color: "#aaa" }}>{manualLocation}</span></div> : null}
                     {landmark  && <div>🗺️ {landmark}</div>}
