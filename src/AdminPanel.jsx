@@ -1177,6 +1177,103 @@ function AuditTab() {
   )
 }
 
+// ── Owner-only environment management ────────────────────────────────────────
+function EnvironmentTab({ onNeedReAuth }) {
+  const [environment, setEnvironment] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
+  const [target, setTarget] = useState(null)
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    setError("")
+    try {
+      const result = await adminFetch("/environment/owner")
+      if (!result.ok) throw new Error(result.data.message || "Could not load environment status.")
+      setEnvironment(result.data)
+    } catch (err) { setError(err.message) }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { refresh() }, [refresh])
+
+  const requestSwitch = (nextMode) => {
+    if (busy || !environment || nextMode === environment.mode) return
+    setTarget(nextMode)
+    setError("")
+    setNotice("")
+  }
+
+  const confirmSwitch = () => {
+    if (!target || busy) return
+    const selectedMode = target
+    setTarget(null)
+    // Re-authentication is required for every environment change; never store
+    // the re-auth token in persistent browser storage.
+    onNeedReAuth(async (freshToken) => {
+      setBusy(true)
+      setError("")
+      try {
+        const result = await adminFetch("/environment/mode", {
+          method: "PUT",
+          headers: { "x-reauth-token": freshToken },
+          body: JSON.stringify({ mode: selectedMode }),
+        })
+        if (!result.ok) throw new Error(result.data.message || "Mode switch was rejected by the server.")
+        setNotice(result.data.message || `Environment switched to ${selectedMode}.`)
+        await refresh()
+      } catch (err) { setError(err.message) }
+      finally { setBusy(false) }
+    })
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      <div>
+        <SectionTitle>Platform Environment</SectionTitle>
+        <p style={{ color: C.textMid, fontSize: 13, lineHeight: 1.7 }}>
+          Owner-only control. Switching is blocked by the backend until ENABLE_ENVIRONMENT_SWITCH is explicitly enabled after financial-isolation testing.
+        </p>
+      </div>
+      {loading ? <LoadingState /> : environment && (
+        <div style={{ background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 10, padding: 24 }}>
+          <div style={{ color: C.textDim, fontSize: 11, fontWeight: 700, marginBottom: 10 }}>CURRENT ENVIRONMENT</div>
+          <div style={{ color: environment.mode === "testing" ? C.yellow : C.green, fontSize: 26, fontWeight: 800 }}>
+            {environment.mode === "testing" ? "TESTING MODE" : "LIVE MODE"}
+          </div>
+          <div style={{ color: C.textMid, fontSize: 12, marginTop: 8 }}>
+            {environment.mode === "testing" ? "New orders use the testing environment. No real payment should be processed for test orders." : "Real payment flows are available for eligible live orders."}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 24 }}>
+            <Btn variant="ghost" disabled={busy || environment.mode === "testing"} onClick={() => requestSwitch("testing")}>Switch to Testing</Btn>
+            <Btn variant="ghost" disabled={busy || environment.mode === "live"} onClick={() => requestSwitch("live")}>Switch to Live</Btn>
+            <Btn variant="ghost" disabled={busy} onClick={refresh}>Refresh</Btn>
+          </div>
+          <p style={{ color: C.textDim, fontSize: 11, marginBottom: 0, marginTop: 18 }}>
+            Last changed: {fmt(environment.changedAt)} {environment.changedBy ? `· ${environment.changedBy}` : ""}
+          </p>
+        </div>
+      )}
+      <Alert type="warn">Do not enable environment switching on Render yet. This interface cannot override the backend safety flag. A successful deployment does not prove simulated payments and rider balances are isolated.</Alert>
+      {notice && <Alert type="success">{notice}</Alert>}
+      {error && <Alert type="error">{error}</Alert>}
+      {target && (
+        <Modal title={`Switch to ${target === "testing" ? "Testing" : "Live"} Mode?`} onClose={() => setTarget(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Alert type="warn">This changes the environment for new orders platform-wide. Existing orders must retain their original environment. Owner reauthentication is required, and the backend may refuse the request while the safety flag is disabled.</Alert>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <Btn variant="ghost" onClick={() => setTarget(null)}>Cancel</Btn>
+              <Btn variant="danger" onClick={confirmSwitch}>Continue to Re-authentication</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN ADMIN PANEL
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1238,6 +1335,7 @@ export default function AdminPanel({ onClose }) {
       { id: "security",   label: "Security",       icon: "⊘",  show: has("view_activity_logs") },
       { id: "admins",     label: "Admin Accounts", icon: "⊗",  show: isOwner || isSA },
       { id: "audit",      label: "Audit Log",      icon: "⊙",  show: isOwner || isSA },
+      { id: "environment", label: "Environment", icon: "◉", show: isOwner },
     ].filter(n => n.show)
   }
 
@@ -1397,6 +1495,7 @@ export default function AdminPanel({ onClose }) {
           {tab === "security"   && <SecurityTab />}
           {tab === "admins"     && <AdminsTab adminUser={adminUser} reAuthToken={reAuthToken} onNeedReAuth={() => handleNeedReAuth(null)} />}
           {tab === "audit"      && <AuditTab />}
+          {tab === "environment" && adminUser?.tier === "owner" && <EnvironmentTab onNeedReAuth={handleNeedReAuth} />}
         </div>
       </div>
 
