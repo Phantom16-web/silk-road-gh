@@ -717,6 +717,12 @@ function App() {
         .sr-mobile-menu { display: none; }
         .sr-mobile-action { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px; background: #151515; border: 1px solid #292929; border-radius: 9px; color: #eee; text-align: left; font: inherit; cursor: pointer; }
         .sr-mobile-action-primary { color: #c8a97e; font-weight: 700; }
+        @media (min-width: 700px) {
+          .sr-product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 20px !important; }
+        }
+        @media (min-width: 1050px) {
+          .sr-product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 24px !important; }
+        }
         @media (max-width: 640px) {
           .sr-desktop-actions { display: none !important; }
           .sr-mobile-controls { display: flex; }
@@ -958,7 +964,7 @@ function App() {
                 ↻ Refresh
               </button>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 130px), 1fr))", gap: "12px" }}>
+            <div className="sr-product-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" }}>
               {listingsLoading
                 ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
                     <ListingSkeleton key={i} />

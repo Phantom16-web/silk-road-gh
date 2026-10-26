@@ -28,11 +28,24 @@ function ProductCard({ item, rate, onSelect, onAddToCart }) {
         e.currentTarget.style.borderColor = "#1e1e1e"
       }}
     >
+      <style>{`
+        @media (min-width: 700px) {
+          .sr-product-image { height: 245px !important; }
+          .sr-product-content { padding: 18px !important; }
+          .sr-product-title { font-size: 16px !important; }
+          .sr-product-price { font-size: 20px !important; }
+          .sr-product-cart { min-height: 46px !important; font-size: 14px !important; }
+        }
+        @media (min-width: 1050px) {
+          .sr-product-image { height: 275px !important; }
+        }
+      `}</style>
       {/* Product image: show the whole image without cropping. */}
       <button
         type="button"
         onClick={onSelect}
         aria-label={`View ${item.title || "product details"}`}
+        className="sr-product-image"
         style={{
           appearance: "none",
           display: "flex",
@@ -61,6 +74,7 @@ function ProductCard({ item, rate, onSelect, onAddToCart }) {
       </button>
 
       <div
+        className="sr-product-content"
         style={{
           padding: "clamp(9px, 3vw, 14px)",
           display: "flex",
@@ -86,6 +100,7 @@ function ProductCard({ item, rate, onSelect, onAddToCart }) {
         <button
           type="button"
           onClick={onSelect}
+          className="sr-product-title"
           style={{
             appearance: "none",
             padding: 0,
@@ -151,6 +166,7 @@ function ProductCard({ item, rate, onSelect, onAddToCart }) {
           }}
         >
           <span
+            className="sr-product-price"
             style={{
               fontSize: "clamp(15px, 4.2vw, 18px)",
               lineHeight: 1.3,
@@ -169,6 +185,7 @@ function ProductCard({ item, rate, onSelect, onAddToCart }) {
         <button
           type="button"
           onClick={onAddToCart}
+          className="sr-product-cart"
           style={{
             marginTop: "11px",
             width: "100%",
