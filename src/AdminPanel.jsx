@@ -1179,6 +1179,8 @@ function AuditTab() {
 
 function GroupPaymentQueueTab() {
   const [groups, setGroups] = useState([])
+  const [testGroups, setTestGroups] = useState([])
+  const [queueCounts, setQueueCounts] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [amounts, setAmounts] = useState({})
@@ -1191,6 +1193,8 @@ function GroupPaymentQueueTab() {
       const { ok, data } = await adminFetch("/checkout-payments/admin/submitted")
       if (!ok) throw new Error(data.message || "Could not load queue")
       setGroups(data.groups || [])
+      setTestGroups(data.testGroups || [])
+      setQueueCounts(data.counts || null)
     } catch (err) { setError(err.message) }
     finally { setBusy(false) }
   }, [])
@@ -1208,11 +1212,14 @@ function GroupPaymentQueueTab() {
     finally { setBusy(false) }
   }
   return <div style={{ display: "grid", gap: 16 }}>
-    <SectionTitle>Grouped Mobile Money verification</SectionTitle>
-    <Alert type="warn">Verify against the actual credited receiving account, not the buyer's screenshot or claim alone. Never confirm testing transactions here.</Alert>
+    <SectionTitle>Mobile Money payment requests</SectionTitle>
+    <Alert type="info">Real payments and practice payments are shown separately. Practice submissions never represent money received.</Alert>
+    <Alert type="warn">For real payments, check the credited receiving MoMo account independently before confirming. A buyer's reference alone is not proof of payment.</Alert>
+    {queueCounts && <div style={{ color: C.textMid, fontSize: 13 }}>Awaiting buyer submission: {queueCounts.livePending} real · {queueCounts.testPending} practice</div>}
+    <div style={{ color: C.text, fontWeight: 700 }}>Real payments waiting for your confirmation ({groups.length})</div>
     {error && <Alert type="error">{error}</Alert>}
     <Btn onClick={load} disabled={busy}>Refresh queue</Btn>
-    {!groups.length && <EmptyState message={busy ? "Loading..." : "No submitted grouped payments."} />}
+    {!groups.length && <EmptyState message={busy ? "Loading..." : "No real payments waiting. If you're running simulations, look in Practice payments below."} />}
     {groups.map(group => <div key={group._id} style={{ border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, display: "grid", gap: 10 }}>
       <div style={{ color: C.gold, fontWeight: 700 }}>{group._id}</div>
       <div style={{ color: C.textMid, fontSize: 12 }}>Claimed reference: {group.buyerReference} · Expected amount: GHS {Number(group.amount).toFixed(2)} · {group.orderIds?.length || 0} seller orders</div>
@@ -1221,6 +1228,14 @@ function GroupPaymentQueueTab() {
       <Input label="Confirmed sending network (e.g. MTN, TELECEL, AT)" value={networks[group._id] ?? ""} onChange={v => setNetworks(prev => ({ ...prev, [group._id]: v }))} />
       <Input label="Actual credited receiving account number" value={recipients[group._id] ?? ""} onChange={v => setRecipients(prev => ({ ...prev, [group._id]: v }))} />
       <Btn disabled={busy || !refs[group._id] || !amounts[group._id] || !networks[group._id] || !recipients[group._id]} onClick={() => verify(group)}>Verify credited funds and allocate</Btn>
+    </div>)}
+    <div style={{ color: C.text, fontWeight: 700, marginTop: 18 }}>Practice payments — Testing Mode ({testGroups.length})</div>
+    <Alert type="info">These checkouts have no real payment to verify. They are shown so you can confirm that the buyer submission reached the server. Do not use the real-money verification button on them.</Alert>
+    {!testGroups.length && <div style={{ color: C.textMid, fontSize: 13 }}>No practice submissions yet. Create a checkout in Testing Mode and select “Send practice payment for review”.</div>}
+    {testGroups.map(group => <div key={group._id} style={{ border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, display: "grid", gap: 5 }}>
+      <strong style={{ color: C.gold }}>Practice checkout · {group._id}</strong>
+      <div style={{ color: C.textMid, fontSize: 12 }}>Reference: {group.buyerReference} · Simulated amount: GHS {Number(group.amount).toFixed(2)} · {group.orderIds?.length || 0} seller orders</div>
+      <div style={{ color: C.textMid, fontSize: 12 }}>Received: {group.submittedAt ? new Date(group.submittedAt).toLocaleString() : "Unknown"} · Not a real payment</div>
     </div>)}
   </div>
 }

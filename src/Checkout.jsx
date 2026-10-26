@@ -35,6 +35,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const [paymentEvidence, setPaymentEvidence] = useState("")
   const [evidenceBusy, setEvidenceBusy] = useState(false)
   const [evidenceMessage, setEvidenceMessage] = useState("")
+  const [checkoutEnvironment, setCheckoutEnvironment] = useState(null)
   const [groupPaymentStatus, setGroupPaymentStatus] = useState("pending")
   const [sellerOrders, setSellerOrders] = useState(initialOrder?.backendOrders || [])
   const [deliveryCodes, setDeliveryCodes] = useState({})
@@ -289,6 +290,37 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     }
   }
 
+  useEffect(() => {
+    if (step !== 3 || !checkoutId || !claimToken) return
+    let cancelled = false
+    fetch(`${API_URL}/checkout-payments/${encodeURIComponent(checkoutId)}/status`, {
+      headers: { "x-checkout-token": claimToken },
+    }).then(async response => {
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.message || "Unable to check checkout mode")
+      if (!cancelled) {
+        setCheckoutEnvironment(data.environment)
+        setGroupPaymentStatus(data.status)
+      }
+    }).catch(err => { if (!cancelled) setEvidenceMessage(err.message) })
+    return () => { cancelled = true }
+  }, [step, checkoutId, claimToken])
+
+  const submitTestCheckout = async () => {
+    if (!checkoutId || !claimToken) return
+    setEvidenceBusy(true); setEvidenceMessage("")
+    try {
+      const response = await fetch(`${API_URL}/checkout-payments/${encodeURIComponent(checkoutId)}/submit-test`, {
+        method: "POST", headers: { "x-checkout-token": claimToken },
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(result.message || "Practice submission failed")
+      setGroupPaymentStatus("submitted")
+      setEvidenceMessage("Practice submission received. No money was sent. Check the Admin payment queue under Test submissions.")
+    } catch (err) { setEvidenceMessage(err.message) }
+    finally { setEvidenceBusy(false) }
+  }
+
   const submitPaymentEvidence = async () => {
     if (!checkoutId || !claimToken || !paymentEvidence.trim()) {
       setEvidenceMessage("Enter your actual Mobile Money transaction reference."); return
@@ -316,6 +348,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(result.message || "Unable to check payment")
       setGroupPaymentStatus(result.status)
+      setCheckoutEnvironment(result.environment)
       setEvidenceMessage(result.status === "verified" ? "Payment independently verified. Each seller order is now funded." : `Current status: ${result.status}. Do not arrange fulfillment until verified.`)
     } catch (err) { setEvidenceMessage(err.message) }
   }
@@ -602,20 +635,42 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                   </div>
 
                   {checkoutId && claimToken && (
-                    <div style={{ background: "#151515", border: "1px solid #36302a", padding: 16, borderRadius: 12, display: "grid", gap: 10 }}>
-                      <strong style={{ color: "#c8a97e" }}>Mobile Money payment verification</strong>
-                      <div style={{ color: "#aaa", fontSize: 12 }}>Checkout reference: {checkoutId}</div>
-                      <div style={{ color: "#aaa", fontSize: 12 }}>Payment status: <strong>{groupPaymentStatus}</strong></div>
-                      {groupPaymentStatus === "pending" && (
+                    <div style={{ background: "#151515", border: "1px solid #36302a", padding: 18, borderRadius: 14, display: "grid", gap: 14 }}>
+                      <div style={{ color: "#c8a97e", fontWeight: 800, fontSize: 17 }}>
+                        {checkoutEnvironment === "testing" ? "Practice payment — no money needed" : "Confirm your Mobile Money payment"}
+                      </div>
+                      <div style={{ color: "#ddd", fontSize: 13, lineHeight: 1.7 }}>
+                        {checkoutEnvironment === "testing"
+                          ? "You're in Testing Mode. Press the button below to send a practice payment request to the admin dashboard. Do not transfer money."
+                          : "After sending your payment to the official Silk Road account, find the transaction ID in your Mobile Money confirmation SMS or app. Paste it below so our team can check that your payment arrived."}
+                      </div>
+                      <div style={{ borderRadius: 10, background: "#24201a", padding: 12, fontSize: 13, color: "#eee" }}>
+                        <div>Amount: <strong>GH₵{Number(confirmedTotal ?? total).toFixed(2)}</strong></div>
+                        <div style={{ marginTop: 5 }}>Status: <strong>{groupPaymentStatus === "pending" ? "Waiting for payment details" : groupPaymentStatus === "submitted" ? "Under review" : groupPaymentStatus === "verified" ? "Payment confirmed" : groupPaymentStatus}</strong></div>
+                      </div>
+                      {groupPaymentStatus === "pending" && checkoutEnvironment === "testing" && (
+                        <button className="btn-gold" disabled={evidenceBusy} onClick={submitTestCheckout} style={{ padding: 13 }}>
+                          {evidenceBusy ? "Submitting..." : "Send practice payment for review"}
+                        </button>
+                      )}
+                      {groupPaymentStatus === "pending" && checkoutEnvironment === "live" && (
                         <>
-                          <label style={{ fontSize: 12, color: "#aaa" }}>Transaction reference from your Mobile Money receipt</label>
-                          <input value={paymentEvidence} onChange={e => setPaymentEvidence(e.target.value)} placeholder="Actual transaction ID (not the checkout ID)" style={inp} />
-                          <button disabled={evidenceBusy || paymentEvidence.trim().length < 5} onClick={submitPaymentEvidence} className="btn-gold" style={{ padding: 12 }}>{evidenceBusy ? "Submitting..." : "Submit payment reference for review"}</button>
+                          <label style={{ color: "#ddd", fontSize: 13, fontWeight: 700 }}>Your Mobile Money transaction ID</label>
+                          <input value={paymentEvidence} onChange={e => setPaymentEvidence(e.target.value)} placeholder="Paste the transaction ID from your SMS" style={inp} />
+                          <div style={{ fontSize: 12, color: "#aaa" }}>This is the ID from your MoMo provider, not your Silk Road order number. Only submit after actually paying.</div>
+                          <button disabled={evidenceBusy || paymentEvidence.trim().length < 5} onClick={submitPaymentEvidence} className="btn-gold" style={{ padding: 13 }}>
+                            {evidenceBusy ? "Submitting..." : "I've paid — send transaction ID"}
+                          </button>
                         </>
                       )}
-                      <button onClick={refreshPaymentStatus} className="btn-ghost" style={{ padding: 10 }}>Refresh payment status</button>
+                      {groupPaymentStatus === "pending" && checkoutEnvironment === null && (
+                        <div style={{ color: "#eabf78", fontSize: 12 }}>Checking whether this checkout is a practice or real payment. Do not send money until the mode is confirmed.</div>
+                      )}
+                      {groupPaymentStatus === "submitted" && <div style={{ color: "#eabf78", fontSize: 13 }}>Your request is in the review queue. You don't need to submit it again.</div>}
+                      {groupPaymentStatus === "verified" && <div style={{ color: "#6ee7b7", fontSize: 13 }}>Payment verified. You can now follow your delivery status.</div>}
+                      <button onClick={refreshPaymentStatus} className="btn-ghost" style={{ padding: 11 }}>Check latest status</button>
                       {evidenceMessage && <div role="status" style={{ fontSize: 12, color: "#eabf78" }}>{evidenceMessage}</div>}
-                      <div style={{ fontSize: 11, color: "#888" }}>Submission is not payment confirmation. Admins must independently confirm credited funds.</div>
+                      <div style={{ fontSize: 11, color: "#888" }}>Need help? Share your checkout number with Silk Road support: {checkoutId}. Never share your MoMo PIN or OTP.</div>
                     </div>
                   )}
 
