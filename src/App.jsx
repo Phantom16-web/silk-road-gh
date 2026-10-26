@@ -84,7 +84,7 @@ const DEFAULT_SITE_SETTINGS = {
   contactWhatsApp: "233543883608",
   aboutText:       "Silk Road GH is Ghana's premier student marketplace — built by students, for students. Whether you're buying textbooks, renting equipment, requesting services, or making extra income, Silk Road GH is your go-to campus platform.",
   privacyText:     "We collect your name, contact information, location data (only during checkout), and transaction history to facilitate buying, selling, and delivery on the platform.",
-  footerTagline:   "Ghana's student marketplace. Buy, sell, rent, and request services — all secured by escrow and powered by MTN MoMo.",
+  footerTagline:   "Ghana's student marketplace. Buy, sell, rent, and request services — all secured by escrow and with secure payment verification.",
   deliveryFee:    10,
 }
 const parseSearch = (query) => {
@@ -136,7 +136,7 @@ function FooterModal({ type, onClose, siteSettings }) {
             ))}
           </div>
           <p style={{ fontSize: "13px", color: "#666" }}>
-            Silk Road GH is proudly built for Ghanaian university students. Payments powered by MTN Mobile Money.
+            Silk Road GH is proudly built for Ghanaian university students. Payments are subject to verification before fulfillment.
           </p>
         </div>
       )
@@ -149,7 +149,7 @@ function FooterModal({ type, onClose, siteSettings }) {
             ["📋 Information We Collect", siteSettings.privacyText],
             ["🔒 How We Use Your Data", "Your data is used solely to process transactions, connect buyers with sellers, coordinate deliveries, and improve the platform. We do not sell your personal information to third parties."],
             ["📍 Location Data", "Location is only accessed during checkout when you choose to share it. It is used to coordinate delivery and is shared only with the seller or rider fulfilling your order."],
-            ["💳 Payment Information", "All payments are processed via MTN MoMo. Silk Road GH does not store your MoMo PIN or full payment credentials."],
+            ["💳 Payment Information", "Payment methods depend on the active provider and receiving account. Silk Road GH does not store your MoMo PIN or full payment credentials."],
             ["🤝 Data Sharing", "Your contact details are only shared with the relevant seller or rider after a confirmed payment. No data is shared with advertisers or unrelated third parties."],
             ["🗑️ Data Deletion", "You may request deletion of your account and associated data at any time by contacting us directly."],
             ["📞 Contact", `For any privacy concerns, reach us at ${siteSettings.contactPhone}.`],
@@ -247,7 +247,7 @@ function Footer({ onOpen, siteSettings }) {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               <div style={{ background: "#ffd700", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: "700", color: "#1a1a00", display: "inline-flex", alignItems: "center", gap: "6px", width: "fit-content" }}>
-                📱 MTN MoMo
+                📱 Mobile Money
               </div>
               <div style={{ fontSize: "11px", color: "#555" }}>
                 Secured escrow payments
@@ -1193,7 +1193,7 @@ function App() {
                   }}
                   style={{ width: "100%", background: "#c8a97e", border: "none", padding: "14px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}
                 >
-                  📱 Checkout with MTN MoMo
+                  📱 Continue to Payment
                 </button>
               </div>
             )}

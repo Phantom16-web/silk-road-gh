@@ -217,39 +217,45 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       createdAt:     Date.now(),
       expiresAt:     Date.now() + 48 * 60 * 60 * 1000,
     }
-    saveOrder(order)
+    // Backend currently supports one listing per order. Do not silently charge
+    // for a full cart while creating an order for only its first listing.
+    if (cart.length !== 1 || Number(cart[0]?.quantity || 1) !== 1) {
+      setSaving(false)
+      alert("This checkout currently supports one item per order. Please check out each item separately until multi-item orders are enabled.")
+      return
+    }
 
     try {
-      const firstItem   = cart[0]
-      const listingId   = firstItem?._id && isMongoId(firstItem._id) ? firstItem._id : null
+      const firstItem = cart[0]
+      const listingId = firstItem?._id && isMongoId(firstItem._id) ? firstItem._id : null
       const rawSellerId = firstItem?.seller?._id || firstItem?.seller
-      const sellerId    = rawSellerId && isMongoId(String(rawSellerId)) ? String(rawSellerId) : null
+      const sellerId = rawSellerId && isMongoId(String(rawSellerId)) ? String(rawSellerId) : null
+      if (!listingId) throw new Error("This listing cannot be checked out because it has no valid database ID.")
 
-      if (listingId || sellerId) {
-        const res = await fetch(`${API_URL}/orders`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            listingId, sellerId,
-            localOrderId:  orderId,
-            type:          "product",
-            amount:        total,
-            paystackRef:   ref,
-            location:      location ? `${location.lat},${location.lng}` : manualLocation,
-            landmark, extraInfo, contactInfo, payerName, payerPhone,
-            promoCode:     promoApplied?.code || null,
-            discount, deliveryMethod,
-            paymentMethod: "manual_momo",
-          }),
-        })
-        const data = await res.json()
-        if (data.orderId || data._id)
-          updateOrder(orderId, { backendOrderId: data.orderId || data._id })
-      }
-    } catch (err) { console.warn("Backend save failed:", err.message) }
-
-    setSaving(false)
-    setPaymentRef(ref)
-    setStep(3)
+      const res = await fetch(`${API_URL}/orders`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingId, sellerId, localOrderId: orderId,
+          type: "product", amount: total,
+          location: location ? `${location.lat},${location.lng}` : manualLocation,
+          landmark, extraInfo, contactInfo, payerName, payerPhone,
+          promoCode: promoApplied?.code || null,
+          discount, deliveryMethod, paymentMethod: "manual_momo",
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || `Order creation failed (${res.status}).`)
+      const backendOrderId = data.orderId || data._id || data.order?._id
+      if (!backendOrderId) throw new Error("Server did not confirm the order ID. Please contact support before retrying to avoid a duplicate order.")
+      saveOrder({ ...order, backendOrderId })
+      setPaymentRef(ref)
+      setStep(3)
+    } catch (err) {
+      console.error("Backend order creation failed:", err)
+      alert(`Order was not confirmed: ${err.message} Do not send additional money. If you have already paid, contact support with your payment reference.`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleConfirmDelivery = () => {
@@ -440,13 +446,13 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           {step === 2 && (
             <>
               <div style={{ background: "#ffd700", borderRadius: "14px", padding: "20px", textAlign: "center" }}>
-                <div style={{ fontSize: "13px", fontWeight: "600", color: "#554400", marginBottom: "6px" }}>SEND THIS EXACT AMOUNT VIA MTN MOMO</div>
+                <div style={{ fontSize: "13px", fontWeight: "600", color: "#554400", marginBottom: "6px" }}>MANUAL MOBILE MONEY — VERIFY RECEIVING NETWORK</div>
                 <div style={{ fontSize: "40px", fontWeight: "900", color: "#1a1a00" }}>₵{total.toLocaleString()}</div>
               </div>
 
               <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#fcd34d", display: "flex", flexDirection: "column", gap: "6px" }}>
-                <div style={{ fontWeight: "700", fontSize: "14px" }}>⚠️ How to pay:</div>
-                <div>1. Dial <strong>*170#</strong> → Send Money → MoMo User</div>
+                <div style={{ fontWeight: "700", fontSize: "14px" }}>⚠️ Pay only to the displayed receiving account:</div>
+                <div>1. Use your network’s Mobile Money transfer menu or app. Confirm that transfers to the receiving network are supported.</div>
                 <div>2. Enter number: <strong style={{ fontSize: "15px" }}>{SILK_ROAD_MOMO}</strong> ({SILK_ROAD_NAME})</div>
                 <div>3. Amount: <strong>₵{total}</strong></div>
                 <div>4. Reference: <strong style={{ fontFamily: "monospace" }}>{orderId}</strong></div>
