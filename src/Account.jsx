@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react"
-import { updateProfile, changePassword, deleteAccount, getMyOrders, getSellingOrders, getMyListings, deleteListing } from "./api"
+import { updateProfile, changePassword, deleteAccount, getMyOrders, getSellingOrders, getMyListings, updateListing, deleteListing } from "./api"
 import { getOrders, updateOrder, getSellerNotifications, markAllNotificationsRead } from "./OrderTracker"
 
 const API_URL    = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
@@ -725,6 +725,10 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
   const [listings, setListings]           = useState([])
   const [loadingOrders, setLoadingOrders]     = useState(false)
   const [loadingListings, setLoadingListings] = useState(false)
+  const [editingListing, setEditingListing] = useState(null)
+  const [listingDraft, setListingDraft] = useState({})
+  const [listingSaveError, setListingSaveError] = useState("")
+  const [listingSaving, setListingSaving] = useState(false)
   const [notifCount, setNotifCount]       = useState(0)
 
   // ── Sale completed flash state ─────────────────────────────────────────────
@@ -809,6 +813,69 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
       } else { setDeleteError(data.message || "Something went wrong.") }
     } catch { setDeleteError("Something went wrong.") }
     setDeleteLoading(false)
+  }
+
+  const openListingEditor = (listing) => {
+    setEditingListing(listing)
+    setListingDraft({
+      title: listing.title || "",
+      desc: listing.desc || "",
+      category: listing.category || "",
+      price: listing.price ?? "",
+      dailyRate: listing.dailyRate ?? "",
+      maxDays: listing.maxDays ?? "",
+      condition: listing.condition || "",
+      contactDetail: listing.contactDetail || "",
+      contactNote: listing.contactNote || "",
+    })
+    setListingSaveError("")
+  }
+
+  const saveListingEdit = async (event) => {
+    event.preventDefault()
+    if (!editingListing || listingSaving) return
+    setListingSaveError("")
+    if (!listingDraft.title.trim() || !listingDraft.desc.trim() || !listingDraft.category.trim()) {
+      setListingSaveError("Title, description, and category are required.")
+      return
+    }
+    const payload = {
+      title: listingDraft.title.trim(),
+      desc: listingDraft.desc.trim(),
+      category: listingDraft.category.trim(),
+    }
+    if (editingListing.type === "rent") {
+      if (!(Number(listingDraft.dailyRate) > 0) || !Number.isInteger(Number(listingDraft.maxDays)) || !(Number(listingDraft.maxDays) > 0)) {
+        setListingSaveError("Enter a positive daily rate and whole-number maximum days.")
+        return
+      }
+      payload.dailyRate = Number(listingDraft.dailyRate)
+      payload.maxDays = Number(listingDraft.maxDays)
+    } else {
+      if (!(Number(listingDraft.price) > 0)) {
+        setListingSaveError("Enter a price greater than zero.")
+        return
+      }
+      payload.price = Number(listingDraft.price)
+    }
+    if (editingListing.type === "product") payload.condition = listingDraft.condition
+    if (editingListing.type === "service") {
+      payload.contactDetail = listingDraft.contactDetail
+      payload.contactNote = listingDraft.contactNote
+    }
+    setListingSaving(true)
+    try {
+      const updated = await updateListing(editingListing._id, payload)
+      if (!updated || updated.message || !updated._id) {
+        throw new Error(updated?.message || "The server did not confirm the update.")
+      }
+      setListings(current => current.map(item => item._id === updated._id ? updated : item))
+      setEditingListing(null)
+    } catch (err) {
+      setListingSaveError(err.message || "Could not update listing.")
+    } finally {
+      setListingSaving(false)
+    }
   }
 
   const handleDeleteListing = async (id) => {
@@ -1082,6 +1149,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-end", flexShrink: 0 }}>
                           <span style={{ fontSize: "11px", fontWeight: "700", background: statusStyle(listing.status || "Active").bg, color: statusStyle(listing.status || "Active").color, border: `1px solid ${statusStyle(listing.status || "Active").border}`, padding: "3px 10px", borderRadius: "20px" }}>{listing.status || "Active"}</span>
+                          <button onClick={() => openListingEditor(listing)} style={{ background: "#c8a97e", color: "#111", border: "none", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "12px", fontWeight: "700", fontFamily: "inherit" }}>Edit</button>
                           <button onClick={() => handleDeleteListing(listing._id)} style={{ background: "transparent", border: "none", color: "#fca5a5", cursor: "pointer", fontSize: "12px", fontFamily: "inherit", minHeight: "auto" }}>Remove</button>
                         </div>
                       </div>
@@ -1089,6 +1157,35 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
                   </div>
                 )}
               </>
+            )}
+
+            {tab === "listings" && editingListing && (
+              <div role="presentation" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "#000c", display: "flex", justifyContent: "center", alignItems: "center", padding: "16px" }}>
+                <form role="dialog" aria-modal="true" aria-label="Edit listing" onSubmit={saveListingEdit} style={{ width: "100%", maxWidth: "540px", maxHeight: "90vh", overflowY: "auto", background: "#181818", border: "1px solid #3b3225", borderRadius: "16px", padding: "24px", color: "#f0ede8" }}>
+                  <h2 style={{ marginTop: 0 }}>Edit listing</h2>
+                  <p style={{ color: "#aaa", fontSize: "13px" }}>Your current listing photo will be preserved.</p>
+                  {[
+                    ["title", "Title", "text"],
+                    ["desc", "Description", "textarea"],
+                    ["category", "Category", "text"],
+                    ...(editingListing.type === "rent" ? [["dailyRate", "Daily rate (GHS)", "number"], ["maxDays", "Maximum rental days", "number"]] : [["price", "Price (GHS)", "number"]]),
+                    ...(editingListing.type === "product" ? [["condition", "Condition", "text"]] : []),
+                    ...(editingListing.type === "service" ? [["contactDetail", "Contact details", "text"], ["contactNote", "Contact note", "textarea"]] : []),
+                  ].map(([key, label, kind]) => (
+                    <label key={key} style={{ display: "block", marginBottom: "12px", fontSize: "13px" }}>
+                      <span style={{ display: "block", marginBottom: "5px" }}>{label}</span>
+                      {kind === "textarea"
+                        ? <textarea value={listingDraft[key] ?? ""} onChange={e => setListingDraft(d => ({ ...d, [key]: e.target.value }))} rows={3} style={{ width: "100%", boxSizing: "border-box", padding: "10px", background: "#252525", color: "#fff", border: "1px solid #444", borderRadius: "7px" }} />
+                        : <input type={kind} min={kind === "number" ? "0.01" : undefined} step={key === "maxDays" ? "1" : kind === "number" ? "any" : undefined} value={listingDraft[key] ?? ""} onChange={e => setListingDraft(d => ({ ...d, [key]: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", padding: "10px", background: "#252525", color: "#fff", border: "1px solid #444", borderRadius: "7px" }} />}
+                    </label>
+                  ))}
+                  {listingSaveError && <p role="alert" style={{ color: "#fca5a5" }}>{listingSaveError}</p>}
+                  <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                    <button type="button" disabled={listingSaving} onClick={() => setEditingListing(null)} style={{ padding: "10px 18px", cursor: "pointer" }}>Cancel</button>
+                    <button type="submit" disabled={listingSaving} style={{ padding: "10px 18px", background: "#c8a97e", color: "#111", fontWeight: "700", border: 0, borderRadius: "6px", cursor: "pointer" }}>{listingSaving ? "Saving..." : "Save changes"}</button>
+                  </div>
+                </form>
+              </div>
             )}
 
             {/* ── RENTALS ── */}
