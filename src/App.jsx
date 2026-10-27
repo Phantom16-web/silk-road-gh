@@ -84,7 +84,7 @@ const DEFAULT_SITE_SETTINGS = {
   contactWhatsApp: "233543883608",
   aboutText:       "Silk Road GH is Ghana's premier student marketplace — built by students, for students. Whether you're buying textbooks, renting equipment, requesting services, or making extra income, Silk Road GH is your go-to campus platform.",
   privacyText:     "We collect your name, contact information, location data (only during checkout), and transaction history to facilitate buying, selling, and delivery on the platform.",
-  footerTagline:   "Ghana's student marketplace. Buy, sell, rent, and request services — all secured by escrow and with secure payment verification.",
+  footerTagline:   "Ghana's student marketplace. Buy, sell, rent, and request services — all secured by escrow and powered by MTN MoMo.",
   deliveryFee:    10,
 }
 const parseSearch = (query) => {
@@ -136,7 +136,7 @@ function FooterModal({ type, onClose, siteSettings }) {
             ))}
           </div>
           <p style={{ fontSize: "13px", color: "#666" }}>
-            Silk Road GH is proudly built for Ghanaian university students. Payments are subject to verification before fulfillment.
+            Silk Road GH is proudly built for Ghanaian university students. Payments powered by MTN Mobile Money.
           </p>
         </div>
       )
@@ -149,7 +149,7 @@ function FooterModal({ type, onClose, siteSettings }) {
             ["📋 Information We Collect", siteSettings.privacyText],
             ["🔒 How We Use Your Data", "Your data is used solely to process transactions, connect buyers with sellers, coordinate deliveries, and improve the platform. We do not sell your personal information to third parties."],
             ["📍 Location Data", "Location is only accessed during checkout when you choose to share it. It is used to coordinate delivery and is shared only with the seller or rider fulfilling your order."],
-            ["💳 Payment Information", "Payment methods depend on the active provider and receiving account. Silk Road GH does not store your MoMo PIN or full payment credentials."],
+            ["💳 Payment Information", "All payments are processed via MTN MoMo. Silk Road GH does not store your MoMo PIN or full payment credentials."],
             ["🤝 Data Sharing", "Your contact details are only shared with the relevant seller or rider after a confirmed payment. No data is shared with advertisers or unrelated third parties."],
             ["🗑️ Data Deletion", "You may request deletion of your account and associated data at any time by contacting us directly."],
             ["📞 Contact", `For any privacy concerns, reach us at ${siteSettings.contactPhone}.`],
@@ -247,7 +247,7 @@ function Footer({ onOpen, siteSettings }) {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               <div style={{ background: "#ffd700", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: "700", color: "#1a1a00", display: "inline-flex", alignItems: "center", gap: "6px", width: "fit-content" }}>
-                📱 Mobile Money
+                📱 MTN MoMo
               </div>
               <div style={{ fontSize: "11px", color: "#555" }}>
                 Secured escrow payments
@@ -414,6 +414,28 @@ function ListingSkeleton() {
     </div>
   )
 }
+
+// Authenticated identity: deliberately self-contained so App.jsx is the only replacement.
+function AccountIdentity({ user, onClick, compact = false }) {
+  if (!user) return null
+  const name = String(user.name || user.fullName || user.username || user.email?.split("@")[0] || "Member").trim()
+  const firstName = name.split(/\s+/)[0]
+  return (
+    <button type="button" className={`sr-identity ${compact ? "sr-identity--compact" : ""}`}
+      onClick={onClick} title={`Signed in as ${name}`}
+      aria-label={`Signed in as ${name}. Open your account`}>
+      <span className="sr-identity__avatar" aria-hidden="true">
+        {firstName.charAt(0).toUpperCase() || "S"}
+        <span className="sr-identity__online" />
+      </span>
+      <span className="sr-identity__copy">
+        <span className="sr-identity__eyebrow"><span className="sr-identity__dot" /> SIGNED IN · SILK ROAD</span>
+        <span className="sr-identity__name">Hi, {firstName}<span className="sr-identity__chevron">⌄</span></span>
+      </span>
+    </button>
+  )
+}
+
 // ── App ────────────────────────────────────────────────────────────────────────
 function App() {
   const [rate, setRate]                       = useState(null)
@@ -712,17 +734,29 @@ function App() {
     <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
       <style>{`
         @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+
+        /* Premium signed-in identity, desktop and mobile */
+        .sr-identity { display:inline-flex;align-items:center;gap:10px;max-width:220px;min-width:0;padding:6px 12px 6px 6px;border:1px solid #c8a97e55;border-radius:15px;background:linear-gradient(135deg,#29231b 0%,#141414 65%,#101010 100%);color:#f8f2e9;cursor:pointer;text-align:left;box-shadow:0 2px 14px #0005,inset 0 1px #ffffff0b;transition:transform .18s,border-color .18s,box-shadow .18s;flex-shrink:0; }
+        .sr-identity:hover,.sr-identity:focus-visible { border-color:#c8a97e;box-shadow:0 0 0 3px #c8a97e22;transform:translateY(-1px); }
+        .sr-identity__avatar { position:relative;flex:none;width:37px;height:37px;border-radius:12px;background:linear-gradient(135deg,#f1d5a5,#b38b51);color:#1b140d;display:grid;place-items:center;font-size:17px;font-weight:850;box-shadow:inset 0 1px #fff6; }
+        .sr-identity__online { position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;background:#22c55e;border:2px solid #161616;border-radius:50%; }
+        .sr-identity__copy { display:flex;flex-direction:column;gap:2px;min-width:0; }
+        .sr-identity__eyebrow { color:#d5bd95;font-size:8px;font-weight:800;letter-spacing:.1em;white-space:nowrap; }
+        .sr-identity__dot { display:inline-block;width:5px;height:5px;margin-right:3px;border-radius:50%;background:#22c55e;vertical-align:middle; }
+        .sr-identity__name { font-size:13px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px; }
+        .sr-identity__chevron { margin-left:7px;color:#c8a97e; }
+        .sr-identity--compact { padding:4px 7px 4px 4px;border-radius:13px;max-width:160px;gap:7px; }
+        .sr-identity--compact .sr-identity__avatar { width:32px;height:32px;border-radius:10px;font-size:14px; }
+        .sr-identity--compact .sr-identity__eyebrow { font-size:7px; }
+        .sr-identity--compact .sr-identity__name { font-size:11px;max-width:105px; }
+        @media(max-width:640px) { .sr-mobile-controls { gap:5px;min-width:0; } .sr-mobile-controls > button { flex-shrink:0; } .sr-topbar { gap:6px; } }
+        @media(max-width:360px) { .sr-identity--compact { max-width:125px; } .sr-identity--compact .sr-identity__eyebrow { display:none; } .sr-identity--compact .sr-identity__name { max-width:70px; } }
+        @media(prefers-reduced-motion:reduce) { .sr-identity { transition:none; } }
         .sr-desktop-actions { display: flex; align-items: center; gap: 6px; }
         .sr-mobile-controls { display: none; align-items: center; gap: 8px; }
         .sr-mobile-menu { display: none; }
         .sr-mobile-action { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px; background: #151515; border: 1px solid #292929; border-radius: 9px; color: #eee; text-align: left; font: inherit; cursor: pointer; }
         .sr-mobile-action-primary { color: #c8a97e; font-weight: 700; }
-        @media (min-width: 700px) {
-          .sr-product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 20px !important; }
-        }
-        @media (min-width: 1050px) {
-          .sr-product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 24px !important; }
-        }
         @media (max-width: 640px) {
           .sr-desktop-actions { display: none !important; }
           .sr-mobile-controls { display: flex; }
@@ -772,12 +806,7 @@ function App() {
               />
             )}
             {user ? (
-              <button
-                onClick={() => setShowAccount(true)}
-                style={{ background: "#c8a97e", border: "none", width: "34px", height: "34px", borderRadius: "50%", fontWeight: "800", cursor: "pointer", fontSize: "14px", color: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
-              >
-                {user.name.charAt(0).toUpperCase()}
-              </button>
+              <AccountIdentity user={user} onClick={() => setShowAccount(true)} />
             ) : (
               <button
                 onClick={() => setShowAuth(true)}
@@ -799,6 +828,7 @@ function App() {
             </button>
           </div>
           <div className="sr-mobile-controls">
+            {user && <AccountIdentity user={user} compact onClick={() => setShowAccount(true)} />}
             <button
               onClick={() => setCartOpen(true)}
               aria-label={`Open cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}
@@ -964,7 +994,7 @@ function App() {
                 ↻ Refresh
               </button>
             </div>
-            <div className="sr-product-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 130px), 1fr))", gap: "12px" }}>
               {listingsLoading
                 ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
                     <ListingSkeleton key={i} />
@@ -1193,7 +1223,7 @@ function App() {
                   }}
                   style={{ width: "100%", background: "#c8a97e", border: "none", padding: "14px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}
                 >
-                  📱 Continue to Payment
+                  📱 Checkout with MTN MoMo
                 </button>
               </div>
             )}
