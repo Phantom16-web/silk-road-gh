@@ -5,8 +5,6 @@ const API_URL        = import.meta.env.VITE_API_URL || "http://localhost:5000/ap
 const SOCKET_URL     = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace("/api", "")
   : "http://localhost:5000"
-const SILK_ROAD_MOMO = "0543883608" // Verify recipient network and number before launch
-const SILK_ROAD_NAME = "Silk Road GH"
 const STEPS          = ["Location", "Confirm Order", "Payment", "Track"]
 
 function isMongoId(str) {
@@ -41,8 +39,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const [deliveryCodes, setDeliveryCodes] = useState({})
   const [deliveryBusy, setDeliveryBusy] = useState(null)
   const [deliveryError, setDeliveryError] = useState("")
-  const [copied, setCopied]                 = useState(false)
-  const [deliveryMethod, setDeliveryMethod] = useState(initialOrder?.deliveryMethod || "pickup")
+    const [deliveryMethod, setDeliveryMethod] = useState(initialOrder?.deliveryMethod || "pickup")
   const [promoCode, setPromoCode]           = useState("")
   const [promoApplied, setPromoApplied]     = useState(null)
   const [promoError, setPromoError]         = useState("")
@@ -210,10 +207,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
 
   const handlePay = async () => {
     if (!payerName.trim())  { alert("Please enter your name."); return }
-    if (!payerPhone.trim()) { alert("Please enter your MoMo number."); return }
+    if (!payerPhone.trim()) { alert("Please enter your contact number."); return }
     setSaving(true)
 
-    const ref = `MOMO-${orderId}`
+    const ref = `SR-${orderId}`
     const order = {
       id: orderId, type: "buy", cart, total, subtotal, platformFee,
       deliveryFee:   deliveryMethod === "rider" ? deliveryFee : 0,
@@ -222,7 +219,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       location, manualLocation, landmark, extraInfo,
       contactInfo, payerName, payerPhone,
       deliveryMethod,
-      paymentMethod: "manual_momo",
+      paymentMethod: "manual_verification",
       paymentRef:    ref,
       status:        "Pending Confirmation",
       delivered:     null,
@@ -384,11 +381,6 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     updateOrder(orderId, { delivered: false, status: "Cancelled" })
   }
 
-  const copyMomo = () => {
-    navigator.clipboard.writeText(SILK_ROAD_MOMO)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
-  }
-
   const mapEmbedUrl = location
     ? `https://www.google.com/maps?q=${location.lat},${location.lng}&z=17&output=embed`
     : manualLocation
@@ -405,6 +397,47 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
       <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "540px", maxHeight: "92vh", overflowY: "auto", border: "1px solid #1e1e1e" }}>
 
+        <style>{`
+          .sr-checkout-journey{display:grid;gap:16px;color:#f5f0e7;animation:srRise .35s ease-out}
+          @keyframes srRise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+          .sr-journey-hero{background:radial-gradient(ellipse at 90% 0%,#64502a55,transparent 55%),linear-gradient(145deg,#242019,#111);border:1px solid #4a3b26;border-radius:20px;padding:25px 22px}
+          .sr-journey-eyebrow{color:#d8bd87;font-size:10px;letter-spacing:.2em;font-weight:800}
+          .sr-journey-hero h2{font-size:clamp(25px,6vw,34px);letter-spacing:-.045em;line-height:1.15;margin:12px 0;color:#fff;font-weight:800}
+          .sr-journey-hero p,.sr-journey-card p{font-size:13px;line-height:1.75;color:#bcb7ad;margin:9px 0 15px}
+          .sr-journey-total{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid #ffffff24;margin-top:20px;padding-top:18px}
+          .sr-journey-total span{font-size:13px;color:#c8c1b5}.sr-journey-total strong{font-size:23px;color:#e5c28b}
+          .sr-journey-card{background:#181818;border:1px solid #30302c;border-radius:18px;padding:19px;display:grid;gap:10px}
+          .sr-journey-heading{display:flex;gap:12px;align-items:center;margin-bottom:5px}
+          .sr-journey-heading>div{display:grid;gap:3px}.sr-journey-heading strong{font-size:17px;letter-spacing:-.02em}
+          .sr-journey-heading small{font-size:12px;color:#8e8a82}
+          .sr-journey-number{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#c8a97e;color:#1b140d;font-weight:900;flex-shrink:0}
+          .sr-payment-status{display:flex;align-items:center;gap:10px;background:#26231e;border-radius:11px;padding:13px;color:#ead3aa;font-size:13px;font-weight:700}
+          .sr-status-dot{height:8px;width:8px;background:#e8b966;border-radius:50%;box-shadow:0 0 0 4px #e8b96620}.sr-status-dot.verified{background:#68d4a0;box-shadow:0 0 0 4px #68d4a020}
+          .sr-journey-label{font-size:13px;font-weight:750;color:#f5f0e7;margin-top:3px}
+          .sr-journey-input{width:100%;box-sizing:border-box;background:#252525;border:1px solid #555044;border-radius:12px;color:#fff;padding:16px;font:inherit;font-size:15px;outline:none;transition:border-color .2s,box-shadow .2s}
+          .sr-journey-input:focus{border-color:#d7b982;box-shadow:0 0 0 3px #d7b98222}
+          .sr-journey-hint{font-size:11px;line-height:1.7;color:#aaa397}
+          .sr-journey-primary,.sr-journey-secondary{min-height:48px;border-radius:12px;padding:13px 15px;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;transition:transform .18s,background .18s}
+          .sr-journey-primary{background:linear-gradient(110deg,#e2c590,#b9945e);color:#1a140e;border:0}
+          .sr-journey-primary:hover:not(:disabled){transform:translateY(-2px);background:#f0d3a0}
+          .sr-journey-primary:disabled{opacity:.45;cursor:not-allowed}
+          .sr-journey-secondary{background:#242424;color:#dfd8cd;border:1px solid #45413a}
+          .sr-journey-secondary:hover{background:#30302e}
+          .sr-journey-feedback{color:#f2d5a0!important}.sr-journey-error{color:#ff9d9d!important}
+          .sr-seller-delivery{display:grid;gap:10px;border-top:1px solid #35312a;padding-top:16px;margin-top:8px}
+          .sr-seller-top{display:flex;justify-content:space-between;align-items:start;gap:12px}.sr-seller-top>div{display:grid;gap:5px;min-width:0}
+          .sr-seller-overline{font-size:10px;font-weight:800;letter-spacing:.13em;color:#b9a17a}
+          .sr-seller-top strong{font-size:14px;overflow-wrap:anywhere}.sr-seller-amount{font-size:13px;color:#ddbe89;white-space:nowrap;font-weight:700}
+          .sr-seller-state{font-size:12px;color:#aaa79f}.sr-code-button{font-size:13px}
+          .sr-code-panel{background:#29231a;border:1px solid #7c633a;border-radius:13px;text-align:center;padding:18px 10px;display:grid;gap:8px}
+          .sr-code-panel span{font-size:10px;letter-spacing:.15em;color:#d7b982;font-weight:800}
+          .sr-code-panel strong{font-family:ui-monospace,monospace;font-size:clamp(27px,8vw,40px);letter-spacing:.17em;color:#fff}
+          .sr-code-panel small{font-size:11px;line-height:1.5;color:#c8c1b5}
+          .sr-detail-line{display:flex;justify-content:space-between;gap:15px;padding:10px 0;border-bottom:1px solid #ffffff12;font-size:12px}
+          .sr-detail-line span{color:#979189;flex-shrink:0}.sr-detail-line strong{text-align:right;font-weight:650;overflow-wrap:anywhere}
+          @media(max-width:450px){.sr-journey-card{padding:16px}.sr-journey-hero{padding:22px 18px}.sr-detail-line{flex-direction:column;gap:4px}.sr-detail-line strong{text-align:left}}
+          @media(prefers-reduced-motion:reduce){.sr-checkout-journey{animation:none}.sr-journey-primary,.sr-journey-secondary{transition:none}}
+        `}</style>
         {/* Header */}
         <div style={{ padding: "18px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: "18px", fontWeight: "700" }}>
@@ -553,218 +586,139 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
 
               <div style={{ display: "flex", gap: "10px" }}>
                 <button className="btn-ghost" onClick={() => setStep(0)} style={{ flex: 1, padding: "13px", borderRadius: "12px" }}>← Back</button>
-                <button className="btn-gold" onClick={() => setStep(2)} style={{ flex: 2, padding: "13px", borderRadius: "12px", fontSize: "15px" }}>Proceed to Payment →</button>
+                <button className="btn-gold" onClick={() => setStep(2)} style={{ flex: 2, padding: "13px", borderRadius: "12px", fontSize: "15px" }}>Continue to Payment →</button>
               </div>
             </>
           )}
 
-          {/* ── STEP 2 — Payment ── */}
+          {/* ── STEP 2 — Continue to Payment ── */}
           {step === 2 && (
             <>
-              <div style={{ background: "#ffd700", borderRadius: "14px", padding: "20px", textAlign: "center" }}>
-                <div style={{ fontSize: "13px", fontWeight: "600", color: "#554400", marginBottom: "6px" }}>MANUAL MOBILE MONEY — VERIFY RECEIVING NETWORK</div>
-                <div style={{ fontSize: "40px", fontWeight: "900", color: "#1a1a00" }}>₵{total.toLocaleString()}</div>
-              </div>
-
-              <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#fcd34d", display: "flex", flexDirection: "column", gap: "6px" }}>
-                <div style={{ fontWeight: "700", fontSize: "14px" }}>⚠️ Pay only to the displayed receiving account:</div>
-                <div>1. Use your network’s Mobile Money transfer menu or app. Confirm that transfers to the receiving network are supported.</div>
-                <div>2. Enter number: <strong style={{ fontSize: "15px" }}>{SILK_ROAD_MOMO}</strong> ({SILK_ROAD_NAME})</div>
-                <div>3. Amount: <strong>₵{total}</strong></div>
-                <div>4. Reference: <strong style={{ fontFamily: "monospace" }}>{orderId}</strong></div>
-                <div>5. Enter your name and number below, then confirm</div>
-              </div>
-
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", letterSpacing: ".04em" }}>{SILK_ROAD_MOMO}</div>
-                  <div style={{ fontSize: "12px", color: "#555", marginTop: "3px" }}>{SILK_ROAD_NAME}</div>
+              <div style={{ background: "#161616", border: "1px solid #36302a", borderRadius: "14px", padding: "20px", display: "grid", gap: "10px" }}>
+                <div style={{ color: "#c8a97e", fontSize: "12px", fontWeight: "700", letterSpacing: ".06em" }}>SECURE CHECKOUT</div>
+                <div style={{ color: "#f0ede8", fontSize: "28px", fontWeight: "800" }}>GH₵{total.toLocaleString()}</div>
+                <div style={{ color: "#999", fontSize: "13px", lineHeight: 1.7 }}>
+                  Continue to create your checkout and view the payment options available for the current platform environment.
+                  Your order will remain pending until payment is independently verified.
                 </div>
-                <button onClick={copyMomo}
-                  style={{ background: copied ? "#064e3b" : "#1a1a1a", border: `1px solid ${copied ? "#065f46" : "#222"}`, color: copied ? "#6ee7b7" : "#c8a97e", padding: "8px 14px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit" }}>
-                  {copied ? "✅ Copied!" : "📋 Copy"}
-                </button>
               </div>
-
               <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR NAME (as paid on MoMo)</div>
+                <div style={{ fontSize: "11px", color: "#777", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR NAME</div>
                 <input placeholder="Full name" value={payerName} onChange={e => setPayerName(e.target.value)} style={inp} />
               </div>
               <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR MOMO NUMBER</div>
+                <div style={{ fontSize: "11px", color: "#777", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>CONTACT NUMBER</div>
                 <input placeholder="e.g. 0241234567" value={payerPhone} onChange={e => setPayerPhone(e.target.value)} style={inp} />
               </div>
-
               <div style={{ display: "flex", gap: "10px" }}>
                 <button className="btn-ghost" onClick={() => setStep(1)} style={{ flex: 1, padding: "13px", borderRadius: "12px" }}>← Back</button>
-                <button onClick={handlePay} disabled={saving}
-                  style={{ flex: 2, background: "#c8a97e", border: "none", padding: "13px", borderRadius: "12px", fontWeight: "700", cursor: saving ? "not-allowed" : "pointer", fontSize: "15px", color: "#000", opacity: saving ? 0.7 : 1, fontFamily: "inherit" }}>
-                  {saving ? "⏳ Saving..." : "Create Orders (Payment Pending)"}
+                <button className="btn-gold" onClick={handlePay} disabled={saving}
+                  style={{ flex: 2, padding: "13px", borderRadius: "12px", fontSize: "15px", opacity: saving ? .7 : 1 }}>
+                  {saving ? "⏳ Preparing checkout..." : "Continue to Payment →"}
                 </button>
               </div>
             </>
           )}
 
-          {/* ── STEP 3 — Track ── */}
+          {/* ── STEP 3 — A calm, buyer-friendly order journey ── */}
           {step === 3 && (
-            <>
-              {/* ── WAITING / OTP state ── */}
-              {delivered === null && (
+            <div className="sr-checkout-journey">
+              {delivered === null ? (
                 <>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: "56px", marginBottom: "10px" }}>✅</div>
-                    <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e", marginBottom: "8px" }}>Orders Created — Payment Pending</h3>
-                    <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.7" }}>
-                      Your orders are recorded, but payment has not been verified. Do not arrange delivery until an administrator confirms receipt.{" "}
-                      {deliveryMethod === "rider"
-                        ? "When the rider delivers your package, a 6-digit OTP will appear below. Read it to the rider to complete delivery."
-                        : "Contact the seller to arrange pickup."}
-                    </p>
-                  </div>
-
-                  <OrderIdBanner orderId={orderId} />
-
-                  <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", fontSize: "13px", color: "#666", display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {cart.length > 0 && <div>📦 <span style={{ color: "#c8a97e", fontWeight: "700" }}>{cart.map(i => i.title).join(", ")}</span></div>}
-                    <div>💰 Total: <span style={{ color: "#aaa" }}>₵{(confirmedTotal ?? total).toLocaleString()}</span></div>
-                    {location ? <div>📍 GPS: <span style={{ color: "#aaa" }}>{location.lat}, {location.lng}</span></div>
-                      : manualLocation ? <div>📍 <span style={{ color: "#aaa" }}>{manualLocation}</span></div> : null}
-                    {landmark  && <div>🗺️ {landmark}</div>}
-                    <div>🚚 <span style={{ color: "#aaa" }}>{deliveryMethod === "rider" ? "Rider delivery" : "Campus pickup"}</span></div>
-                    {paymentRef && <div style={{ fontSize: "10px", color: "#444", fontFamily: "monospace", marginTop: "4px" }}>Ref: {paymentRef}</div>}
-                  </div>
-
-                  {checkoutId && claimToken && (
-                    <div style={{ background: "#151515", border: "1px solid #36302a", padding: 18, borderRadius: 14, display: "grid", gap: 14 }}>
-                      <div style={{ color: "#c8a97e", fontWeight: 800, fontSize: 17 }}>
-                        {checkoutEnvironment === "testing" ? "Practice payment — no money needed" : "Confirm your Mobile Money payment"}
-                      </div>
-                      <div style={{ color: "#ddd", fontSize: 13, lineHeight: 1.7 }}>
-                        {checkoutEnvironment === "testing"
-                          ? "You're in Testing Mode. Press the button below to send a practice payment request to the admin dashboard. Do not transfer money."
-                          : "After sending your payment to the official Silk Road account, find the transaction ID in your Mobile Money confirmation SMS or app. Paste it below so our team can check that your payment arrived."}
-                      </div>
-                      <div style={{ borderRadius: 10, background: "#24201a", padding: 12, fontSize: 13, color: "#eee" }}>
-                        <div>Amount: <strong>GH₵{Number(confirmedTotal ?? total).toFixed(2)}</strong></div>
-                        <div style={{ marginTop: 5 }}>Status: <strong>{groupPaymentStatus === "pending" ? "Waiting for payment details" : groupPaymentStatus === "submitted" ? "Under review" : groupPaymentStatus === "verified" ? "Payment confirmed" : groupPaymentStatus}</strong></div>
-                      </div>
-                      {groupPaymentStatus === "pending" && checkoutEnvironment === "testing" && (
-                        <button className="btn-gold" disabled={evidenceBusy} onClick={submitTestCheckout} style={{ padding: 13 }}>
-                          {evidenceBusy ? "Submitting..." : "Send practice payment for review"}
-                        </button>
-                      )}
-                      {groupPaymentStatus === "pending" && checkoutEnvironment === "live" && (
-                        <>
-                          <label style={{ color: "#ddd", fontSize: 13, fontWeight: 700 }}>Your Mobile Money transaction ID</label>
-                          <input value={paymentEvidence} onChange={e => setPaymentEvidence(e.target.value)} placeholder="Paste the transaction ID from your SMS" style={inp} />
-                          <div style={{ fontSize: 12, color: "#aaa" }}>This is the ID from your MoMo provider, not your Silk Road order number. Only submit after actually paying.</div>
-                          <button disabled={evidenceBusy || paymentEvidence.trim().length < 5} onClick={submitPaymentEvidence} className="btn-gold" style={{ padding: 13 }}>
-                            {evidenceBusy ? "Submitting..." : "I've paid — send transaction ID"}
-                          </button>
-                        </>
-                      )}
-                      {groupPaymentStatus === "pending" && checkoutEnvironment === null && (
-                        <div style={{ color: "#eabf78", fontSize: 12 }}>Checking whether this checkout is a practice or real payment. Do not send money until the mode is confirmed.</div>
-                      )}
-                      {groupPaymentStatus === "submitted" && <div style={{ color: "#eabf78", fontSize: 13 }}>Your request is in the review queue. You don't need to submit it again.</div>}
-                      {groupPaymentStatus === "verified" && <div style={{ color: "#6ee7b7", fontSize: 13 }}>Payment verified. You can now follow your delivery status.</div>}
-                      <button onClick={refreshPaymentStatus} className="btn-ghost" style={{ padding: 11 }}>Check latest status</button>
-                      {evidenceMessage && <div role="status" style={{ fontSize: 12, color: "#eabf78" }}>{evidenceMessage}</div>}
-                      <div style={{ fontSize: 11, color: "#888" }}>Need help? Share your checkout number with Silk Road support: {checkoutId}. Never share your MoMo PIN or OTP.</div>
+                  <div className="sr-journey-hero">
+                    <div className="sr-journey-eyebrow">YOUR ORDER JOURNEY</div>
+                    <h2>You're all set.</h2>
+                    <p>We've saved your order. Just one more step before your seller can get started.</p>
+                    <div className="sr-journey-total">
+                      <span>Your total</span>
+                      <strong>GH₵{Number(confirmedTotal ?? total).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
-                  )}
+                  </div>
 
-                  {/* ── RIDER — OTP section ── */}
-                  {deliveryMethod === "rider" && (
-                    otp ? (
-                      <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "24px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
-                        <div style={{ fontSize: "28px" }}>🚪</div>
-                        <div>
-                          <div style={{ fontSize: "16px", fontWeight: "700", color: "#6ee7b7", marginBottom: "6px" }}>Your Package Has Arrived!</div>
-                          <div style={{ fontSize: "13px", color: "#888" }}>Read this code to the rider to confirm delivery</div>
+                  <div className="sr-journey-card">
+                    <div className="sr-journey-heading"><span className="sr-journey-number">1</span><div><strong>Complete your payment</strong><small>We'll guide you through it.</small></div></div>
+                    {checkoutId && claimToken ? (
+                      <>
+                        <div className="sr-payment-status">
+                          <span className={`sr-status-dot ${groupPaymentStatus === "verified" ? "verified" : ""}`} />
+                          <span>{groupPaymentStatus === "verified" ? "Payment confirmed" : groupPaymentStatus === "submitted" ? "We're checking your payment" : "Waiting for payment"}</span>
                         </div>
-                        <div style={{ fontSize: "56px", fontWeight: "900", color: "#c8a97e", fontFamily: "monospace", letterSpacing: ".2em", background: "#161616", borderRadius: "14px", padding: "20px 12px", border: "2px solid #c8a97e44" }}>
-                          {otp}
-                        </div>
-                        {otpExpiry && (
-                          <div style={{ fontSize: "12px", color: "#555" }}>
-                            ⏰ Expires at {new Date(otpExpiry).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                          </div>
+                        {groupPaymentStatus === "pending" && checkoutEnvironment === "testing" && (
+                          <>
+                            <p>This is a practice checkout, so you don't need to send any money. Tap below and we'll send your order for a test review.</p>
+                            <button className="sr-journey-primary" disabled={evidenceBusy} onClick={submitTestCheckout}>{evidenceBusy ? "Sending your request…" : "Continue with practice payment"}</button>
+                          </>
                         )}
-                        <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
-                          ⚠️ Read this code to the rider. Once they enter it, your delivery confirms automatically.
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#c8a97e", flexShrink: 0 }} />
-                          <div style={{ fontSize: "13px", color: "#888" }}>Waiting for rider to deliver your package...</div>
-                        </div>
-                        <div style={{ fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
-                          Keep this screen open. When the rider arrives and marks your package delivered, a 6-digit OTP will appear here automatically.
-                        </div>
-                      </div>
-                    )
-                  )}
-
-                  {/* Grouped checkout must never use legacy local-only delivery or cancellation buttons. */}
-                  {checkoutId && claimToken ? (
-                    <div style={{ display: "grid", gap: 12, background: "#151515", border: "1px solid #36302a", padding: 16, borderRadius: 12 }}>
-                      <strong style={{ color: "#c8a97e" }}>Delivery by seller</strong>
-                      <p style={{ color: "#aaa", fontSize: 12 }}>Only generate a code after receiving and inspecting that seller's items. Delivery confirmation does not mean a payout has been sent.</p>
-                      <button className="btn-ghost" style={{ padding: 10 }} onClick={refreshSellerOrders}>Refresh seller order status</button>
-                      {sellerOrders.map(o => <div key={o.orderId} style={{ border: "1px solid #343434", borderRadius: 10, padding: 12, display: "grid", gap: 7 }}>
-                        <strong style={{ color: "#eee" }}>{o.title || `Order ${o.orderId?.slice(-8)}`}</strong>
-                        <span style={{ color: "#aaa", fontSize: 12 }}>GHS {Number(o.amount || 0).toFixed(2)} · {o.paymentStatus || groupPaymentStatus} · {o.fulfillmentStatus || "Awaiting payment"}</span>
-                        {o.paymentStatus === "escrow_held" && <button className="btn-gold" style={{ padding: 10 }} disabled={deliveryBusy === o.orderId} onClick={() => generateSellerCode(o.orderId)}>Generate seller delivery code</button>}
-                        {deliveryCodes[o.orderId] && <div style={{ color: "#c8a97e", fontSize: 22, fontWeight: 800, letterSpacing: 3 }}>{deliveryCodes[o.orderId].deliveryCode}<div style={{ color: "#888", fontSize: 11, letterSpacing: 0 }}>Expires {new Date(deliveryCodes[o.orderId].expiresAt).toLocaleTimeString()}. Share only with this seller after receiving the item.</div></div>}
-                        {o.paymentStatus === "release_pending" && <span style={{ color: "#eabf78", fontSize: 12 }}>Delivery confirmed; seller payout pending.</span>}
-                        {o.paymentStatus === "released" && <span style={{ color: "#6ee7b7", fontSize: 12 }}>Seller payout recorded.</span>}
-                      </div>)}
-                      {deliveryError && <div role="alert" style={{ color: "#fca5a5", fontSize: 12 }}>{deliveryError}</div>}
-                    </div>
-                  ) : (
-                    <div style={{ color: "#aaa", fontSize: 12 }}>Legacy order: delivery and cancellation must be verified through support. No automatic release or refund is promised.</div>
-                  )}
-
-                  {mapEmbedUrl && (
-                    <div style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e" }}>
-                      <iframe src={mapEmbedUrl} width="100%" height="160" style={{ border: "none", display: "block" }} allowFullScreen loading="lazy" title="Location" />
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* ── BUYER SUCCESS — auto-triggered by completed: socket event ── */}
-              {delivered === true && (
-                <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <div style={{ fontSize: "72px" }}>🎉</div>
-                  <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#6ee7b7" }}>Delivery Complete!</h3>
-                  <p style={{ color: "#888", fontSize: "14px", lineHeight: "1.7" }}>
-                    Your order has been delivered and confirmed. Payout status must be checked with the platform.
-                  </p>
-                  <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px", color: "#6ee7b7" }}>
-                    <div>✅ Delivery confirmed via OTP</div>
-                    <div>💰 Delivery status recorded; payout verification may still be pending</div>
-                    {cart.length > 0 && <div>📦 {cart.map(i => i.title).join(", ")}</div>}
+                        {groupPaymentStatus === "pending" && checkoutEnvironment === "live" && (
+                          <>
+                            <p>Once you've paid using Silk Road's official payment instructions, enter the transaction reference from your payment confirmation message.</p>
+                            <label className="sr-journey-label" htmlFor="sr-payment-reference">Payment reference</label>
+                            <input id="sr-payment-reference" className="sr-journey-input" autoComplete="off" value={paymentEvidence} onChange={e => setPaymentEvidence(e.target.value)} placeholder="e.g. the reference in your payment SMS" />
+                            <div className="sr-journey-hint">This is the reference from your payment provider, not your order number. Only enter it after paying.</div>
+                            <button className="sr-journey-primary" disabled={evidenceBusy || paymentEvidence.trim().length < 5} onClick={submitPaymentEvidence}>{evidenceBusy ? "Sending…" : "Submit payment reference"}</button>
+                          </>
+                        )}
+                        {groupPaymentStatus === "pending" && checkoutEnvironment === null && <p>We're checking which payment options are available. Please wait before sending money.</p>}
+                        {groupPaymentStatus === "submitted" && <p>Thanks! Your payment details are with our team. You don't need to send them again. We'll update your order once payment is confirmed.</p>}
+                        {groupPaymentStatus === "verified" && <p>Good news! Your payment is confirmed. Your seller can now prepare your order.</p>}
+                        {!["pending", "submitted", "verified"].includes(groupPaymentStatus) && <p>Your payment needs attention. Please contact Silk Road support before taking another step.</p>}
+                        <button className="sr-journey-secondary" onClick={refreshPaymentStatus}>↻ Refresh payment status</button>
+                        {evidenceMessage && <p role="status" className="sr-journey-feedback">{evidenceMessage}</p>}
+                      </>
+                    ) : <p>We're preparing your order details. If this takes too long, contact Silk Road support before trying to pay again.</p>}
                   </div>
-                  <button className="btn-gold" onClick={onClose} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>
-                    Back to Marketplace
-                  </button>
-                </div>
-              )}
 
-              {/* ── CANCELLED ── */}
-              {delivered === false && (
-                <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <div style={{ fontSize: "56px" }}>💸</div>
-                  <h3 style={{ fontSize: "22px", fontWeight: "700", color: "#fca5a5" }}>Order Cancelled</h3>
-                  <p style={{ color: "#888", fontSize: "14px" }}>Your refund of ₵{total.toLocaleString()} will be processed within 24 hours.</p>
-                  <button className="btn-gold" onClick={onClose} style={{ padding: "14px", borderRadius: "12px", fontSize: "15px" }}>Back to Marketplace</button>
+                  <div className="sr-journey-card">
+                    <div className="sr-journey-heading"><span className="sr-journey-number">2</span><div><strong>Receive your order</strong><small>Confirm each delivery when it arrives.</small></div></div>
+                    <p>When you receive your items, check that everything is right. Then share the delivery code with the seller. <strong>Never share it before receiving your items.</strong></p>
+                    {checkoutId && claimToken ? (
+                      <>
+                        <button className="sr-journey-secondary" onClick={refreshSellerOrders}>↻ Update delivery progress</button>
+                        {sellerOrders.map((o, index) => (
+                          <div className="sr-seller-delivery" key={o.orderId}>
+                            <div className="sr-seller-top">
+                              <div><span className="sr-seller-overline">PACKAGE {index + 1}</span><strong>{o.title || `Your order ${index + 1}`}</strong></div>
+                              <span className="sr-seller-amount">GH₵{Number(o.amount || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="sr-seller-state">{o.paymentStatus === "released" ? "Payment to seller recorded" : o.paymentStatus === "release_pending" ? "Delivery confirmed" : o.paymentStatus === "escrow_held" ? "Ready for delivery" : "Waiting for payment confirmation"}</div>
+                            {o.paymentStatus === "escrow_held" && (
+                              <button className="sr-journey-primary sr-code-button" disabled={deliveryBusy === o.orderId} onClick={() => generateSellerCode(o.orderId)}>
+                                {deliveryBusy === o.orderId ? "Getting your code…" : deliveryCodes[o.orderId] ? "Get a new delivery code" : "I've received this package — get my code"}
+                              </button>
+                            )}
+                            {deliveryCodes[o.orderId] && (
+                              <div className="sr-code-panel">
+                                <span>YOUR DELIVERY CODE</span>
+                                <strong>{deliveryCodes[o.orderId].deliveryCode}</strong>
+                                <small>Share only after checking your items. Code expires at {new Date(deliveryCodes[o.orderId].expiresAt).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}.</small>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {deliveryError && <p role="alert" className="sr-journey-error">{deliveryError}</p>}
+                      </>
+                    ) : <p>Need help with an earlier order? Contact Silk Road support to confirm its delivery status.</p>}
+                  </div>
+
+                  <div className="sr-journey-card sr-order-details">
+                    <div className="sr-journey-heading"><span className="sr-journey-number">3</span><div><strong>Your order at a glance</strong><small>Everything in one place.</small></div></div>
+                    {cart.length > 0 && <div className="sr-detail-line"><span>Items</span><strong>{cart.map(i => i.title).join(", ")}</strong></div>}
+                    <div className="sr-detail-line"><span>Delivery</span><strong>{deliveryMethod === "rider" ? "Rider delivery requested" : "Arrange with seller"}</strong></div>
+                    {(manualLocation || location) && <div className="sr-detail-line"><span>Location</span><strong>{manualLocation || `${location.lat}, ${location.lng}`}</strong></div>}
+                    {paymentRef && <div className="sr-detail-line"><span>Reference</span><strong>{paymentRef}</strong></div>}
+                    <div className="sr-journey-hint">Keep your order details for reference. Silk Road will never ask for your payment PIN.</div>
+                  </div>
+                  <button className="sr-journey-secondary" onClick={onClose}>Back to marketplace</button>
+                </>
+              ) : (
+                <div className="sr-journey-hero">
+                  <div className="sr-journey-eyebrow">ORDER UPDATE</div>
+                  <h2>{delivered ? "Delivered. Enjoy!" : "Order cancelled"}</h2>
+                  <p>{delivered ? "Your delivery has been confirmed. Any seller payout is handled separately." : "Your order is marked cancelled. Contact support for the latest refund status."}</p>
+                  <button className="sr-journey-primary" onClick={onClose}>Back to marketplace</button>
                 </div>
               )}
-            </>
+            </div>
           )}
 
         </div>
