@@ -1,625 +1,159 @@
 import { useState, useEffect, useRef } from "react"
 
-const API_URL    = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
-const SOCKET_URL = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace("/api", "")
-  : "http://localhost:5000"
-
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+const SOCKET_URL = API_URL.replace(/\/api\/?$/, "")
 const STORAGE_KEY = "silkroad_orders"
-const NOTIF_KEY   = "silkroad_seller_notifications"
-
-const socketRegistry = {}
-let   socketInstance = null
-let   registeredId   = null
-
-// ── Order storage helpers ─────────────────────────────────────────────────────
-export function generateOrderId() {
-  return `SR-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
-}
-
-export function saveOrder(order) {
-  try {
-    const orders = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
-    orders[order.id] = { ...order, updatedAt: Date.now() }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(orders))
-  } catch {}
-}
-
-export function getOrder(id) {
-  try {
-    const orders = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
-    return orders[id] || null
-  } catch { return null }
-}
-
-export function getOrders() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") }
-  catch { return {} }
-}
-
-export function updateOrder(id, patch) {
-  try {
-    const orders = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")
-    if (orders[id]) {
-      orders[id] = { ...orders[id], ...patch, updatedAt: Date.now() }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(orders))
-    }
-  } catch {}
-}
-
-// ── Notification helpers ──────────────────────────────────────────────────────
-export function getSellerNotifications(sellerId) {
-  try {
-    const all = JSON.parse(localStorage.getItem(NOTIF_KEY) || "[]")
-    return all.filter(n => n.sellerId === String(sellerId)).sort((a, b) => b.createdAt - a.createdAt)
-  } catch { return [] }
-}
-
-export function markAllNotificationsRead(sellerId) {
-  try {
-    const all     = JSON.parse(localStorage.getItem(NOTIF_KEY) || "[]")
-    const updated = all.map(n => n.sellerId === String(sellerId) ? { ...n, status: "read" } : n)
-    localStorage.setItem(NOTIF_KEY, JSON.stringify(updated))
-  } catch {}
-}
-
-function saveNotification(notif) {
-  try {
-    const all    = JSON.parse(localStorage.getItem(NOTIF_KEY) || "[]")
-    const exists = all.find(n => n.id === notif.id)
-    if (!exists) {
-      all.unshift(notif)
-      if (all.length > 200) all.splice(200)
-      localStorage.setItem(NOTIF_KEY, JSON.stringify(all))
-    }
-  } catch {}
-}
-
-// ── Toast store ───────────────────────────────────────────────────────────────
+const NOTIF_KEY = "silkroad_seller_notifications"
+let socketInstance = null
+let registeredId = null
+let connectionSequence = 0
+const notificationListeners = new Set()
 const toastListeners = new Set()
-let   toastQueue     = []
+let toastQueue = []
+const readCache = () => { try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || "[]") } catch { return [] } }
+const notify = () => { notificationListeners.forEach(fn => fn()); window.dispatchEvent(new Event("silkroad_notifications_changed")) }
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem("silkroad_token") || ""}` })
 
-function fireToast(toast) {
-  toastQueue = [...toastQueue, { ...toast, id: Date.now() + Math.random() }]
-  toastListeners.forEach(cb => cb([...toastQueue]))
+export function generateOrderId() { return `SR-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}` }
+export function getOrders() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") } catch { return {} } }
+export function getOrder(id) { return getOrders()[id] || null }
+export function saveOrder(order) { try { const all = getOrders(); all[order.id] = { ...order, updatedAt: Date.now() }; localStorage.setItem(STORAGE_KEY, JSON.stringify(all)) } catch {} }
+export function updateOrder(id, patch) { const order = getOrder(id); if (order) saveOrder({ ...order, ...patch }) }
+export function getSellerNotifications(sellerId) { return readCache().filter(n => String(n.sellerId) === String(sellerId)).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)) }
+function setSellerNotifications(sellerId, incoming) {
+  const others = readCache().filter(n => String(n.sellerId) !== String(sellerId))
+  localStorage.setItem(NOTIF_KEY, JSON.stringify([...incoming, ...others].slice(0, 500)))
+  notify()
 }
-
-function dismissToast(id) {
-  toastQueue = toastQueue.filter(t => t.id !== id)
-  toastListeners.forEach(cb => cb([...toastQueue]))
+export async function refreshSellerNotifications(sellerId) {
+  if (!sellerId || !localStorage.getItem("silkroad_token")) return getSellerNotifications(sellerId)
+  try {
+    const response = await fetch(`${API_URL}/seller-notifications`, { headers: authHeaders() })
+    if (!response.ok) return getSellerNotifications(sellerId)
+    const data = await response.json()
+    setSellerNotifications(sellerId, data.notifications || [])
+  } catch (err) { console.warn("Notification sync unavailable", err) }
+  return getSellerNotifications(sellerId)
 }
+export function markAllNotificationsRead(sellerId) {
+  setSellerNotifications(sellerId, readCache().filter(n => String(n.sellerId) === String(sellerId)).map(n => ({ ...n, status: "read" })))
+  if (!localStorage.getItem("silkroad_token")) return
+  fetch(`${API_URL}/seller-notifications/read-all`, { method: "PUT", headers: authHeaders() })
+    .then(res => { if (!res.ok) throw new Error("Could not mark read") })
+    .catch(() => refreshSellerNotifications(sellerId))
+}
+function fireToast(toast) { toastQueue = [...toastQueue, { ...toast, id: Date.now() + Math.random() }]; toastListeners.forEach(fn => fn([...toastQueue])) }
+function dismissToast(id) { toastQueue = toastQueue.filter(t => t.id !== id); toastListeners.forEach(fn => fn([...toastQueue])) }
 
-// ── Socket singleton ──────────────────────────────────────────────────────────
 export function connectSellerSocket(sellerId) {
   if (!sellerId) return
   const id = String(sellerId)
-
-  if (socketInstance?.connected && registeredId === id) {
-    socketInstance.emit("register_seller", id)
-    return
-  }
-
-  if (socketInstance) {
-    socketInstance.disconnect()
-    socketInstance = null
-    registeredId   = null
-  }
-
+  const token = localStorage.getItem("silkroad_token")
+  if (!token) return
+  if (socketInstance && registeredId === id) { refreshSellerNotifications(id); return }
+  disconnectSocket()
+  const seq = ++connectionSequence
+  refreshSellerNotifications(id)
   import("socket.io-client").then(({ io }) => {
-    const s = io(SOCKET_URL, {
-      autoConnect:          true,
-      reconnection:         true,
-      reconnectionDelay:    1000,
-      reconnectionAttempts: Infinity,
-      transports:           ["websocket", "polling"],
+    if (seq !== connectionSequence) return
+    const socket = io(SOCKET_URL, { auth: { token }, reconnection: true, reconnectionDelay: 1000, reconnectionAttempts: Infinity, transports: ["websocket", "polling"] })
+    socketInstance = socket
+    registeredId = id
+    socket.on("connect", () => { socket.emit("register_seller", id); refreshSellerNotifications(id) })
+    socket.on("new_order", data => {
+      if (String(data.sellerId) !== id) return
+      const existing = getSellerNotifications(id)
+      if (existing.some(n => n.id === data.id)) return
+      setSellerNotifications(id, [{ ...data, sellerId: id, status: "unread" }, ...existing])
+      window.dispatchEvent(new CustomEvent("silkroad_new_order", { detail: data }))
+      fireToast({ type: "order", title: "🛒 New Paid Order!", message: `An order worth ₵${Number(data.amount || 0).toLocaleString()} is ready for fulfillment.` })
     })
-
-    s.on("connect", () => {
-      console.log(`🔌 Socket connected: ${s.id} — registering seller ${id}`)
-      s.emit("register_seller", id)
-      registeredId = id
-    })
-
-    s.on("seller_registered", (data) => {
-      console.log(`✅ Registered as seller ${data.sellerId}`)
-    })
-
-    s.on("reconnect", (attempt) => {
-      console.log(`🔄 Reconnected after ${attempt} attempt(s) — re-registering seller ${id}`)
-      s.emit("register_seller", id)
-    })
-
-    s.on("disconnect", (reason) => {
-      console.log(`🔌 Socket disconnected: ${reason}`)
-      if (reason === "io server disconnect") s.connect()
-    })
-
-    s.on("new_order", (data) => {
-      const notif = {
-        id:             data.orderId || `notif-${Date.now()}`,
-        sellerId:       id,
-        orderId:        data.orderId,
-        itemTitle:      data.itemTitle     || "New Order",
-        itemImage:      data.itemImage     || null,
-        amount:         data.amount        || 0,
-        buyerName:      data.buyerName     || "A buyer",
-        buyerContact:   data.buyerContact  || "",
-        location:       data.location      || "",
-        landmark:       data.landmark      || "",
-        paymentRef:     data.paymentRef    || "",
-        paymentMethod:  data.paymentMethod || "manual_momo",
-        deliveryMethod: data.deliveryMethod|| "pickup",
-        discount:       data.discount      || 0,
-        promoCode:      data.promoCode     || null,
-        status:         "unread",
-        createdAt:      Date.now(),
-      }
-      saveNotification(notif)
-      Object.values(socketRegistry).forEach(cb => cb(notif))
-      window.dispatchEvent(new CustomEvent("silkroad_new_order", { detail: notif }))
-      fireToast({
-        type:       "order",
-        title:      "🛒 New Order!",
-        message:    `${data.buyerName || "Someone"} ordered ${data.itemTitle || "your item"} · ₵${data.amount || 0}`,
-        persistent: false,
-      })
-    })
-
-    s.on("delivery_accepted", (d) => {
-      window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({ type: "delivery", title: "✅ Rider Accepted!", message: d.message || "A rider accepted your delivery job.", persistent: false })
-    })
-
-    s.on("delivery_picked_up", (d) => {
-      window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({ type: "delivery", title: "📦 Package Picked Up", message: d.message || "Rider picked up the package.", persistent: false })
-    })
-
-    s.on("delivery_at_door", (d) => {
-      window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({ type: "otp", title: "🚪 Package at Door!", message: "Package delivered. Waiting for buyer OTP confirmation.", persistent: true })
-    })
-
-    s.on("sale_completed", (d) => {
-      window.dispatchEvent(new CustomEvent("silkroad_sale_completed", { detail: d }))
-      fireToast({
-        type:      "success",
-        title:     "🎉 Sale Complete!",
-        message:   `₵${(d.sellerAmount || d.orderAmount || 0).toLocaleString()} added to your earnings.`,
-        persistent: false,
-      })
-    })
-
-    s.on("delivery_completed", (d) => {
-      window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({ type: "success", title: "✅ Delivery Confirmed!", message: d.message || "OTP confirmed. Payment released.", persistent: false })
-    })
-
-    s.on("delivery_cancelled_by_rider", (d) => {
-      window.dispatchEvent(new CustomEvent("silkroad_delivery_update", { detail: d }))
-      fireToast({ type: "warning", title: "⚠️ Rider Cancelled", message: d.message || "Rider cancelled. Job is back on the board.", persistent: false })
-    })
-
-    s.on("delivery_otp", (d) => {
-      window.dispatchEvent(new CustomEvent("silkroad_delivery_otp", { detail: d }))
-    })
-
-    socketInstance = s
-  }).catch(() => {})
+    const events = {
+      delivery_accepted: ["silkroad_delivery_update", "✅ Rider Accepted!"],
+      delivery_picked_up: ["silkroad_delivery_update", "📦 Package Picked Up"],
+      delivery_at_door: ["silkroad_delivery_update", "🚪 Package at Door!"],
+      sale_completed: ["silkroad_sale_completed", "🎉 Sale Complete!"],
+      delivery_completed: ["silkroad_delivery_update", "✅ Delivery Confirmed!"],
+      delivery_cancelled_by_rider: ["silkroad_delivery_update", "⚠️ Rider Cancelled"],
+      delivery_otp: ["silkroad_delivery_otp", null],
+    }
+    Object.entries(events).forEach(([event, [custom, title]]) => socket.on(event, data => {
+      window.dispatchEvent(new CustomEvent(custom, { detail: data }))
+      if (title) fireToast({ type: event === "delivery_at_door" ? "otp" : "delivery", title, message: data?.message || "Your order status has changed.", persistent: event === "delivery_at_door" })
+    }))
+  }).catch(err => console.warn("Socket initialization failed", err))
 }
+export function disconnectSocket() { ++connectionSequence; socketInstance?.disconnect(); socketInstance = null; registeredId = null }
 
-export function disconnectSocket() {
-  if (socketInstance) {
-    socketInstance.disconnect()
-    socketInstance = null
-    registeredId   = null
-  }
-}
-
-// ── Toast container ───────────────────────────────────────────────────────────
 export function ToastContainer() {
   const [toasts, setToasts] = useState([])
-
-  useEffect(() => {
-    toastListeners.add(setToasts)
-    return () => toastListeners.delete(setToasts)
-  }, [])
-
-  useEffect(() => {
-    const nonPersistent = toasts.filter(t => !t.persistent)
-    if (nonPersistent.length === 0) return
-    const timer = setTimeout(() => dismissToast(nonPersistent[0].id), 5000)
-    return () => clearTimeout(timer)
-  }, [toasts])
-
-  if (toasts.length === 0) return null
-
-  const STYLES = {
-    order:    { bg: "#161a1e", border: "#c8a97e", accent: "#c8a97e" },
-    delivery: { bg: "#0d1a2e", border: "#1d4ed8", accent: "#93c5fd" },
-    otp:      { bg: "#064e3b", border: "#065f46", accent: "#6ee7b7" },
-    success:  { bg: "#064e3b18", border: "#065f46", accent: "#6ee7b7" },
-    warning:  { bg: "#78350f18", border: "#92400e", accent: "#fcd34d" },
-  }
-
-  return (
-    <div style={{ position: "fixed", top: "16px", right: "16px", zIndex: 9999, display: "flex", flexDirection: "column", gap: "10px", maxWidth: "320px", pointerEvents: "none" }}>
-      <style>{`@keyframes slideInToast { from { transform: translateX(110%); opacity: 0 } to { transform: translateX(0); opacity: 1 } }`}</style>
-      {toasts.map(toast => {
-        const s = STYLES[toast.type] || STYLES.order
-        return (
-          <div key={toast.id}
-            style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: "14px", padding: "14px 16px", display: "flex", gap: "12px", alignItems: "flex-start", boxShadow: "0 8px 32px rgba(0,0,0,.6)", pointerEvents: "all", animation: "slideInToast .25s ease" }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "13px", fontWeight: "700", color: s.accent, marginBottom: "4px" }}>
-                {toast.title}
-                {toast.persistent && (
-                  <span style={{ marginLeft: "8px", fontSize: "10px", fontWeight: "600", background: s.border + "44", color: s.accent, padding: "2px 7px", borderRadius: "20px", letterSpacing: ".04em" }}>STAY</span>
-                )}
-              </div>
-              <div style={{ fontSize: "12px", color: toast.type === "otp" ? "#a7f3d0" : "#888", lineHeight: "1.5", fontWeight: toast.type === "otp" ? "600" : "400" }}>
-                {toast.message}
-              </div>
-            </div>
-            <button onClick={() => dismissToast(toast.id)}
-              style={{ background: "transparent", border: "none", color: "#aaa", cursor: "pointer", fontSize: "18px", minHeight: "auto", padding: "0", flexShrink: 0, lineHeight: 1, fontWeight: "700" }}>
-              {"✕"}
-            </button>
-          </div>
-        )
-      })}
-    </div>
-  )
+  useEffect(() => { toastListeners.add(setToasts); return () => { toastListeners.delete(setToasts) } }, [])
+  useEffect(() => { const first = toasts.find(t => !t.persistent); if (!first) return; const t = setTimeout(() => dismissToast(first.id), 5000); return () => clearTimeout(t) }, [toasts])
+  return <div style={{ position: "fixed", top: 16, right: 16, zIndex: 9999, maxWidth: 330, display: "grid", gap: 10 }}>{toasts.map(t => <div key={t.id} style={{ background: "#161a1e", border: "1px solid #c8a97e", borderRadius: 14, padding: 16, color: "#ddd", boxShadow: "0 8px 30px #0008" }}><div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}><strong style={{ color: "#c8a97e" }}>{t.title}</strong><button onClick={() => dismissToast(t.id)} style={{ background: "none", border: 0, color: "#ddd", cursor: "pointer" }}>✕</button></div><div style={{ fontSize: 12, marginTop: 7 }}>{t.message}</div></div>)}</div>
 }
-
-// ── Notification bell ─────────────────────────────────────────────────────────
 export function NotificationBell({ sellerId, onClick }) {
   const [count, setCount] = useState(0)
-
-  const refresh = () => {
-    if (!sellerId) return
-    setCount(getSellerNotifications(sellerId).filter(n => n.status === "unread").length)
-  }
-
   useEffect(() => {
-    refresh()
-    const key = String(sellerId || "bell")
-    socketRegistry[key] = refresh
-    window.addEventListener("silkroad_new_order", refresh)
+    const refresh = () => setCount(getSellerNotifications(sellerId).filter(n => n.status === "unread").length)
+    refresh(); refreshSellerNotifications(sellerId)
+    notificationListeners.add(refresh)
     window.addEventListener("storage", refresh)
-    return () => {
-      delete socketRegistry[key]
-      window.removeEventListener("silkroad_new_order", refresh)
-      window.removeEventListener("storage", refresh)
-    }
+    const timer = setInterval(() => refreshSellerNotifications(sellerId), 30000)
+    return () => { notificationListeners.delete(refresh); window.removeEventListener("storage", refresh); clearInterval(timer) }
   }, [sellerId])
-
-  return (
-    <button onClick={onClick}
-      style={{ position: "relative", background: "transparent", border: "none", color: "#aaa", fontSize: "22px", cursor: "pointer", padding: "4px" }}>
-      {"🔔"}
-      {count > 0 && (
-        <span style={{ position: "absolute", top: "-2px", right: "-2px", background: "#c8a97e", color: "#000", fontSize: "9px", fontWeight: "800", borderRadius: "50%", width: "16px", height: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {count > 9 ? "9+" : count}
-        </span>
-      )}
-    </button>
-  )
+  return <button onClick={onClick} aria-label={`Notifications: ${count} unread`} style={{ position: "relative", background: "transparent", border: 0, fontSize: 22, cursor: "pointer", padding: 4 }}>🔔{count > 0 && <span style={{ position: "absolute", top: -3, right: -3, background: "#c8a97e", color: "#000", borderRadius: 20, fontSize: 10, fontWeight: 800, minWidth: 17, height: 17, display: "grid", placeItems: "center" }}>{count > 9 ? "9+" : count}</span>}</button>
 }
-
-// ── Order ID banner ───────────────────────────────────────────────────────────
 export function OrderIdBanner({ orderId }) {
   const [copied, setCopied] = useState(false)
-  const copy = () => {
-    navigator.clipboard.writeText(orderId)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
-  }
-  return (
-    <div style={{ background: "#161616", border: "1px solid #c8a97e44", borderRadius: "14px", padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
-      <div>
-        <div style={{ fontSize: "10px", color: "#c8a97e", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "4px" }}>YOUR ORDER ID</div>
-        <div style={{ fontSize: "16px", fontWeight: "800", color: "#f0ede8", fontFamily: "monospace", letterSpacing: ".04em" }}>{orderId}</div>
-        <div style={{ fontSize: "11px", color: "#444", marginTop: "3px" }}>Save this to track your order anytime</div>
-      </div>
-      <button onClick={copy}
-        style={{ background: copied ? "#064e3b" : "#1a1a1a", border: `1px solid ${copied ? "#065f46" : "#222"}`, color: copied ? "#6ee7b7" : "#c8a97e", padding: "8px 14px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit", whiteSpace: "nowrap" }}>
-        {copied ? "✅ Copied!" : "📋 Copy"}
-      </button>
-    </div>
-  )
+  return <div style={{ background: "#161616", border: "1px solid #c8a97e44", borderRadius: 14, padding: 18, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}><div><small style={{ color: "#c8a97e" }}>YOUR ORDER ID</small><div style={{ fontFamily: "monospace", fontWeight: 800 }}>{orderId}</div><small>Save this to track your order</small></div><button onClick={() => navigator.clipboard.writeText(orderId).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })}>{copied ? "Copied!" : "Copy"}</button></div>
 }
-
-// ── Main OrderTracker modal ───────────────────────────────────────────────────
 export default function OrderTracker({ onClose, onOpenOrder }) {
-  const [input, setInput]             = useState("")
-  const [order, setOrder]             = useState(null)
-  const [notFound, setNotFound]       = useState(false)
-  const [searching, setSearching]     = useState(false)
+  const [input, setInput] = useState("")
+  const [order, setOrder] = useState(null)
+  const [notFound, setNotFound] = useState(false)
+  const [searching, setSearching] = useState(false)
   const [deliveryOtp, setDeliveryOtp] = useState(null)
-  const [completed, setCompleted]     = useState(false)
-  const pollRef                       = useRef(null)
-  const completionPollRef             = useRef(null)
-
-  // ── Search — localStorage first, backend fallback for incognito ───────────
+  const [completed, setCompleted] = useState(false)
+  const pollRef = useRef(null)
   const search = async () => {
-    const id = input.trim().toUpperCase()
-    if (!id) return
-
-    setSearching(true)
-    setNotFound(false)
-    setOrder(null)
-    setDeliveryOtp(null)
-    setCompleted(false)
-
-    // 1. localStorage fast path
-    const local = getOrder(id)
-    if (local) {
-      setOrder(local)
-      setSearching(false)
-      return
-    }
-
-    // 2. Backend fallback — incognito / tab closed / storage cleared
-    try {
-      const orderRes   = await fetch(`${API_URL}/orders/by-local-id/${encodeURIComponent(id)}`)
-      const orderData  = orderRes.ok ? await orderRes.json() : null
-
-      const deliveryRes  = await fetch(`${API_URL}/deliveries/by-order/${encodeURIComponent(id)}`)
-      const deliveryData = deliveryRes.ok ? await deliveryRes.json() : null
-      const delivery     = deliveryData?.delivery || null
-
-      if (!orderData && !delivery) {
-        setNotFound(true)
-        setSearching(false)
-        return
+    const id = input.trim().toUpperCase(); if (!id) return
+    setSearching(true); setNotFound(false); setOrder(null); setDeliveryOtp(null); setCompleted(false)
+    let found = getOrder(id)
+    if (!found) try {
+      const [o, d] = await Promise.all([fetch(`${API_URL}/orders/by-local-id/${encodeURIComponent(id)}`), fetch(`${API_URL}/deliveries/by-order/${encodeURIComponent(id)}`)])
+      const orderData = o.ok ? await o.json() : null
+      const deliveryData = d.ok ? await d.json() : null
+      const delivery = deliveryData?.delivery
+      if (orderData || delivery) {
+        found = { id, total: orderData?.amount || 0, deliveryMethod: orderData?.deliveryMethod || (delivery ? "rider" : "pickup"), location: orderData?.location || null, landmark: orderData?.landmark || null, status: orderData?.status || "Pending Confirmation", delivered: orderData?.status === "Completed" ? true : orderData?.status === "Refunded" ? false : null, createdAt: orderData?.createdAt ? new Date(orderData.createdAt).getTime() : Date.now(), cart: [], _fromBackend: true }
+        saveOrder(found)
+        if (delivery?.status === "completed") setCompleted(true)
       }
-
-      const rebuilt = {
-        id,
-        total:          orderData?.amount         || 0,
-        subtotal:       orderData?.amount         || 0,
-        deliveryMethod: orderData?.deliveryMethod || (delivery ? "rider" : "pickup"),
-        location:       orderData?.location       || null,
-        manualLocation: orderData?.location       || null,
-        landmark:       orderData?.landmark       || null,
-        paymentRef:     orderData?.paystackRef    || null,
-        status:         orderData?.status         || "Pending Confirmation",
-        delivered:      orderData?.status === "Completed" ? true
-                      : orderData?.status === "Refunded"  ? false
-                      : null,
-        createdAt:      orderData?.createdAt
-                          ? new Date(orderData.createdAt).getTime()
-                          : Date.now(),
-        cart:           [],
-        _fromBackend:   true,
-      }
-
-      saveOrder(rebuilt)
-      setOrder(rebuilt)
-
-      // If rider already delivered, fetch OTP
-      if (delivery?.status === "delivered") {
-        const otpRes  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(id)}`)
-        const otpData = otpRes.ok ? await otpRes.json() : null
-        if (otpData?.otp) setDeliveryOtp(otpData)
-      }
-
-      // If already completed
-      if (delivery?.status === "completed" || orderData?.status === "Completed") {
-        setCompleted(true)
-      }
-
-    } catch (err) {
-      console.warn("Backend order lookup failed:", err.message)
-      setNotFound(true)
-    }
-
-    setSearching(false)
+    } catch (err) { console.warn("Order lookup failed", err) }
+    setOrder(found); setNotFound(!found); setSearching(false)
   }
-
-  // ── OTP poll ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (pollRef.current) clearInterval(pollRef.current)
-    if (!order || order.deliveryMethod !== "rider" || order.delivered !== null || completed) return
-
+    if (!order || order.deliveryMethod !== "rider" || completed) return
     const poll = async () => {
       try {
-        const res  = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(order.id)}`)
-        const data = res.ok ? await res.json() : null
-        if (data?.otp) {
-          setDeliveryOtp(data)
-          clearInterval(pollRef.current)
+        const r = await fetch(`${API_URL}/deliveries/otp-for-order/${encodeURIComponent(order.id)}`)
+        if (r.ok) { const d = await r.json(); if (d?.otp) setDeliveryOtp(d) }
+        if (deliveryOtp?.deliveryId) {
+          const statusRes = await fetch(`${API_URL}/deliveries/${deliveryOtp.deliveryId}`)
+          if (statusRes.ok && (await statusRes.json())?.status === "completed") { setCompleted(true); updateOrder(order.id, { delivered: true, status: "Completed" }) }
         }
       } catch {}
     }
-
-    poll()
-    pollRef.current = setInterval(poll, 5000)
+    poll(); pollRef.current = setInterval(poll, 5000)
     return () => clearInterval(pollRef.current)
-  }, [order, completed])
-
-  // ── Completion poll ───────────────────────────────────────────────────────
+  }, [order, completed, deliveryOtp?.deliveryId])
   useEffect(() => {
-    if (completionPollRef.current) clearInterval(completionPollRef.current)
-    if (!order || order.deliveryMethod !== "rider" || !deliveryOtp || completed) return
-
-    const poll = async () => {
-      try {
-        if (deliveryOtp.deliveryId) {
-          const res  = await fetch(`${API_URL}/deliveries/${deliveryOtp.deliveryId}`)
-          const data = res.ok ? await res.json() : null
-          if (data?.status === "completed") {
-            setCompleted(true)
-            updateOrder(order.id, { delivered: true, status: "Completed" })
-            clearInterval(completionPollRef.current)
-          }
-        }
-      } catch {}
-    }
-
-    completionPollRef.current = setInterval(poll, 5000)
-    return () => clearInterval(completionPollRef.current)
-  }, [order, deliveryOtp, completed])
-
-  // ── Socket listeners ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!order || order.deliveryMethod !== "rider") return
-
-    const otpHandler = (e) => {
-      const d = e.detail
-      if (d?.otp) {
-        setDeliveryOtp(d)
-        if (pollRef.current) clearInterval(pollRef.current)
-      }
-    }
-
-    const completedHandler = (e) => {
-      const d = e.detail
-      if (d?.localOrderId === order.id || d?.orderId === order.id) {
-        setCompleted(true)
-        updateOrder(order.id, { delivered: true, status: "Completed" })
-        if (completionPollRef.current) clearInterval(completionPollRef.current)
-      }
-    }
-
-    window.addEventListener("silkroad_delivery_otp",   otpHandler)
-    window.addEventListener("silkroad_sale_completed", completedHandler)
-    return () => {
-      window.removeEventListener("silkroad_delivery_otp",   otpHandler)
-      window.removeEventListener("silkroad_sale_completed", completedHandler)
-    }
+    if (!order) return
+    const otp = e => { if (e.detail?.otp) setDeliveryOtp(e.detail) }
+    const done = e => { if (e.detail?.localOrderId === order.id || e.detail?.orderId === order.id) { setCompleted(true); updateOrder(order.id, { delivered: true, status: "Completed" }) } }
+    window.addEventListener("silkroad_delivery_otp", otp); window.addEventListener("silkroad_sale_completed", done)
+    return () => { window.removeEventListener("silkroad_delivery_otp", otp); window.removeEventListener("silkroad_sale_completed", done) }
   }, [order])
-
-  const fmt          = (ts) => new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
-  const isRiderOrder = order?.deliveryMethod === "rider"
-  const isCompleted  = completed || order?.delivered === true
-
-  return (
-    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-      <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "480px", maxHeight: "92vh", overflowY: "auto", border: "1px solid #1e1e1e" }}>
-
-        <div style={{ padding: "18px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: "17px", fontWeight: "700" }}>{"📦"} Track Your Order</span>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>{"✕"}</button>
-        </div>
-
-        <div style={{ padding: "22px", display: "flex", flexDirection: "column", gap: "16px" }}>
-
-          <div>
-            <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>ENTER YOUR ORDER ID</div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <input
-                placeholder="e.g. SR-M5X3K2-AB12"
-                value={input}
-                onChange={e => setInput(e.target.value.toUpperCase())}
-                onKeyDown={e => e.key === "Enter" && search()}
-                style={{ flex: 1, background: "#161616", border: "1px solid #1e1e1e", color: "#f0ede8", padding: "12px 16px", borderRadius: "10px", fontSize: "15px", fontFamily: "monospace", letterSpacing: ".04em", outline: "none" }}
-              />
-              <button onClick={search} disabled={searching}
-                style={{ background: "#c8a97e", border: "none", padding: "12px 20px", borderRadius: "10px", fontWeight: "700", cursor: searching ? "not-allowed" : "pointer", fontSize: "14px", fontFamily: "inherit", color: "#000", whiteSpace: "nowrap", opacity: searching ? 0.7 : 1 }}>
-                {searching ? "⏳" : "Track →"}
-              </button>
-            </div>
-            {searching && (
-              <div style={{ fontSize: "12px", color: "#555", marginTop: "8px", textAlign: "center" }}>
-                Looking up your order...
-              </div>
-            )}
-          </div>
-
-          {notFound && (
-            <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "14px 16px", fontSize: "13px", color: "#fca5a5" }}>
-              {"⚠️"} Order not found. Check the ID and try again. Make sure you have the exact SR-XXXXX code from your receipt.
-            </div>
-          )}
-
-          {order && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-
-              <div style={{ background: isCompleted ? "#064e3b18" : "#1e3a5f18", border: `1px solid ${isCompleted ? "#065f46" : "#1d4ed8"}`, borderRadius: "14px", padding: "16px 18px" }}>
-                <div style={{ fontSize: "11px", color: isCompleted ? "#6ee7b7" : "#93c5fd", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "6px" }}>STATUS</div>
-                <div style={{ fontSize: "17px", fontWeight: "800", color: isCompleted ? "#6ee7b7" : "#93c5fd" }}>
-                  {isCompleted               ? "✅ Delivered & Complete"
-                  : order.delivered === false ? "❌ Cancelled / Refund Pending"
-                  : isRiderOrder             ? "🛵 Rider Delivery in Progress"
-                  :                            "⏳ Awaiting Delivery"}
-                </div>
-              </div>
-
-              <div style={{ background: "#161616", borderRadius: "14px", padding: "16px 18px", fontSize: "13px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                <div style={{ fontSize: "10px", color: "#444", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "4px" }}>ORDER DETAILS</div>
-                <div>{"🏷️"} ID: <span style={{ color: "#c8a97e", fontFamily: "monospace", fontWeight: "700" }}>{order.id}</span></div>
-                {order.total > 0 && <div>{"💰"} Total: <span style={{ color: "#aaa" }}>{"₵"}{order.total?.toLocaleString()}</span></div>}
-                <div>{"🚚"} Delivery: <span style={{ color: "#aaa" }}>{isRiderOrder ? "🛵 Rider" : "📍 Pickup"}</span></div>
-                {order.location
-                  ? <div>{"📍"} GPS: <span style={{ color: "#aaa", fontFamily: "monospace", fontSize: "11px" }}>{typeof order.location === "object" ? `${order.location.lat}, ${order.location.lng}` : order.location}</span></div>
-                  : order.manualLocation ? <div>{"📍"} <span style={{ color: "#aaa" }}>{order.manualLocation}</span></div> : null}
-                {order.landmark && <div>{"🗺️"} <span style={{ color: "#aaa" }}>{order.landmark}</span></div>}
-                <div>{"📅"} Placed: <span style={{ color: "#aaa" }}>{fmt(order.createdAt)}</span></div>
-                {order._fromBackend && (
-                  <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>{"ℹ️"} Retrieved from server</div>
-                )}
-              </div>
-
-              {/* OTP section */}
-              {isRiderOrder && !isCompleted && order.delivered !== false && (
-                deliveryOtp ? (
-                  <div style={{ background: "#064e3b18", border: "2px solid #065f46", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column", gap: "14px", textAlign: "center" }}>
-                    <div style={{ fontSize: "28px" }}>{"🚪"}</div>
-                    <div>
-                      <div style={{ fontSize: "15px", fontWeight: "700", color: "#6ee7b7", marginBottom: "6px" }}>Your Package Has Arrived!</div>
-                      <div style={{ fontSize: "13px", color: "#888" }}>Read this 6-digit code to the rider to confirm delivery</div>
-                    </div>
-                    <div style={{ fontSize: "52px", fontWeight: "900", color: "#c8a97e", fontFamily: "monospace", letterSpacing: ".2em", background: "#161616", borderRadius: "14px", padding: "20px 12px", border: "2px solid #c8a97e44" }}>
-                      {deliveryOtp.otp}
-                    </div>
-                    {deliveryOtp.expiresAt && (
-                      <div style={{ fontSize: "12px", color: "#555" }}>
-                        {"⏰"} Expires at {new Date(deliveryOtp.expiresAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                      </div>
-                    )}
-                    <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
-                      {"⚠️"} Only share this with the rider delivering your package.
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ background: "#161616", border: "1px solid #1e1e1e", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#c8a97e", flexShrink: 0 }} />
-                      <div style={{ fontSize: "13px", color: "#888" }}>Waiting for rider to deliver...</div>
-                    </div>
-                    <div style={{ fontSize: "12px", color: "#444", lineHeight: "1.7" }}>
-                      When the rider arrives and marks your package delivered, a 6-digit OTP will appear here automatically.
-                    </div>
-                  </div>
-                )
-              )}
-
-              {!isCompleted && order.delivered !== false && (
-                <button onClick={() => { onOpenOrder(order); onClose() }}
-                  style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "14px", borderRadius: "12px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-                  {"📂"} Open Full Order View
-                </button>
-              )}
-
-              {isCompleted && (
-                <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "20px", textAlign: "center", display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <div style={{ fontSize: "40px" }}>{"🎉"}</div>
-                  <div style={{ fontSize: "16px", fontWeight: "800", color: "#6ee7b7" }}>Order Complete!</div>
-                  <div style={{ fontSize: "13px", color: "#888" }}>Payment has been released to the seller.</div>
-                </div>
-              )}
-
-              {order.delivered === false && !isCompleted && (
-                <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#fca5a5", textAlign: "center" }}>
-                  Your refund of {"₵"}{order.total?.toLocaleString()} is being processed.
-                </div>
-              )}
-
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
+  const btn = { border: 0, borderRadius: 10, background: "#c8a97e", color: "#000", padding: "12px 16px", fontWeight: 700, cursor: "pointer" }
+  return <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000c", zIndex: 200, display: "grid", placeItems: "center", padding: 20 }}><div className="modal-content" style={{ background: "#111", color: "#eee", width: "100%", maxWidth: 480, maxHeight: "92vh", overflowY: "auto", borderRadius: 20, border: "1px solid #333", padding: 22 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><h3>📦 Track Your Order</h3><button onClick={onClose} style={{ background: "none", border: 0, color: "#ddd", cursor: "pointer" }}>✕</button></div><div style={{ display: "flex", gap: 8, marginTop: 18 }}><input value={input} onChange={e => setInput(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && search()} placeholder="Enter SR- order ID" style={{ minWidth: 0, flex: 1, borderRadius: 10, padding: 12, background: "#222", border: "1px solid #444", color: "#fff" }}/><button onClick={search} disabled={searching} style={btn}>{searching ? "Searching" : "Track"}</button></div>{notFound && <p style={{ color: "#fca5a5" }}>Order not found. Check your order ID.</p>}{order && <div style={{ marginTop: 20, display: "grid", gap: 14 }}><div style={{ border: "1px solid #c8a97e55", padding: 16, borderRadius: 12 }}><strong>{completed || order.delivered === true ? "✅ Delivered & Complete" : order.delivered === false ? "❌ Cancelled / Refund Pending" : order.status || "⏳ Awaiting Delivery"}</strong></div><div style={{ background: "#191919", padding: 16, borderRadius: 12, display: "grid", gap: 8 }}><div>ID: {order.id}</div><div>Total: ₵{Number(order.total || 0).toLocaleString()}</div><div>Delivery: {order.deliveryMethod === "rider" ? "Rider" : "Pickup"}</div><div>Placed: {new Date(order.createdAt).toLocaleString()}</div></div>{order.deliveryMethod === "rider" && !completed && (deliveryOtp?.otp ? <div style={{ textAlign: "center", border: "1px solid #065f46", borderRadius: 12, padding: 20 }}><h4>🚪 Your Package Has Arrived!</h4><p>Read this code only to the rider delivering your package.</p><div style={{ fontSize: 40, letterSpacing: 6, color: "#c8a97e", fontWeight: 900 }}>{deliveryOtp.otp}</div></div> : <p>Waiting for rider delivery and OTP confirmation…</p>)}{!completed && order.delivered !== false && <button style={btn} onClick={() => { onOpenOrder?.(order); onClose?.() }}>📂 Open Full Order View</button>}{completed && <p style={{ color: "#6ee7b7" }}>🎉 Order complete. Delivery confirmed.</p>}</div>}</div></div>
 }
