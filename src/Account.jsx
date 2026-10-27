@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react"
+import SellerCommissionNotices from "./SellerCommissionNotices"
 import { updateProfile, changePassword, deleteAccount, getMyOrders, getSellingOrders, getMyListings, updateListing, deleteListing } from "./api"
 import { getOrders, updateOrder, getSellerNotifications, markAllNotificationsRead } from "./OrderTracker"
 
@@ -1080,6 +1081,7 @@ export default function Account({ user, onSignOut, onClose, onUserUpdate, notifT
               <>
                 <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#f0ede8", marginBottom: "6px", letterSpacing: "-0.02em" }}>🔔 Notifications</h1>
                 <p style={{ fontSize: "14px", color: "#555", marginBottom: "24px" }}>Every order for your listings — choose how to deliver each one.</p>
+                <SellerCommissionNotices userToken={localStorage.getItem("silkroad_token") || localStorage.getItem("token") || ""} />
                 <NotificationsTab user={user} onSaleComplete={handleSaleComplete} />
               </>
             )}

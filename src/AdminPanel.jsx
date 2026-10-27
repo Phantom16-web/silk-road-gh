@@ -1,3 +1,5 @@
+import RemovedRecordsPanel from "./RemovedRecordsPanel.jsx"
+import OwnerCommissionStudio from "./OwnerCommissionStudio.jsx"
 import { useState, useEffect, useCallback } from "react"
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
@@ -79,44 +81,32 @@ function StatusDot({ status }) {
 
 function Stat({ label, value, sub, accent }) {
   return (
-    <div style={{ borderTop: `2px solid ${accent || C.border2}`, paddingTop: 14 }}>
-      <div style={{ fontSize: 26, fontWeight: 800, color: accent || C.text, letterSpacing: "-0.03em", lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 12, color: C.textMid, marginTop: 6, fontWeight: 500 }}>{label}</div>
-      {sub && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>{sub}</div>}
+    <div className="sr-metric-card" style={{ "--metric-accent": accent || C.gold }}>
+      <div className="sr-metric-label">{label}</div>
+      <div className="sr-metric-value">{value ?? "—"}</div>
+      <div className="sr-metric-footer">{sub || "Marketplace overview"}</div>
     </div>
   )
 }
 
 function Table({ columns, rows, empty = "No records." }) {
-  if (!rows.length) return (
-    <div style={{ padding: "48px 0", textAlign: "center", color: C.textDim, fontSize: 13 }}>{empty}</div>
-  )
-  return (
-    <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 480 }}>
-        <thead>
-          <tr>
-            {columns.map(col => (
-              <th key={col.key} style={{ textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${C.border}`, color: C.textDim, fontWeight: 600, fontSize: 11, whiteSpace: "nowrap" }}>
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-              {columns.map(col => (
-                <td key={col.key} style={{ padding: "11px 14px", color: C.text, verticalAlign: "middle", whiteSpace: col.wrap ? "normal" : "nowrap" }}>
-                  {col.render ? col.render(row) : row[col.key] ?? "—"}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+  const [query,setQuery]=useState("")
+  const [page,setPage]=useState(1)
+  const [size,setSize]=useState(10)
+  const matching=rows.filter(r=>!query||columns.some(c=>{const v=r[c.key];return typeof v==="string"||typeof v==="number" ? String(v).toLowerCase().includes(query.toLowerCase()) : false}))
+  const pages=Math.max(1,Math.ceil(matching.length/size))
+  const visible=matching.slice((Math.min(page,pages)-1)*size,Math.min(page,pages)*size)
+  return <div className="sr-records" style={{background:C.surface,border:`1px solid ${C.border2}`,borderRadius:16,overflow:"hidden"}}>
+    <div style={{padding:"16px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div style={{color:C.textMid,fontSize:12}}>{matching.length} records</div>
+      <input aria-label="Search records" placeholder="Search records..." value={query} onChange={e=>{setQuery(e.target.value);setPage(1)}} style={{background:C.surface2,border:`1px solid ${C.border2}`,borderRadius:9,color:C.text,padding:"10px 12px",fontSize:12,minWidth:170,maxWidth:"100%"}} />
     </div>
-  )
+    {!visible.length?<div style={{padding:"40px 18px",textAlign:"center",color:C.textDim,fontSize:13}}>{query?"No matching records.":empty}</div>:<>
+      <div className="sr-table-desktop" style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:520}}><thead><tr>{columns.map(c=><th key={c.key} style={{textAlign:"left",padding:"13px 15px",borderBottom:`1px solid ${C.border2}`,color:C.textMid,fontSize:11,whiteSpace:"nowrap"}}>{c.label}</th>)}</tr></thead><tbody>{visible.map((r,i)=><tr key={r._id||r.id||i} style={{borderBottom:`1px solid ${C.border}`}}>{columns.map(c=><td key={c.key} style={{padding:"15px",verticalAlign:"middle",color:C.text,whiteSpace:c.wrap?"normal":"nowrap"}}>{c.render?c.render(r):r[c.key]??"—"}</td>)}</tr>)}</tbody></table></div>
+      <div className="sr-table-mobile">{visible.map((r,i)=><div key={r._id||r.id||i} style={{padding:16,borderTop:`1px solid ${C.border}`,display:"grid",gap:10}}>{columns.map(c=><div key={c.key} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,minWidth:0}}><span style={{color:C.textDim,fontSize:11,flexShrink:0}}>{c.label||"Actions"}</span><div style={{color:C.text,fontSize:12,textAlign:"right",minWidth:0,overflowWrap:"anywhere"}}>{c.render?c.render(r):r[c.key]??"—"}</div></div>)}</div>)}</div>
+    </>}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"12px 16px",flexWrap:"wrap"}}><select aria-label="Records per page" value={size} onChange={e=>{setSize(Number(e.target.value));setPage(1)}} style={{background:C.surface2,color:C.textMid,border:`1px solid ${C.border2}`,padding:7,borderRadius:8}}><option value={10}>10 per page</option><option value={25}>25 per page</option><option value={50}>50 per page</option></select><div style={{display:"flex",alignItems:"center",gap:10}}><button disabled={page<=1} onClick={()=>setPage(p=>p-1)}>‹</button><span style={{fontSize:11,color:C.textMid}}>{Math.min(page,pages)} / {pages}</span><button disabled={page>=pages} onClick={()=>setPage(p=>p+1)}>›</button></div></div>
+  </div>
 }
 
 function Pagination({ page, pages, onPage }) {
@@ -161,9 +151,14 @@ function Btn({ children, onClick, disabled, variant = "primary", size = "md", fu
 }
 
 function Modal({ title, onClose, children, width = 480 }) {
+  useEffect(() => {
+    const handleKey = (event) => { if (event.key === "Escape") onClose() }
+    window.addEventListener("keydown", handleKey)
+    return () => window.removeEventListener("keydown", handleKey)
+  }, [onClose])
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, width: "100%", maxWidth: width, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label={title} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, width: "100%", maxWidth: width, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: C.surface, zIndex: 1 }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{title}</span>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: C.textDim, fontSize: 20, cursor: "pointer" }}>{"✕"}</button>
@@ -487,7 +482,7 @@ function DashboardTab() {
     <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
       <div>
         <SectionTitle>Platform Overview</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 20, marginTop: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 185px), 1fr))", gap: 14, marginTop: 20 }}>
           <Stat label="Total Users"       value={data.users?.toLocaleString()}            accent={C.gold}  />
           <Stat label="Active Listings"   value={data.listings?.toLocaleString()}                          />
           <Stat label="Total Orders"      value={data.orders?.toLocaleString()}                            />
@@ -498,7 +493,7 @@ function DashboardTab() {
       </div>
       <div>
         <SectionTitle>Financials</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 20, marginTop: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 185px), 1fr))", gap: 14, marginTop: 20 }}>
           <Stat label="Platform Revenue"  value={fmtGHS(data.revenue)}      accent={C.gold}   sub="Completed orders" />
           <Stat label="Total GMV"         value={fmtGHS(data.totalVolume)}   accent={C.green}  sub="Gross merchandise value" />
           <Stat label="In Escrow"         value={fmtGHS(data.escrowHeld)}    accent={C.yellow} sub="Held pending delivery" />
@@ -535,6 +530,14 @@ function UsersTab() {
   const suspend   = async u => { await adminFetch(`/admin/users/${u._id}/suspend`,   { method: "PUT", body: JSON.stringify({ reason: "Suspended by admin" }) }); load(page) }
   const reinstate = async u => { await adminFetch(`/admin/users/${u._id}/reinstate`,  { method: "PUT" }); load(page) }
 
+  const removeUser = async u => {
+    const reason = window.prompt(`Reason for removing ${u.name} (at least 10 characters):`)
+    if (!reason) return
+    const {ok,data} = await adminFetch(`/admin-moderation/users/${u._id}/remove`, {method:"POST",body:JSON.stringify({reason})})
+    if (!ok) { window.alert(data.message || "Removal blocked"); return }
+    window.alert(data.message); load(page)
+  }
+
   const columns = [
     { key: "name",       label: "Name",       render: u => <span style={{ color: C.text, fontWeight: 600 }}>{u.name}</span> },
     { key: "email",      label: "Email",      render: u => <span style={{ color: C.textMid, fontSize: 12 }}>{u.email}</span> },
@@ -543,6 +546,7 @@ function UsersTab() {
     { key: "createdAt",  label: "Joined",     render: u => fmt(u.createdAt) },
     { key: "actions",    label: "",           render: u => (
       <div style={{ display: "flex", gap: 6 }}>
+        <Btn size="sm" variant="danger" onClick={() => removeUser(u)}>Remove account</Btn>
         {u.status === "Suspended"
           ? <Btn size="sm" variant="success" onClick={() => setConfirm({ action: "reinstate", user: u })}>Reinstate</Btn>
           : <Btn size="sm" variant="danger"  onClick={() => setConfirm({ action: "suspend",   user: u })}>Suspend</Btn>}
@@ -592,6 +596,8 @@ function ListingsTab() {
   const [search, setSearch]     = useState("")
   const [loading, setLoading]   = useState(false)
   const [confirm, setConfirm]   = useState(null)
+  const [removalReason, setRemovalReason] = useState("")
+  const [actionError, setActionError] = useState("")
 
   const load = useCallback(async (p = 1, q = search) => {
     setLoading(true)
@@ -603,7 +609,13 @@ function ListingsTab() {
   useEffect(() => { load(1) }, [])
 
   const flag   = async l => { await adminFetch(`/admin/listings/${l._id}/flag`, { method: "PUT" }); load(page) }
-  const remove = async l => { await adminFetch(`/admin/listings/${l._id}`,       { method: "DELETE" }); load(page) }
+  const remove = async l => {
+    setActionError("")
+    if(removalReason.trim().length<10){setActionError("Enter a specific reason (at least 10 characters).");return false}
+    const {ok,data}=await adminFetch(`/admin-moderation/listings/${l._id}/remove`, { method: "POST", body: JSON.stringify({reason: removalReason.trim()}) })
+    if(!ok){setActionError(data.message||"Removal failed");return false}
+    await load(page);return true
+  }
 
   const columns = [
     { key: "image",    label: "",         render: l => l.image ? <img src={l.image} alt={l.title} style={{ width: 36, height: 36, objectFit: "cover", borderRadius: 4 }} /> : <div style={{ width: 36, height: 36, background: C.surface2, borderRadius: 4 }} /> },
@@ -615,7 +627,7 @@ function ListingsTab() {
     { key: "actions",  label: "",         render: l => (
       <div style={{ display: "flex", gap: 6 }}>
         {l.status !== "Flagged" && <Btn size="sm" variant="ghost" onClick={() => setConfirm({ action: "flag", listing: l })}>Flag</Btn>}
-        <Btn size="sm" variant="danger" onClick={() => setConfirm({ action: "remove", listing: l })}>Remove</Btn>
+        <Btn size="sm" variant="danger" onClick={() => {setRemovalReason("");setActionError("");setConfirm({ action: "remove", listing: l })}}>Remove</Btn>
       </div>
     )},
   ]
@@ -634,14 +646,18 @@ function ListingsTab() {
             <p style={{ color: C.textMid, fontSize: 13, margin: 0 }}>
               {confirm.action === "flag"
                 ? `Flag "${confirm.listing.title}"? It will be marked for review.`
-                : `Permanently remove "${confirm.listing.title}"? This cannot be undone.`}
+                : `Withdraw "${confirm.listing.title}" from public view? Its transaction history is preserved and an Owner may restore it.`}
             </p>
+            {confirm.action === "remove" && <label style={{display:"grid",gap:7,color:C.textMid,fontSize:12}}>Reason for removal (required)
+              <textarea value={removalReason} onChange={e=>setRemovalReason(e.target.value)} rows={3} maxLength={1000} placeholder="Explain the policy violation or moderation decision" style={{background:C.surface2,color:C.text,border:`1px solid ${C.border2}`,borderRadius:9,padding:12,resize:"vertical"}} />
+            </label>}
+            {actionError && <Alert type="error">{actionError}</Alert>}
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <Btn variant="ghost" onClick={() => setConfirm(null)}>Cancel</Btn>
               <Btn variant="danger" onClick={async () => {
-                confirm.action === "flag" ? await flag(confirm.listing) : await remove(confirm.listing)
-                setConfirm(null)
-              }}>{confirm.action === "flag" ? "Flag" : "Remove Permanently"}</Btn>
+                if(confirm.action === "flag") { await flag(confirm.listing);setConfirm(null) }
+                else if(await remove(confirm.listing))setConfirm(null)
+              }}>{confirm.action === "flag" ? "Flag" : "Withdraw listing"}</Btn>
             </div>
           </div>
         </Modal>
@@ -880,7 +896,7 @@ function FinanceTab() {
         <>
           <div>
             <div style={{ fontSize: 11, color: C.textDim, fontWeight: 600, marginBottom: 16 }}>SUMMARY</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 185px), 1fr))", gap: 14 }}>
               <Stat label="Platform Revenue"  value={fmtGHS(report.summary?.totalRevenue)}  accent={C.gold}  />
               <Stat label="Total GMV"         value={fmtGHS(report.summary?.totalVolume)}   accent={C.green} />
               <Stat label="Completed Orders"  value={report.summary?.totalOrders}            />
@@ -977,12 +993,49 @@ function SecurityTab() {
 // ADMIN MANAGEMENT TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+// Owner-controlled permissions. The backend supplies the authoritative catalog.
+function PermissionSwitches({ admin, onClose, onSaved, onNeedReAuth }) {
+  const [groups,setGroups]=useState({})
+  const [chosen,setChosen]=useState(() => [...(admin.permissions||[])])
+  const [busy,setBusy]=useState(false)
+  const [error,setError]=useState("")
+  useEffect(()=>{adminFetch("/admin-permissions/catalog").then(({ok,data})=>{if(ok)setGroups(data.groups||{});else setError(data.message||"Permission catalog unavailable")}).catch(e=>setError(e.message))},[])
+  const save=()=>onNeedReAuth(async token=>{
+    setBusy(true);setError("")
+    try {
+      const {ok,data}=await adminFetch(`/admin-permissions/admins/${admin._id}`,{method:"PUT",headers:{"x-reauth-token":token},body:JSON.stringify({permissions:chosen})})
+      if(!ok)throw Error(data.message||"Unable to save permissions")
+      const actual=data.admin?.permissions||[]
+      if(actual.length!==chosen.length||chosen.some(p=>!actual.includes(p)))throw Error("Saved rights differ from requested rights")
+      await onSaved();onClose()
+    }catch(e){setError(e.message)}finally{setBusy(false)}
+  })
+  return <Modal title={`Permissions · ${admin.name}`} onClose={onClose}>
+    <div style={{display:"grid",gap:14}}>
+      <Alert type="warn">Owner-only: every change requires fresh reauthentication. These controls cannot override Owner-only routes. Grant financial and removal permissions only to trusted administrators.</Alert>
+      <div style={{color:C.textMid,fontSize:12}}>{chosen.length} rights selected · {admin.role?.replaceAll("_"," ")} preset</div>
+      <div style={{display:"grid",gap:12,maxHeight:"55vh",overflowY:"auto"}}>{Object.entries(groups).map(([group,rights])=><section key={group} style={{border:`1px solid ${C.border2}`,borderRadius:12,padding:12,background:C.surface2}}>
+        <div style={{fontWeight:700,color:C.gold,marginBottom:10}}>{group} · {rights.filter(p=>chosen.includes(p)).length}/{rights.length}</div>
+        <div style={{display:"grid",gap:8}}>{rights.map(right=><label key={right} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,padding:"9px 6px",cursor:"pointer"}}>
+          <span style={{fontSize:13,color:C.text,textTransform:"capitalize"}}>{right.replaceAll("_"," ")}</span>
+          <input type="checkbox" checked={chosen.includes(right)} onChange={e=>setChosen(v=>e.target.checked?[...v,right]:v.filter(x=>x!==right))} style={{accentColor:C.gold,width:19,height:19,flexShrink:0}} />
+        </label>)}</div>
+      </section>)}</div>
+      {!Object.keys(groups).length&&!error&&<div style={{color:C.textMid}}>Loading permission catalog…</div>}
+      {error&&<Alert type="error">{error}</Alert>}
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={busy||!Object.keys(groups).length}>{busy?"Saving...":"Review & save"}</Btn></div>
+    </div>
+  </Modal>
+}
+
 function AdminsTab({ adminUser, reAuthToken, onNeedReAuth }) {
   const [admins, setAdmins]       = useState([])
   const [loading, setLoading]     = useState(true)
   const [showCreate, setCreate]   = useState(false)
   const [createMode, setCreateMode] = useState("admin")
   const [confirm, setConfirm]     = useState(null)
+  const [editingRights, setEditingRights] = useState(null)
 
   const [saName, setSaName]         = useState("")
   const [saEmail, setSaEmail]       = useState("")
@@ -1054,6 +1107,7 @@ function AdminsTab({ adminUser, reAuthToken, onNeedReAuth }) {
         )}
         {a.tier === "admin" && (
           <>
+            <Btn size="sm" variant="ghost" onClick={() => setEditingRights(a)}>Permissions</Btn>
             {a.isActive
               ? <Btn size="sm" variant="danger"   onClick={() => suspend(a)}>Suspend</Btn>
               : <Btn size="sm" variant="success"  onClick={() => reinstate(a)}>Reinstate</Btn>}
@@ -1082,6 +1136,8 @@ function AdminsTab({ adminUser, reAuthToken, onNeedReAuth }) {
       </div>
 
       {loading ? <LoadingState /> : <Table columns={columns} rows={admins} empty="No admins yet." />}
+
+      {editingRights && <PermissionSwitches key={editingRights._id} admin={editingRights} onClose={() => setEditingRights(null)} onSaved={load} onNeedReAuth={onNeedReAuth} />}
 
       {showCreate && (
         <Modal title={createMode === "super_admin" ? "Create Super Admin" : "Create Admin"} onClose={() => { setCreate(false); setSaResult(null); setSaError(""); setAError("") }}>
@@ -1408,6 +1464,8 @@ export default function AdminPanel({ onClose }) {
       { id: "admins",     label: "Admin Accounts", icon: "⊗",  show: isOwner || isSA },
       { id: "audit",      label: "Audit Log",      icon: "⊙",  show: isOwner || isSA },
       { id: "payment-settings", label: "Payment Settings", icon: "◈", show: isOwner },
+      { id: "commission", label: "Platform Commission", icon: "◈", show: isOwner },
+      { id: "removed_records", label: "Removed Records", icon: "▤", show: isOwner },
     ].filter(n => n.show)
   }
 
@@ -1439,18 +1497,45 @@ export default function AdminPanel({ onClose }) {
         ::-webkit-scrollbar { width: 4px }
         ::-webkit-scrollbar-track { background: transparent }
         ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px }
+        .sr-metric-card { background:linear-gradient(155deg,#1b1a18,#121212);border:1px solid #332d23;border-radius:16px;padding:22px 20px;min-height:132px;display:flex;flex-direction:column;gap:12px;box-shadow:0 8px 28px #00000018;position:relative;overflow:hidden }
+        .sr-metric-card:before {content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--metric-accent)}
+        .sr-metric-label {font-size:12px;color:#aaa092;font-weight:600;letter-spacing:.02em}
+        .sr-metric-value {font-size:clamp(23px,2.2vw,34px);color:#f0ede8;font-weight:800;line-height:1.1;overflow-wrap:anywhere;letter-spacing:-.035em}
+        .sr-metric-footer {font-size:11px;color:#777067;margin-top:auto}
+        .sr-records {box-shadow:0 12px 34px #0000001f}
+        .sr-records tbody tr:hover {background:#c8a97e0b}
+        .sr-admin-sidebar button:focus-visible, .sr-admin-workspace button:focus-visible, .sr-records input:focus-visible, .sr-records select:focus-visible {outline:2px solid #c8a97e;outline-offset:2px}
+        .sr-admin-workspace {min-width:0}
+        .sr-admin-workspace > div {min-width:0}
+        @media (prefers-reduced-motion:reduce) { .sr-admin-sidebar {transition:none!important} }
+        .sr-table-mobile { display:none }
+        .sr-admin-sidebar { transform: translateX(-100%); }
+        .sr-admin-workspace { margin-left: 0; }
+        .sr-admin-mobile-menu { display:flex; }
+        .sr-admin-section { background:linear-gradient(125deg,#171613,#111111); border:1px solid #30291e; border-radius:18px; padding:22px 24px; margin-bottom:26px; }
+        .sr-admin-section h1 { margin:0; color:#f0ede8; font-size:clamp(21px,2.3vw,29px); letter-spacing:-.03em; }
+        .sr-admin-section p { margin:8px 0 0; color:#aaa092; font-size:13px; line-height:1.6; }
+        .sr-admin-section .sr-breadcrumb { color:#c8a97e; font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; margin-bottom:10px; }
+        @media(min-width:1000px) {
+          .sr-admin-sidebar { transform:translateX(0) !important; }
+          .sr-admin-workspace { margin-left:240px; }
+          .sr-admin-mobile-menu { display:none !important; }
+          .sr-admin-overlay { display:none !important; }
+        }
+        @media(max-width:650px) { .sr-admin-section {padding:18px 16px;border-radius:12px} }
+        @media(max-width:650px){ .sr-table-desktop{display:none} .sr-table-mobile{display:block} }
         @keyframes spin { to { transform: rotate(360deg) } }
         @keyframes slideInSidebar { from { transform: translateX(-100%) } to { transform: translateX(0) } }
       `}</style>
 
       {/* ── Overlay when sidebar open ── */}
       {sidebarOpen && (
-        <div onClick={() => setSidebarOpen(false)}
+        <div className="sr-admin-overlay" onClick={() => setSidebarOpen(false)}
           style={{ position: "fixed", inset: 0, background: "#000000aa", zIndex: 10 }} />
       )}
 
       {/* ── Sidebar — slides in from left, same as Account panel ── */}
-      <div style={{
+      <div className="sr-admin-sidebar" style={{
         position: "fixed", top: 0, left: 0, bottom: 0, width: 240,
         background: C.surface, borderRight: `1px solid ${C.border}`,
         display: "flex", flexDirection: "column", zIndex: 20,
@@ -1531,10 +1616,10 @@ export default function AdminPanel({ onClose }) {
       </div>
 
       {/* ── Top bar ── */}
-      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+      <div className="sr-admin-workspace" style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
 
         {/* Hamburger — same style as Account panel */}
-        <button onClick={() => setSidebarOpen(true)}
+        <button className="sr-admin-mobile-menu" onClick={() => setSidebarOpen(true)}
           style={{ background: "transparent", border: `1px solid ${C.border}`, color: C.gold, width: 38, height: 38, borderRadius: 9, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, flexShrink: 0, minHeight: "auto" }}>
           <span style={{ display: "block", width: 16, height: 2, background: C.gold, borderRadius: 2 }} />
           <span style={{ display: "block", width: 16, height: 2, background: C.gold, borderRadius: 2 }} />
@@ -1555,8 +1640,13 @@ export default function AdminPanel({ onClose }) {
       </div>
 
       {/* ── Main content ── */}
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px 80px" }}>
+      <div className="sr-admin-workspace" style={{ flex: 1, overflowY: "auto", minHeight:0 }}>
+        <div style={{ maxWidth: 1520, margin: "0 auto", padding: "30px clamp(16px, 3vw, 48px) 90px" }}>
+          <section className="sr-admin-section" aria-label="Current workspace">
+            <div className="sr-breadcrumb">Silk Road GH / Administration / {tabLabel}</div>
+            <h1>{tabLabel}</h1>
+            <p>{({dashboard:"Marketplace performance, recent activity and operational priorities.",users:"Review accounts, manage access and handle removals with full audit history.",listings:"Moderate marketplace listings and protect buyers from misleading offers.",orders:"Track transaction progress, escrow states and order exceptions.",riders:"Manage rider accounts and monitor operational availability.",deliveries:"Review delivery progress, fulfillment and OTP completion.",finance:"Review settlement reporting, revenue and payment exceptions.",security:"Investigate suspicious activity and access-related events.",admins:"Manage administrators and assign individual permissions with Owner approval.",audit:"Search administrative actions and accountability records.",commission:"Review current rates, upcoming changes and seller notices.","payment-settings":"Configure supported payment collection methods safely.",removed_records:"Review withdrawn accounts and listings; restore eligible records."})[tab] || "Manage this area of the marketplace."}</p>
+          </section>
           {tab === "dashboard"  && <DashboardTab />}
           {tab === "users"      && <UsersTab />}
           {tab === "listings"   && <ListingsTab />}
@@ -1565,9 +1655,11 @@ export default function AdminPanel({ onClose }) {
           {tab === "deliveries" && <DeliveriesTab />}
           {tab === "finance"    && <><FinanceTab /><div style={{ marginTop: 36 }}><GroupPaymentQueueTab /><GroupSettlementTab /></div></>}
           {tab === "security"   && <SecurityTab />}
-          {tab === "admins"     && <AdminsTab adminUser={adminUser} reAuthToken={reAuthToken} onNeedReAuth={() => handleNeedReAuth(null)} />}
+          {tab === "admins"     && <AdminsTab adminUser={adminUser} reAuthToken={reAuthToken} onNeedReAuth={handleNeedReAuth} />}
           {tab === "audit"      && <AuditTab />}
           {tab === "payment-settings" && adminUser?.tier === "owner" && <PaymentSettingsTab onNeedReAuth={handleNeedReAuth} />}
+          {tab === "commission" && adminUser?.tier === "owner" && <OwnerCommissionStudio adminToken={getAdminToken()} onNeedReAuth={handleNeedReAuth} />}
+            {tab === "removed_records" && adminUser?.tier === "owner" && <RemovedRecordsPanel adminFetch={adminFetch} />}
         </div>
       </div>
 

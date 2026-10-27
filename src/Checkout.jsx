@@ -1,3 +1,4 @@
+import PaystackCheckoutExperience from "./PaystackCheckoutExperience"
 import { useState, useEffect, useRef } from "react"
 import { saveOrder, generateOrderId, updateOrder, OrderIdBanner } from "./OrderTracker"
 
@@ -35,6 +36,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const [evidenceMessage, setEvidenceMessage] = useState("")
   const [checkoutEnvironment, setCheckoutEnvironment] = useState(null)
   const [groupPaymentStatus, setGroupPaymentStatus] = useState("pending")
+  const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState(initialOrder?.checkoutPaymentMethod || "manual_momo")
   const [sellerOrders, setSellerOrders] = useState(initialOrder?.backendOrders || [])
   const [deliveryCodes, setDeliveryCodes] = useState({})
   const [deliveryBusy, setDeliveryBusy] = useState(null)
@@ -42,7 +44,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     const [deliveryMethod, setDeliveryMethod] = useState(initialOrder?.deliveryMethod || "pickup")
   const [promoCode, setPromoCode]           = useState("")
   const [promoApplied, setPromoApplied]     = useState(null)
-  const [promoError, setPromoError]         = useState("")
+  const [promoError, setPromoError]         = useState("Promotional discounts are temporarily unavailable at checkout.")
   const [promoLoading, setPromoLoading]     = useState(false)
 
   const [otp, setOtp]             = useState(null)
@@ -51,13 +53,14 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const completionPollRef         = useRef(null)
   const socketRef                 = useRef(null)
 
-  const deliveryFee = siteSettings?.deliveryFee || 10
+  const deliveryFee = 0 // Buyer is not charged rider fees: seller funds a server-quoted rider fee after purchase.
   const subtotal    = initialOrder?.subtotal || cart.reduce((s, i) => s + (i.price || i.dailyRate || 0) * i.qty, 0)
   const discount    = promoApplied?.type === "percentage"    ? Math.round(subtotal * promoApplied.value / 100)
                     : promoApplied?.type === "fixed"         ? promoApplied.value
                     : promoApplied?.type === "free_delivery" ? deliveryFee : 0
   const total       = Math.max(0, subtotal + (deliveryMethod === "rider" && promoApplied?.type !== "free_delivery" ? deliveryFee : 0) - (promoApplied?.type !== "free_delivery" ? discount : 0))
-  const platformFee = Math.round(subtotal * 0.08)
+  // Commission is determined by the backend and locked when the checkout is created.
+  const platformFee = initialOrder?.platformFee ?? null
 
   // ── Single socket connection for the entire tracking phase ───────────────
   // Connects when buyer reaches step 3 with rider delivery
@@ -213,13 +216,13 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     const ref = `SR-${orderId}`
     const order = {
       id: orderId, type: "buy", cart, total, subtotal, platformFee,
-      deliveryFee:   deliveryMethod === "rider" ? deliveryFee : 0,
+      deliveryFee:   0,
       discount,
-      promoCode:     promoApplied?.code || null,
+      promoCode:     null,
       location, manualLocation, landmark, extraInfo,
       contactInfo, payerName, payerPhone,
       deliveryMethod,
-      paymentMethod: "manual_verification",
+      paymentMethod: "pending_provider_selection",
       paymentRef:    ref,
       status:        "Pending Confirmation",
       delivered:     null,
@@ -237,7 +240,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           items, localOrderId: orderId,
           location: location ? `${location.lat},${location.lng}` : manualLocation,
           landmark, extraInfo, contactInfo, payerName, payerPhone,
-          promoCode: promoApplied?.code || null,
+          promoCode: null,
           deliveryMethod,
         }),
       })
@@ -259,23 +262,25 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           // The group may already exist on the server. Preserve its claim token
           // and never silently create another group on a second click.
           setCheckoutId(data.checkoutId)
+          setCheckoutPaymentMethod(data.paymentMethod || "manual_momo")
           setClaimToken(data.claimToken)
           setSellerOrders(data.orders)
           setPaymentRef(data.paymentReference)
           setConfirmedTotal(serverTotal)
-          saveOrder({ ...order, total: serverTotal, checkoutId: data.checkoutId,
+          saveOrder({ ...order, platformFee: data.orders.reduce((s, o) => s + Number(o.platformFee || 0), 0), commissionRatePercent: data.commissionRatePercent, total: serverTotal, checkoutId: data.checkoutId,
             checkoutClaimToken: data.claimToken, backendOrders: data.orders,
-            backendOrderId: data.orders[0].orderId, paymentRef: data.paymentReference,
+            backendOrderId: data.orders[0].orderId, checkoutPaymentMethod: data.paymentMethod, paymentRef: data.paymentReference,
             status: "Price Review Required" })
           alert("Checkout saved for review. Do not transfer money. Close this window and contact support or cancel the pending checkout.")
           return
         }
       }
       setConfirmedTotal(serverTotal)
-      saveOrder({ ...order, total: serverTotal, backendOrderId: data.orders[0].orderId,
-        checkoutId: data.checkoutId, checkoutClaimToken: data.claimToken, backendOrders: data.orders, paymentRef: data.paymentReference })
+      saveOrder({ ...order, platformFee: data.orders.reduce((s, o) => s + Number(o.platformFee || 0), 0), commissionRatePercent: data.commissionRatePercent, total: serverTotal, backendOrderId: data.orders[0].orderId,
+        checkoutId: data.checkoutId, checkoutClaimToken: data.claimToken, backendOrders: data.orders, checkoutPaymentMethod: data.paymentMethod, paymentRef: data.paymentReference })
       setSellerOrders(data.orders)
       setCheckoutId(data.checkoutId)
+      setCheckoutPaymentMethod(data.paymentMethod || "manual_momo")
       setClaimToken(data.claimToken)
       setPaymentRef(data.paymentReference)
       setStep(3)
@@ -297,6 +302,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       if (!response.ok) throw new Error(data.message || "Unable to check checkout mode")
       if (!cancelled) {
         setCheckoutEnvironment(data.environment)
+        if (data.paymentMethod) setCheckoutPaymentMethod(data.paymentMethod)
         setGroupPaymentStatus(data.status)
       }
     }).catch(err => { if (!cancelled) setEvidenceMessage(err.message) })
@@ -346,6 +352,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
       if (!response.ok) throw new Error(result.message || "Unable to check payment")
       setGroupPaymentStatus(result.status)
       setCheckoutEnvironment(result.environment)
+      if (result.paymentMethod) setCheckoutPaymentMethod(result.paymentMethod)
       setEvidenceMessage(result.status === "verified" ? "Payment independently verified. Each seller order is now funded." : `Current status: ${result.status}. Do not arrange fulfillment until verified.`)
     } catch (err) { setEvidenceMessage(err.message) }
   }
@@ -502,7 +509,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
               <div>
                 <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "6px", textTransform: "uppercase", letterSpacing: ".06em" }}>DELIVERY METHOD</div>
                 <div style={{ display: "flex", gap: "8px" }}>
-                  {[["pickup", "📍 Pickup (Free)"], ["rider", `🛵 Rider (₵${deliveryFee})`]].map(([val, label]) => (
+                  {[["pickup", "📍 Pickup (Free)"], ["rider", `🛵 Request rider (seller-funded)`]].map(([val, label]) => (
                     <button key={val} onClick={() => setDeliveryMethod(val)}
                       style={{ flex: 1, background: deliveryMethod === val ? "#c8a97e18" : "#161616", border: `1.5px solid ${deliveryMethod === val ? "#c8a97e" : "#1e1e1e"}`, color: deliveryMethod === val ? "#c8a97e" : "#888", padding: "12px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
                       {label}
@@ -558,10 +565,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <input placeholder="Enter promo code" value={promoCode} onChange={e => setPromoCode(e.target.value.toUpperCase())}
+                    <input placeholder="Promo codes temporarily unavailable" disabled value={promoCode} onChange={e => setPromoCode(e.target.value.toUpperCase())}
                       onKeyDown={e => e.key === "Enter" && handleApplyPromo()}
                       style={{ ...inp, flex: 1, fontFamily: "monospace" }} />
-                    <button onClick={handleApplyPromo} disabled={promoLoading}
+                    <button onClick={handleApplyPromo} disabled={true}
                       style={{ background: "#c8a97e", border: "none", padding: "12px 18px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "13px", color: "#000", fontFamily: "inherit" }}>
                       {promoLoading ? "..." : "Apply"}
                     </button>
@@ -573,7 +580,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
               <div style={{ background: "#161616", borderRadius: "14px", padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}><span>Subtotal</span><span>₵{subtotal.toLocaleString()}</span></div>
                 {deliveryMethod === "rider" && promoApplied?.type !== "free_delivery" && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}><span>Rider delivery</span><span>₵{deliveryFee}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#666" }}><span>Rider delivery (seller-funded)</span><span>₵0</span></div>
                 )}
                 {discount > 0 && (
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#6ee7b7" }}><span>🎟️ Discount</span><span>−₵{discount}</span></div>
@@ -599,7 +606,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                 <div style={{ color: "#f0ede8", fontSize: "28px", fontWeight: "800" }}>GH₵{total.toLocaleString()}</div>
                 <div style={{ color: "#999", fontSize: "13px", lineHeight: 1.7 }}>
                   Continue to create your checkout and view the payment options available for the current platform environment.
-                  Your order will remain pending until payment is independently verified.
+                  Your order will remain pending until payment is independently verified. Rider requests are funded by the seller after checkout, not charged to the buyer.
                 </div>
               </div>
               <div>
@@ -643,13 +650,21 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                           <span className={`sr-status-dot ${groupPaymentStatus === "verified" ? "verified" : ""}`} />
                           <span>{groupPaymentStatus === "verified" ? "Payment confirmed" : groupPaymentStatus === "submitted" ? "We're checking your payment" : "Waiting for payment"}</span>
                         </div>
-                        {groupPaymentStatus === "pending" && checkoutEnvironment === "testing" && (
+                        {checkoutPaymentMethod === "paystack" && groupPaymentStatus !== "verified" && (
+                          <PaystackCheckoutExperience
+                            apiUrl={API_URL}
+                            checkoutId={checkoutId}
+                            claimToken={claimToken}
+                            onVerified={() => { setGroupPaymentStatus("verified"); setEvidenceMessage("Paystack independently verified this checkout. Seller allocations are now funded."); refreshSellerOrders() }}
+                          />
+                        )}
+                        {checkoutPaymentMethod === "manual_momo" && groupPaymentStatus === "pending" && checkoutEnvironment === "testing" && (
                           <>
                             <p>This is a practice checkout, so you don't need to send any money. Tap below and we'll send your order for a test review.</p>
                             <button className="sr-journey-primary" disabled={evidenceBusy} onClick={submitTestCheckout}>{evidenceBusy ? "Sending your request…" : "Continue with practice payment"}</button>
                           </>
                         )}
-                        {groupPaymentStatus === "pending" && checkoutEnvironment === "live" && (
+                        {checkoutPaymentMethod === "manual_momo" && groupPaymentStatus === "pending" && checkoutEnvironment === "live" && (
                           <>
                             <p>Once you've paid using Silk Road's official payment instructions, enter the transaction reference from your payment confirmation message.</p>
                             <label className="sr-journey-label" htmlFor="sr-payment-reference">Payment reference</label>
@@ -658,8 +673,8 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
                             <button className="sr-journey-primary" disabled={evidenceBusy || paymentEvidence.trim().length < 5} onClick={submitPaymentEvidence}>{evidenceBusy ? "Sending…" : "Submit payment reference"}</button>
                           </>
                         )}
-                        {groupPaymentStatus === "pending" && checkoutEnvironment === null && <p>We're checking which payment options are available. Please wait before sending money.</p>}
-                        {groupPaymentStatus === "submitted" && <p>Thanks! Your payment details are with our team. You don't need to send them again. We'll update your order once payment is confirmed.</p>}
+                        {checkoutPaymentMethod === "manual_momo" && groupPaymentStatus === "pending" && checkoutEnvironment === null && <p>We're checking which payment options are available. Please wait before sending money.</p>}
+                        {checkoutPaymentMethod === "manual_momo" && groupPaymentStatus === "submitted" && <p>Thanks! Your payment details are with our team. You don't need to send them again. We'll update your order once payment is confirmed.</p>}
                         {groupPaymentStatus === "verified" && <p>Good news! Your payment is confirmed. Your seller can now prepare your order.</p>}
                         {!["pending", "submitted", "verified"].includes(groupPaymentStatus) && <p>Your payment needs attention. Please contact Silk Road support before taking another step.</p>}
                         <button className="sr-journey-secondary" onClick={refreshPaymentStatus}>↻ Refresh payment status</button>
