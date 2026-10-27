@@ -1403,6 +1403,65 @@ function PaymentSettingsTab({ onNeedReAuth }) {
 }
 
 // Owner-only marketplace environment control. The backend remains authoritative.
+function PermanentDevCleanup({ onNeedReAuth, onComplete }) {
+  const [report, setReport] = useState(null)
+  const [selected, setSelected] = useState([])
+  const [phrase, setPhrase] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
+  const refresh = useCallback(async () => {
+    setBusy(true)
+    try {
+      const { ok, data } = await adminFetch("/environment/owner/dev-records")
+      if (!ok) throw new Error(data?.message || "Could not load development records")
+      setReport(data); setSelected([]); setPhrase(""); setError("")
+    } catch (e) { setError(e.message) }
+    finally { setBusy(false) }
+  }, [])
+  useEffect(() => { refresh() }, [refresh])
+  const purge = () => {
+    if (phrase !== "PERMANENTLY DELETE TEST RECORDS" || !selected.length) return
+    if (!window.confirm(`PERMANENT DELETION: Delete ${selected.length} selected test orders and their linked deliveries? This cannot be undone.`)) return
+    onNeedReAuth(async token => {
+      setBusy(true); setError(""); setNotice("")
+      try {
+        const { ok, data } = await adminFetch("/environment/owner/dev-records/purge", {
+          method: "POST", headers: { "x-reauth-token": token },
+          body: JSON.stringify({ orderIds: selected, confirmation: phrase }),
+        })
+        if (!ok) throw new Error(data?.message || "Permanent deletion failed")
+        setNotice(`${data.deletedOrders} orders and ${data.deletedDeliveries} deliveries permanently deleted.`)
+        await refresh(); await onComplete()
+      } catch (e) { setError(e.message) }
+      finally { setBusy(false) }
+    })
+  }
+  return <div style={{ padding: 20, border: `1px solid ${C.border2}`, borderRadius: 12, display: "grid", gap: 14 }}>
+    <SectionTitle>Review and permanently delete development records</SectionTitle>
+    <Alert type="warn">PERMANENT DELETION. Selected orders and linked deliveries will be physically removed from MongoDB. This cannot be undone without a backup. Financially linked orders are blocked automatically. Do not use during public checkout traffic.</Alert>
+    {error && <Alert type="error">{error}</Alert>}
+    {notice && <Alert type="success">{notice}</Alert>}
+    {report && <>
+      <div style={{ color: C.textMid, fontSize: 12 }}>Deletion endpoint: {report.cleanupEnabled ? "Enabled" : "Disabled — set ENABLE_DEV_RECORD_PURGE=true temporarily on Render"}. {report.truncated ? "Showing only the first 200 records." : ""}</div>
+      <div style={{ maxHeight: 360, overflowY: "auto", display: "grid", gap: 8 }}>
+        {report.records.length === 0 && <div style={{ color: C.textMid }}>No legacy Live Mode orders found.</div>}
+        {report.records.map(r => <label key={r.id} style={{ display: "flex", gap: 10, padding: 10, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 12 }}>
+          <input type="checkbox" disabled={!r.eligible || busy} checked={selected.includes(r.id)} onChange={e => setSelected(old => e.target.checked ? [...old, r.id] : old.filter(id => id !== r.id))} />
+          <span style={{ overflowWrap: "anywhere" }}><strong>{r.localOrderId || r.id}</strong> — {r.paymentStatus} / {r.paymentMethod} — {r.deliveryCount} deliveries
+          <span style={{ display: "block", color: r.eligible ? C.green : C.red }}>{r.eligible ? "Eligible for Owner review" : `Protected: ${r.reasons.join("; ")}`}</span></span>
+        </label>)}
+      </div>
+      <div style={{ color: C.textMid, fontSize: 12 }}>Selected: {selected.length} (maximum 50 per deletion). Type <strong style={{ color: C.text }}>PERMANENTLY DELETE TEST RECORDS</strong> to confirm.</div>
+      <input value={phrase} onChange={e => setPhrase(e.target.value)} placeholder="Type exact confirmation phrase" style={{ padding: 12, borderRadius: 8, border: `1px solid ${C.border2}`, background: C.surface2, color: C.text, width: "100%", boxSizing: "border-box" }} />
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <Btn variant="danger" disabled={busy || !report.cleanupEnabled || !selected.length || selected.length > 50 || phrase !== "PERMANENTLY DELETE TEST RECORDS"} onClick={purge}>Permanently delete selected records</Btn>
+        <Btn variant="ghost" disabled={busy} onClick={refresh}>Refresh records</Btn>
+      </div>
+    </>}
+  </div>
+}
+
 function MarketplaceEnvironmentTab({ onNeedReAuth }) {
   const [environment, setEnvironment] = useState(null)
   const [payment, setPayment] = useState(null)
@@ -1495,6 +1554,7 @@ function MarketplaceEnvironmentTab({ onNeedReAuth }) {
         </div>
       </div>
       {mode === "testing" && provider === "test" && <Alert type="success">Test configuration matches. Use only Paystack test transactions. Live collection, settlement, refunds and payouts require separate end-to-end verification.</Alert>}
+      {mode === "live" && <PermanentDevCleanup onNeedReAuth={onNeedReAuth} onComplete={refresh} />}
       <Alert type="info">Returning to Live Mode is deliberately not exposed here. It requires a separate launch-readiness review and verified live payment configuration.</Alert>
     </>}
   </div>
