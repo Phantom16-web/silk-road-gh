@@ -1536,7 +1536,7 @@ function MarketplaceEnvironmentTab({ onNeedReAuth }) {
           method: "POST", headers: { "x-reauth-token": token }, body: JSON.stringify({ confirmation }),
         })
         if (!ok) throw new Error(data?.message || "Development reset rejected")
-        setNotice(`Permanently deleted ${data.deletedOrders} orders and ${data.deletedDeliveries} deliveries. Marketplace switched to Testing Mode.`)
+        setNotice(`Permanently deleted ${data.deletedOrders} orders, ${data.deletedDeliveries} deliveries, ${data.deletedPayments ?? 0} payments and ${data.deletedCheckoutGroups ?? 0} checkout groups. Marketplace switched to Testing Mode.`)
         await refresh()
       } catch (err) { setError(err.message || "Reset failed") }
       finally { setBusy(false) }
@@ -1575,7 +1575,7 @@ function MarketplaceEnvironmentTab({ onNeedReAuth }) {
       {mode === "testing" && provider === "test" && <Alert type="success">Test configuration matches. Use only Paystack test transactions. Live collection, settlement, refunds and payouts require separate end-to-end verification.</Alert>}
       {mode === "live" && <div style={{ padding: 20, border: `1px solid ${C.red}`, borderRadius: 12, display: "grid", gap: 12 }}>
         <SectionTitle>One-time development reset</SectionTitle>
-        <Alert type="warn">DANGER: Permanently deletes legacy development orders and their linked deliveries, then switches to Testing Mode in one database transaction. Any existing payment records, live checkout groups, or settlement evidence will stop the reset. Make a backup and stop public checkout first.</Alert>
+        <Alert type="warn">DANGER: Permanently deletes legacy development orders and their linked deliveries, then switches to Testing Mode in one database transaction. Unpaid, unsubmitted development payment records and checkout groups can also be deleted. Verified payments, provider references, submitted evidence, disputed or unsettled transactions will stop the reset. Make a backup and stop public checkout first.</Alert>
         <Btn variant="danger" disabled={busy || !environment.cleanupEnabled || !environment.switchingEnabled || provider !== "test"} onClick={resetDevelopment}>Permanently delete development records and enter Testing Mode</Btn>
         {!environment.cleanupEnabled && <Alert type="warn">Set ENABLE_DEV_RECORD_PURGE=true on Render and redeploy to enable the reset.</Alert>}
       </div>}
