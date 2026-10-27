@@ -735,6 +735,12 @@ function App() {
       <style>{`
         @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
 
+        /* Marketplace grid: prevent the 130px desktop-card regression. */
+        .sr-listing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        @media (min-width: 700px) { .sr-listing-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (min-width: 1050px) { .sr-listing-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+        @media (max-width: 420px) { .sr-listing-grid { gap: 10px !important; } }
+
         /* Premium signed-in identity, desktop and mobile */
         .sr-identity { display:inline-flex;align-items:center;gap:10px;max-width:220px;min-width:0;padding:6px 12px 6px 6px;border:1px solid #c8a97e55;border-radius:15px;background:linear-gradient(135deg,#29231b 0%,#141414 65%,#101010 100%);color:#f8f2e9;cursor:pointer;text-align:left;box-shadow:0 2px 14px #0005,inset 0 1px #ffffff0b;transition:transform .18s,border-color .18s,box-shadow .18s;flex-shrink:0; }
         .sr-identity:hover,.sr-identity:focus-visible { border-color:#c8a97e;box-shadow:0 0 0 3px #c8a97e22;transform:translateY(-1px); }
@@ -994,7 +1000,7 @@ function App() {
                 ↻ Refresh
               </button>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 130px), 1fr))", gap: "12px" }}>
+            <div className="sr-listing-grid" style={{ display: "grid", gap: "16px", minWidth: 0 }}>
               {listingsLoading
                 ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
                     <ListingSkeleton key={i} />
