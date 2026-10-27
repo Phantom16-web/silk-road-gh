@@ -1402,6 +1402,104 @@ function PaymentSettingsTab({ onNeedReAuth }) {
   </div>
 }
 
+// Owner-only marketplace environment control. The backend remains authoritative.
+function MarketplaceEnvironmentTab({ onNeedReAuth }) {
+  const [environment, setEnvironment] = useState(null)
+  const [payment, setPayment] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [envResponse, paymentResponse] = await Promise.all([
+        adminFetch("/environment/owner"),
+        adminFetch("/settings/payment-mode"),
+      ])
+      if (!envResponse.ok) throw new Error(envResponse.data?.message || "Unable to read marketplace environment.")
+      if (!paymentResponse.ok) throw new Error(paymentResponse.data?.message || "Unable to read payment settings.")
+      setEnvironment(envResponse.data)
+      setPayment(paymentResponse.data)
+      setError("")
+    } catch (err) {
+      setError(err.message || "Unable to load environment settings.")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { refresh() }, [refresh])
+
+  const switchToTesting = () => {
+    if (!environment?.switchingEnabled || environment.mode !== "live" || busy) return
+    if (payment?.providerEnvironment !== "test") {
+      setError("Configure a Paystack test secret key on the backend before switching for test checkout.")
+      return
+    }
+    if (!window.confirm("Switch Silk Road GH to TESTING mode? Ensure public checkout is closed and no real transactions or deliveries are active.")) return
+    onNeedReAuth(async token => {
+      setBusy(true)
+      setError("")
+      setNotice("")
+      try {
+        const { ok, data } = await adminFetch("/environment/mode", {
+          method: "PUT",
+          headers: { "x-reauth-token": token },
+          body: JSON.stringify({ mode: "testing" }),
+        })
+        if (!ok) {
+          const blockers = data?.blockers
+            ? ` Blockers: ${Object.entries(data.blockers).filter(([, value]) => value).map(([key]) => key).join(", ") || "none reported"}.`
+            : ""
+          throw new Error((data?.message || "Environment switch rejected.") + blockers)
+        }
+        setNotice("Switch request accepted. Confirm the current mode below before testing checkout.")
+        await refresh()
+      } catch (err) {
+        setError(err.message || "Unable to switch environment.")
+      } finally {
+        setBusy(false)
+      }
+    })
+  }
+
+  const mode = environment?.mode
+  const provider = payment?.providerEnvironment || "unconfigured"
+  const matching = (mode === "testing" && provider === "test") || (mode === "live" && provider === "live")
+
+  return <div style={{ maxWidth: 720, display: "grid", gap: 18 }}>
+    <SectionTitle>Marketplace Environment</SectionTitle>
+    <Alert type="warn">Only the Owner can switch environments. Keep public checkout closed during the switch. The backend checks for outstanding transactions, but this check is not an atomic guarantee against new orders.</Alert>
+    {error && <Alert type="error">{error}</Alert>}
+    {notice && <Alert type="success">{notice}</Alert>}
+    {loading && !environment ? <LoadingState /> : environment && <>
+      <div style={{ padding: 20, border: `1px solid ${C.border2}`, borderRadius: 12, background: C.surface, display: "grid", gap: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ color: C.textMid, fontSize: 12 }}>Marketplace mode</span>
+          <Badge label={mode === "testing" ? "Testing" : "Live"} color={mode === "testing" ? C.blue : C.yellow} dim={mode === "testing" ? C.blueDim : C.yellowDim} />
+        </div>
+        <div style={{ color: C.textMid, fontSize: 12 }}>Paystack key environment: <strong style={{ color: C.text }}>{provider.toUpperCase()}</strong></div>
+        <div style={{ color: C.textMid, fontSize: 12 }}>Payment provider: <strong style={{ color: C.text }}>{payment?.paymentMode === "paystack" ? "Paystack" : "Manual Mobile Money"}</strong></div>
+        <div style={{ color: matching ? C.green : C.yellow, fontSize: 12, fontWeight: 700 }}>
+          {matching ? "Marketplace and Paystack environments match." : "Marketplace and Paystack environments do not match."}
+        </div>
+        <div style={{ color: C.textMid, fontSize: 12 }}>Server environment switching: {environment.switchingEnabled ? "Enabled" : "Disabled"}</div>
+        {!environment.switchingEnabled && <Alert type="warn">The backend requires ENABLE_ENVIRONMENT_SWITCH=true on Render followed by a redeploy.</Alert>}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          <Btn onClick={switchToTesting} disabled={busy || loading || mode !== "live" || !environment.switchingEnabled || provider !== "test"}>
+            {busy ? "Switching..." : mode === "testing" ? "Already in Testing Mode" : "Switch to Testing Mode"}
+          </Btn>
+          <Btn variant="ghost" onClick={refresh} disabled={busy || loading}>{loading ? "Refreshing..." : "Refresh status"}</Btn>
+        </div>
+      </div>
+      {mode === "testing" && provider === "test" && <Alert type="success">Test configuration matches. Use only Paystack test transactions. Live collection, settlement, refunds and payouts require separate end-to-end verification.</Alert>}
+      <Alert type="info">Returning to Live Mode is deliberately not exposed here. It requires a separate launch-readiness review and verified live payment configuration.</Alert>
+    </>}
+  </div>
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN ADMIN PANEL
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1464,6 +1562,7 @@ export default function AdminPanel({ onClose }) {
       { id: "admins",     label: "Admin Accounts", icon: "⊗",  show: isOwner || isSA },
       { id: "audit",      label: "Audit Log",      icon: "⊙",  show: isOwner || isSA },
       { id: "payment-settings", label: "Payment Settings", icon: "◈", show: isOwner },
+      { id: "environment", label: "Marketplace Environment", icon: "◈", show: isOwner },
       { id: "commission", label: "Platform Commission", icon: "◈", show: isOwner },
       { id: "removed_records", label: "Removed Records", icon: "▤", show: isOwner },
     ].filter(n => n.show)
@@ -1658,6 +1757,7 @@ export default function AdminPanel({ onClose }) {
           {tab === "admins"     && <AdminsTab adminUser={adminUser} reAuthToken={reAuthToken} onNeedReAuth={handleNeedReAuth} />}
           {tab === "audit"      && <AuditTab />}
           {tab === "payment-settings" && adminUser?.tier === "owner" && <PaymentSettingsTab onNeedReAuth={handleNeedReAuth} />}
+          {tab === "environment" && adminUser?.tier === "owner" && <MarketplaceEnvironmentTab onNeedReAuth={handleNeedReAuth} />}
           {tab === "commission" && adminUser?.tier === "owner" && <OwnerCommissionStudio adminToken={getAdminToken()} onNeedReAuth={handleNeedReAuth} />}
             {tab === "removed_records" && adminUser?.tier === "owner" && <RemovedRecordsPanel adminFetch={adminFetch} />}
         </div>
