@@ -1,300 +1,104 @@
-import { useState, useEffect } from "react"
+import { useCallback, useEffect, useState } from "react"
 
-const DELIVERY_FEE = 10 // ₵ — editable by admin
-
-// ── Sample deliveries for demo ─────────────────────────────────────────────
-const SAMPLE_DELIVERIES = [
-  {
-    id: "DEL-001",
-    orderId: "SR-A1B2C3",
-    item: "Calculus Textbook",
-    buyer: "Kwame A.",
-    buyerContact: "0241234567",
-    seller: "Ahmad K.",
-    sellerContact: "0551234567",
-    pickupLocation: "Mensah Sarbah Hall, UG Legon",
-    deliveryLocation: "Volta Hall, UG Legon",
-    zone: "UG Legon",
-    fee: DELIVERY_FEE,
-    status: "Pending", // Pending | Accepted | PickedUp | Delivered | Declined
-    assignedAt: Date.now() - 1000 * 60 * 5,
-  },
-  {
-    id: "DEL-002",
-    orderId: "SR-D4E5F6",
-    item: "Desk Lamp",
-    buyer: "Ama S.",
-    buyerContact: "0271234567",
-    seller: "Omar A.",
-    sellerContact: "0201234567",
-    pickupLocation: "Unity Hall, KNUST",
-    deliveryLocation: "Queens Hall, KNUST",
-    zone: "KNUST",
-    fee: DELIVERY_FEE,
-    status: "Accepted",
-    assignedAt: Date.now() - 1000 * 60 * 15,
-  },
-  {
-    id: "DEL-003",
-    orderId: "SR-G7H8I9",
-    item: "Scientific Calculator",
-    buyer: "Kofi T.",
-    buyerContact: "0241111222",
-    seller: "Abena M.",
-    sellerContact: "0557654321",
-    pickupLocation: "Main Gate Area, KNUST",
-    deliveryLocation: "Republic Hall, KNUST",
-    zone: "KNUST",
-    fee: DELIVERY_FEE,
-    status: "PickedUp",
-    assignedAt: Date.now() - 1000 * 60 * 30,
-  },
-]
-
-const STATUS_META = {
-  Pending: { color: "#fcd34d", bg: "#78350f22", border: "#92400e", label: "⏳ Pending", desc: "Waiting for you to accept" },
-  Accepted: { color: "#93c5fd", bg: "#1e3a5f22", border: "#1d4ed8", label: "✅ Accepted", desc: "Head to pickup location" },
-  PickedUp: { color: "#c4b5fd", bg: "#2a1a3f22", border: "#7c3aed", label: "📦 Picked Up", desc: "En route to buyer" },
-  Delivered: { color: "#6ee7b7", bg: "#064e3b22", border: "#065f46", label: "🎉 Delivered", desc: "Completed" },
-  Declined: { color: "#fca5a5", bg: "#7f1d1d22", border: "#7f1d1d", label: "❌ Declined", desc: "You declined this delivery" },
-}
-
-function DeliveryCard({ delivery, onUpdate }) {
-  const [expanded, setExpanded] = useState(false)
-  const meta = STATUS_META[delivery.status]
-
-  const timeSince = (ts) => {
-    const diff = Date.now() - ts
-    const mins = Math.floor(diff / 60000)
-    if (mins < 60) return `${mins}m ago`
-    return `${Math.floor(mins / 60)}h ago`
-  }
-
-  return (
-    <div style={{ background: "#1a1a1a", borderRadius: "14px", border: `1px solid ${meta.border}`, overflow: "hidden" }}>
-
-      {/* Header */}
-      <div style={{ padding: "16px", display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}
-        onClick={() => setExpanded(e => !e)}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8", marginBottom: "3px" }}>{delivery.item}</div>
-          <div style={{ fontSize: "12px", color: "#666" }}>
-            To: <span style={{ color: "#aaa" }}>{delivery.buyer}</span> · {delivery.zone} · {timeSince(delivery.assignedAt)}
-          </div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
-          <span style={{ fontSize: "11px", fontWeight: "700", background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, padding: "3px 10px", borderRadius: "20px" }}>
-            {meta.label}
-          </span>
-          <span style={{ fontSize: "16px", fontWeight: "800", color: "#c8a97e" }}>₵{delivery.fee}</span>
-        </div>
-      </div>
-
-      {/* Expanded */}
-      {expanded && (
-        <div style={{ padding: "0 16px 16px", borderTop: "1px solid #222", display: "flex", flexDirection: "column", gap: "14px" }}>
-
-          {/* Details */}
-          <div style={{ paddingTop: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
-            <div style={{ background: "#111", borderRadius: "10px", padding: "14px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px" }}>
-              <div style={{ fontSize: "11px", color: "#666", fontWeight: "600", marginBottom: "2px" }}>DELIVERY DETAILS</div>
-              <div>📦 Order ID: <span style={{ color: "#c8a97e", fontFamily: "monospace" }}>{delivery.orderId}</span></div>
-              <div>🏪 Pickup: <span style={{ color: "#aaa" }}>{delivery.pickupLocation}</span></div>
-              <div>📍 Deliver to: <span style={{ color: "#aaa" }}>{delivery.deliveryLocation}</span></div>
-            </div>
-
-            {/* Contacts — revealed after acceptance */}
-            {delivery.status !== "Pending" && delivery.status !== "Declined" && (
-              <div style={{ background: "#1e3a5f22", border: "1px solid #1d4ed8", borderRadius: "10px", padding: "14px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px" }}>
-                <div style={{ fontSize: "11px", color: "#93c5fd", fontWeight: "600", marginBottom: "2px" }}>🔓 CONTACT DETAILS</div>
-                <div>👤 Seller: <span style={{ color: "#f0ede8", fontWeight: "600" }}>{delivery.seller}</span> · <span style={{ color: "#c8a97e" }}>{delivery.sellerContact}</span></div>
-                <div>🙋 Buyer: <span style={{ color: "#f0ede8", fontWeight: "600" }}>{delivery.buyer}</span> · <span style={{ color: "#c8a97e" }}>{delivery.buyerContact}</span></div>
-              </div>
-            )}
-
-            {delivery.status === "Pending" && (
-              <div style={{ background: "#78350f22", border: "1px solid #92400e", borderRadius: "10px", padding: "12px", fontSize: "12px", color: "#fcd34d" }}>
-                ⚠️ Accept to reveal seller and buyer contact details.
-              </div>
-            )}
-          </div>
-
-          {/* Actions */}
-          {delivery.status === "Pending" && (
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button onClick={() => onUpdate(delivery.id, "Declined")}
-                style={{ flex: 1, background: "#7f1d1d22", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "12px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-                ❌ Decline
-              </button>
-              <button onClick={() => onUpdate(delivery.id, "Accepted")}
-                style={{ flex: 2, background: "#c8a97e", border: "none", color: "#000", padding: "12px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-                ✅ Accept Delivery — ₵{delivery.fee}
-              </button>
-            </div>
-          )}
-
-          {delivery.status === "Accepted" && (
-            <button onClick={() => onUpdate(delivery.id, "PickedUp")}
-              style={{ background: "#7c3aed", border: "none", color: "#fff", padding: "13px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-              📦 I've Picked Up the Item
-            </button>
-          )}
-
-          {delivery.status === "PickedUp" && (
-            <button onClick={() => onUpdate(delivery.id, "Delivered")}
-              style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "13px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "14px", fontFamily: "inherit" }}>
-              🎉 Mark as Delivered
-            </button>
-          )}
-
-          {delivery.status === "Delivered" && (
-            <div style={{ background: "#064e3b22", border: "1px solid #065f46", borderRadius: "10px", padding: "14px", textAlign: "center" }}>
-              <div style={{ fontSize: "24px", marginBottom: "6px" }}>🎉</div>
-              <div style={{ fontSize: "14px", fontWeight: "700", color: "#6ee7b7" }}>Delivery Complete</div>
-              <div style={{ fontSize: "12px", color: "#555", marginTop: "4px" }}>₵{delivery.fee} will be sent to your MTN MoMo</div>
-            </div>
-          )}
-
-          {delivery.status === "Declined" && (
-            <div style={{ background: "#7f1d1d22", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "12px", textAlign: "center", fontSize: "13px", color: "#fca5a5" }}>
-              You declined this delivery. It has been reassigned.
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
+const API = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "")
+const panel = { background: "#171717", border: "1px solid #37302a", borderRadius: 16, padding: 18 }
+const gold = "#d7b47a"
+const btn = { background: gold, color: "#16120d", border: 0, borderRadius: 10, padding: "11px 16px", fontWeight: 800, cursor: "pointer" }
+const secondary = { ...btn, background: "#292725", color: "#eee1cd", border: "1px solid #5a4a35" }
 
 export default function RiderDashboard({ user, onClose }) {
-  const [deliveries, setDeliveries] = useState(SAMPLE_DELIVERIES)
-  const [activeTab, setActiveTab] = useState("active")
-  const [earnings, setEarnings] = useState({ today: 30, week: 120, total: 480, pending: 10 })
-  const [isOnline, setIsOnline] = useState(true)
-
-  const activeDeliveries = deliveries.filter(d => ["Pending", "Accepted", "PickedUp"].includes(d.status))
-  const completedDeliveries = deliveries.filter(d => d.status === "Delivered")
-  const declinedDeliveries = deliveries.filter(d => d.status === "Declined")
-
-  const handleUpdate = (id, newStatus) => {
-    setDeliveries(prev => prev.map(d => d.id === id ? { ...d, status: newStatus } : d))
-    if (newStatus === "Delivered") {
-      setEarnings(e => ({ ...e, today: e.today + DELIVERY_FEE, week: e.week + DELIVERY_FEE, total: e.total + DELIVERY_FEE, pending: Math.max(0, e.pending - DELIVERY_FEE) }))
+  const [jobs, setJobs] = useState([])
+  const [active, setActive] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
+  const [otp, setOtp] = useState("")
+  const [context, setContext] = useState(null)
+  const token = user?.token || user?.riderToken || localStorage.getItem("riderToken")
+    || localStorage.getItem("rider_token")
+  const request = useCallback(async (path, method = "GET", body) => {
+    if (!token) throw Error("Rider login is required. Sign in to your rider account.")
+    const response = await fetch(`${API}${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw Error(data.message || `Request failed (${response.status})`)
+    return data
+  }, [token])
+  const refresh = useCallback(async () => {
+    const current = await request("/api/deliveries/my-active")
+    const assigned = current.delivery || null
+    setActive(assigned)
+    if (assigned) {
+      const info = await request(`/api/group-lifecycle/rider-delivery/${assigned._id}/confirmation-context`)
+      setContext(info)
+      setJobs([])
+    } else {
+      setContext(null)
+      const available = await request("/api/deliveries/available")
+      setJobs(available.jobs || [])
     }
+  }, [request])
+  useEffect(() => { refresh().catch(e => setError(e.message)) }, [refresh])
+  async function act(path, method = "PUT", body) {
+    setBusy(true); setError(""); setNotice("")
+    try {
+      const data = await request(path, method, body)
+      setNotice(data.message || "Updated successfully.")
+      setOtp("")
+      await refresh()
+    } catch (e) { setError(e.message) }
+    finally { setBusy(false) }
   }
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000ee", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-      <div style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "560px", maxHeight: "92vh", overflowY: "auto", border: "1px solid #1e1e1e", display: "flex", flexDirection: "column" }}>
-
-        {/* Header */}
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#111", zIndex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <span style={{ fontSize: "17px", fontWeight: "700" }}>🛵 Rider Dashboard</span>
-            <div onClick={() => setIsOnline(o => !o)}
-              style={{ display: "flex", alignItems: "center", gap: "6px", background: isOnline ? "#064e3b22" : "#1e1e1e", border: `1px solid ${isOnline ? "#065f46" : "#333"}`, borderRadius: "20px", padding: "4px 12px", cursor: "pointer" }}>
-              <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: isOnline ? "#6ee7b7" : "#555" }} />
-              <span style={{ fontSize: "12px", fontWeight: "600", color: isOnline ? "#6ee7b7" : "#555" }}>{isOnline ? "Online" : "Offline"}</span>
-            </div>
-          </div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#666", fontSize: "22px", cursor: "pointer" }}>✕</button>
-        </div>
-
-        <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-
-          {/* Rider profile strip */}
-          <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "16px", display: "flex", alignItems: "center", gap: "14px", border: "1px solid #1e1e1e" }}>
-            <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "linear-gradient(135deg,#c8a97e,#9a7040)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", fontWeight: "700", color: "#000", flexShrink: 0 }}>
-              {user?.name?.charAt(0)?.toUpperCase() || "R"}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8" }}>{user?.name || "Rider"}</div>
-              <div style={{ fontSize: "12px", color: "#666" }}>{user?.university || "Campus Rider"} · 🛵 Active Zone</div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: "18px", fontWeight: "800", color: "#c8a97e" }}>₵{earnings.total}</div>
-              <div style={{ fontSize: "11px", color: "#555" }}>Total earned</div>
-            </div>
-          </div>
-
-          {/* Earnings cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
-            {[
-              ["Today", `₵${earnings.today}`, "#6ee7b7"],
-              ["This Week", `₵${earnings.week}`, "#93c5fd"],
-              ["Pending", `₵${earnings.pending}`, "#fcd34d"],
-            ].map(([label, value, color]) => (
-              <div key={label} style={{ background: "#1a1a1a", borderRadius: "10px", padding: "14px", border: "1px solid #1e1e1e", textAlign: "center" }}>
-                <div style={{ fontSize: "18px", fontWeight: "800", color }}>{value}</div>
-                <div style={{ fontSize: "11px", color: "#555", marginTop: "3px" }}>{label}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Offline warning */}
-          {!isOnline && (
-            <div style={{ background: "#78350f22", border: "1px solid #92400e", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#fcd34d", textAlign: "center" }}>
-              ⚠️ You're offline. You won't receive new delivery assignments.
-            </div>
-          )}
-
-          {/* Tabs */}
-          <div style={{ display: "flex", background: "#1a1a1a", borderRadius: "10px", padding: "4px", gap: "4px" }}>
-            {[
-              { id: "active", label: `Active (${activeDeliveries.length})` },
-              { id: "completed", label: `Completed (${completedDeliveries.length})` },
-              { id: "declined", label: `Declined (${declinedDeliveries.length})` },
-            ].map(t => (
-              <button key={t.id} onClick={() => setActiveTab(t.id)}
-                style={{ flex: 1, padding: "10px 6px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "700", fontSize: "12px", fontFamily: "inherit", background: activeTab === t.id ? "#c8a97e" : "transparent", color: activeTab === t.id ? "#000" : "#666", transition: "all .2s" }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Active deliveries */}
-          {activeTab === "active" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              {activeDeliveries.length === 0 ? (
-                <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "32px", textAlign: "center", border: "1px solid #1e1e1e" }}>
-                  <div style={{ fontSize: "40px", marginBottom: "12px" }}>🛵</div>
-                  <div style={{ fontSize: "15px", fontWeight: "600", color: "#888", marginBottom: "6px" }}>No active deliveries</div>
-                  <div style={{ fontSize: "13px", color: "#555" }}>{isOnline ? "New assignments will appear here automatically." : "Go online to receive delivery assignments."}</div>
-                </div>
-              ) : (
-                activeDeliveries.map(d => <DeliveryCard key={d.id} delivery={d} onUpdate={handleUpdate} />)
-              )}
-            </div>
-          )}
-
-          {/* Completed deliveries */}
-          {activeTab === "completed" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              {completedDeliveries.length === 0 ? (
-                <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "32px", textAlign: "center", border: "1px solid #1e1e1e", color: "#555", fontSize: "13px" }}>
-                  No completed deliveries yet.
-                </div>
-              ) : (
-                completedDeliveries.map(d => <DeliveryCard key={d.id} delivery={d} onUpdate={handleUpdate} />)
-              )}
-            </div>
-          )}
-
-          {/* Declined deliveries */}
-          {activeTab === "declined" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              {declinedDeliveries.length === 0 ? (
-                <div style={{ background: "#1a1a1a", borderRadius: "12px", padding: "32px", textAlign: "center", border: "1px solid #1e1e1e", color: "#555", fontSize: "13px" }}>
-                  No declined deliveries.
-                </div>
-              ) : (
-                declinedDeliveries.map(d => <DeliveryCard key={d.id} delivery={d} onUpdate={handleUpdate} />)
-              )}
-            </div>
-          )}
-
-        </div>
-      </div>
-    </div>
+  const money = amount => `GH₵${Number(amount || 0).toFixed(2)}`
+  const action = (label, path, method = "PUT", body, style = btn) => (
+    <button type="button" disabled={busy} style={{ ...style, opacity: busy ? 0.5 : 1 }} onClick={() => act(path, method, body)}>{label}</button>
   )
+  const place = p => p?.address || (Number.isFinite(p?.lat) ? `${p.lat}, ${p.lng}` : "Location provided after acceptance")
+  return <div style={{ position: "fixed", inset: 0, background: "#080808ee", zIndex: 400, padding: 16, overflowY: "auto", color: "#f4eee5" }}>
+    <div style={{ maxWidth: 680, margin: "24px auto", display: "grid", gap: 16 }}>
+      <header style={{ ...panel, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div><div style={{ color: gold, letterSpacing: 2, fontSize: 11 }}>SILK ROAD • DELIVERY</div><h2 style={{ margin: "6px 0" }}>Rider dashboard</h2><span style={{ color: "#b9ad9e" }}>{user?.name || "Rider"} · Live delivery jobs</span></div>
+        <button type="button" onClick={onClose} style={secondary}>Close</button>
+      </header>
+      {error && <div role="alert" style={{ ...panel, borderColor: "#9b4343", color: "#ffc5c5" }}>{error}</div>}
+      {notice && <div role="status" style={{ ...panel, borderColor: "#4a7656", color: "#baf4c5" }}>{notice}</div>}
+      <button type="button" style={secondary} disabled={busy} onClick={() => refresh().catch(e => setError(e.message))}>Refresh deliveries</button>
+      {active ? <section style={panel}>
+        <div style={{ color: gold, fontSize: 12 }}>CURRENT DELIVERY</div>
+        <h3 style={{ margin: "8px 0" }}>{active.itemTitle || "Customer order"}</h3>
+        <p style={{ color: "#c2b9ac" }}>Status: <strong>{active.status}</strong> · Fee: <strong>{money(active.deliveryFee)}</strong></p>
+        <p>Pickup: {place(active.pickupLocation)}</p><p>Drop-off: {place(active.dropLocation)}</p>
+        {active.sellerContact && <p>Seller: {active.sellerContact}</p>}
+        {active.buyerContact && <p>Buyer: {active.buyerContact}</p>}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          {active.status === "accepted" && action("Item picked up", `/api/deliveries/${active._id}/picked-up`)}
+          {active.status === "picked_up" && action("Arrived at buyer / delivered", `/api/deliveries/${active._id}/delivered`)}
+          {["accepted", "picked_up"].includes(active.status) && action("Release assignment", `/api/deliveries/${active._id}/cancel-by-rider`, "PUT", undefined, secondary)}
+        </div>
+        {active.status === "delivered" && <div style={{ marginTop: 18, padding: 16, border: "1px solid #6b593f", borderRadius: 12 }}>
+          <h3 style={{ marginTop: 0 }}>Confirm with buyer's code</h3>
+          <p style={{ color: "#c2b9ac" }}>Ask the buyer to generate the six-digit delivery code in their order screen. Payment is not released until the code is verified and settlement is recorded.</p>
+          <input aria-label="Six-digit delivery code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" style={{ background: "#24211e", color: "white", border: "1px solid #88704d", borderRadius: 10, padding: 14, fontSize: 22, width: 170, letterSpacing: 5 }} />
+          <div style={{ marginTop: 12 }}>
+            <button type="button" style={btn} disabled={busy || otp.length !== 6 || !context} onClick={() => {
+              if (context?.grouped) return act(`/api/group-lifecycle/${encodeURIComponent(context.checkoutId)}/orders/${context.orderId}/confirm-rider-delivery`, "POST", { deliveryCode: otp })
+              if (context?.grouped === false) return act(`/api/deliveries/${active._id}/confirm-otp`, "PUT", { otp })
+              setError("Unable to verify delivery type. Confirmation is blocked for safety.")
+            }}>Verify delivery code</button>
+          </div>
+        </div>}
+      </section> : <section style={panel}>
+        <h3 style={{ marginTop: 0 }}>Available rider jobs</h3>
+        {!jobs.length && <p style={{ color: "#a9a093" }}>No funded jobs available right now.</p>}
+        {jobs.map(job => <div key={job._id || job.id} style={{ borderTop: "1px solid #3c342a", padding: "16px 0" }}>
+          <strong>{job.itemTitle || "Delivery request"}</strong>
+          <p style={{ color: "#b8aa97" }}>Fee: {money(job.deliveryFee)} · Distance: {Number(job.distanceKm || 0).toFixed(1)} km</p>
+          {action("Accept job", `/api/deliveries/${job._id || job.id}/accept`)}
+        </div>)}
+      </section>}
+    </div>
+  </div>
 }
