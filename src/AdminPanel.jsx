@@ -1524,6 +1524,25 @@ function MarketplaceEnvironmentTab({ onNeedReAuth }) {
     })
   }
 
+  const resetDevelopment = () => {
+    if (busy || environment?.mode !== "live") return
+    const confirmation = window.prompt("WARNING: ALL eligible legacy development orders and linked deliveries will be PERMANENTLY DELETED from MongoDB. No recovery without a backup. Any payment evidence stops the reset.\n\nType DELETE ALL DEVELOPMENT RECORDS AND SWITCH TO TESTING")
+    if (confirmation !== "DELETE ALL DEVELOPMENT RECORDS AND SWITCH TO TESTING") return
+    if (!window.confirm("FINAL WARNING: Permanently erase development orders and deliveries, then switch to Testing Mode? Public checkout must be stopped. This cannot be undone.")) return
+    onNeedReAuth(async token => {
+      setBusy(true); setError(""); setNotice("")
+      try {
+        const { ok, data } = await adminFetch("/environment/owner/reset-development-and-test", {
+          method: "POST", headers: { "x-reauth-token": token }, body: JSON.stringify({ confirmation }),
+        })
+        if (!ok) throw new Error(data?.message || "Development reset rejected")
+        setNotice(`Permanently deleted ${data.deletedOrders} orders and ${data.deletedDeliveries} deliveries. Marketplace switched to Testing Mode.`)
+        await refresh()
+      } catch (err) { setError(err.message || "Reset failed") }
+      finally { setBusy(false) }
+    })
+  }
+
   const mode = environment?.mode
   const provider = payment?.providerEnvironment || "unconfigured"
   const matching = (mode === "testing" && provider === "test") || (mode === "live" && provider === "live")
@@ -1554,6 +1573,12 @@ function MarketplaceEnvironmentTab({ onNeedReAuth }) {
         </div>
       </div>
       {mode === "testing" && provider === "test" && <Alert type="success">Test configuration matches. Use only Paystack test transactions. Live collection, settlement, refunds and payouts require separate end-to-end verification.</Alert>}
+      {mode === "live" && <div style={{ padding: 20, border: `1px solid ${C.red}`, borderRadius: 12, display: "grid", gap: 12 }}>
+        <SectionTitle>One-time development reset</SectionTitle>
+        <Alert type="warn">DANGER: Permanently deletes legacy development orders and their linked deliveries, then switches to Testing Mode in one database transaction. Any existing payment records, live checkout groups, or settlement evidence will stop the reset. Make a backup and stop public checkout first.</Alert>
+        <Btn variant="danger" disabled={busy || !environment.cleanupEnabled || !environment.switchingEnabled || provider !== "test"} onClick={resetDevelopment}>Permanently delete development records and enter Testing Mode</Btn>
+        {!environment.cleanupEnabled && <Alert type="warn">Set ENABLE_DEV_RECORD_PURGE=true on Render and redeploy to enable the reset.</Alert>}
+      </div>}
       {mode === "live" && <PermanentDevCleanup onNeedReAuth={onNeedReAuth} onComplete={refresh} />}
       <Alert type="info">Returning to Live Mode is deliberately not exposed here. It requires a separate launch-readiness review and verified live payment configuration.</Alert>
     </>}
