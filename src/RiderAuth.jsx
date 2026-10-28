@@ -1,205 +1,86 @@
 import { useState } from "react"
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+const API = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/$/, "")
+const inputStyle = { width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 10, border: "1px solid #45403b", background: "#1b1b1b", color: "#fff", fontSize: 14 }
+const labelStyle = { display: "grid", gap: 6, fontSize: 12, color: "#d6c7b3", fontWeight: 600 }
 
-const UNIS     = ["KNUST", "UG Legon", "Ashesi", "UDS", "UCC", "GIJ", "UHAS", "Other"]
-const VEHICLES = [
-  { id: "motorbike", label: "🛵 Motorbike", desc: "Fastest, best for longer distances" },
-  { id: "bicycle",   label: "🚲 Bicycle",   desc: "Eco-friendly, great on campus" },
-  { id: "walking",   label: "🚶 Walking",   desc: "Short distances within campus" },
-]
-
-const inp = (err) => ({
-  width: "100%", background: "#161616",
-  border: `1px solid ${err ? "#991b1b" : "#1e1e1e"}`,
-  color: "#fff", padding: "12px 16px", borderRadius: "10px",
-  fontSize: "14px", outline: "none", boxSizing: "border-box",
-  fontFamily: "inherit",
-})
-
+/** App.jsx already opens this modal via the Rider login button.
+ * This replaces the active RiderAuth component; BecomeRider.jsx is a separate registration page.
+ */
 export default function RiderAuth({ onAuth, onClose }) {
-  const [mode, setMode]         = useState("login")
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState("")
-  const [errors, setErrors]     = useState({})
-
-  const [form, setForm] = useState({
-    name:      "",
-    phone:     "",
-    email:     "",
-    password:  "",
-    confirm:   "",
-    university:"",
-    vehicle:   "motorbike",
-  })
-
-  const set = (key, val) => {
-    setForm(f => ({ ...f, [key]: val }))
-    setErrors(e => ({ ...e, [key]: "" }))
-    setError("")
-  }
-
-  const validateRegister = () => {
-    const e = {}
-    if (!form.name.trim())     e.name     = "Name is required."
-    if (!form.phone.trim())    e.phone    = "Phone is required."
-    if (!form.email.trim())    e.email    = "Email is required."
-    if (form.password.length < 6) e.password = "Password must be at least 6 characters."
-    if (form.password !== form.confirm) e.confirm = "Passwords do not match."
-    if (!form.university)      e.university = "Please select your university."
-    return e
-  }
-
-  const handleSubmit = async () => {
-    setError("")
-    if (mode === "register") {
-      const e = validateRegister()
-      if (Object.keys(e).length > 0) { setErrors(e); return }
+  const [mode, setMode] = useState("login")
+  const [form, setForm] = useState({ name: "", phone: "", email: "", password: "", university: "UCC", vehicle: "motorbike" })
+  const [photo, setPhoto] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const [message, setMessage] = useState("")
+  const change = e => setForm(v => ({ ...v, [e.target.name]: e.target.value }))
+  async function submit(e) {
+    e.preventDefault()
+    setError(""); setMessage("")
+    if (mode === "register" && (!photo || !photo.type.startsWith("image/"))) {
+      setError("Upload a clear photograph of your face to apply as a rider."); return
     }
-    setLoading(true)
+    if (mode === "register" && form.password.length < 8) {
+      setError("Password must contain at least 8 characters."); return
+    }
+    setBusy(true)
     try {
-      const endpoint = mode === "login" ? "/rider-auth/login" : "/rider-auth/register"
-      const body     = mode === "login"
-        ? { email: form.email.trim(), password: form.password }
-        : { name: form.name.trim(), phone: form.phone.trim(), email: form.email.trim(), password: form.password, university: form.university, vehicle: form.vehicle }
-
-      const res  = await fetch(`${API_URL}${endpoint}`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(body),
+      const register = mode === "register"
+      const body = register ? new FormData() : JSON.stringify({ email: form.email, password: form.password })
+      if (register) {
+        for (const key of ["name", "phone", "email", "password", "university", "vehicle"]) body.append(key, form[key])
+        body.append("photo", photo)
+      }
+      const response = await fetch(`${API}/rider-auth/${register ? "register" : "login"}`, {
+        method: "POST", body,
+        ...(register ? {} : { headers: { "Content-Type": "application/json" } }),
       })
-      const data = await res.json()
-
-      if (!res.ok) { setError(data.message || "Something went wrong."); setLoading(false); return }
-
-      // Store rider token separately from seller token
-      localStorage.setItem("silkroad_rider_token", data.token)
-      localStorage.setItem("silkroad_rider", JSON.stringify(data))
-      onAuth(data)
-    } catch {
-      setError("Could not connect to server. Please try again.")
-    }
-    setLoading(false)
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(result.message || "Unable to continue. Please retry.")
+      const rider = result.rider || result
+      if (register) {
+        setMessage(result.message || "Application received. Await administrative approval.")
+        setMode("login")
+        setPhoto(null)
+        return
+      }
+      if (rider.isApproved === false || rider.photoReviewStatus === "pending" || rider.photoReviewStatus === "rejected") {
+        setMessage("Signed in. Your rider application is awaiting identity/photo approval; you cannot accept jobs yet.")
+      }
+      onAuth?.(result)
+    } catch (err) { setError(err.message) }
+    finally { setBusy(false) }
   }
-
-  return (
-    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, background: "#000000dd", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-      <div className="modal-content" style={{ background: "#111", borderRadius: "20px", width: "100%", maxWidth: "460px", maxHeight: "92vh", overflowY: "auto", border: "1px solid #1e1e1e" }}>
-
-        {/* Header */}
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <div style={{ fontSize: "18px", fontWeight: "700", color: "#f0ede8" }}>🛵 Rider Portal</div>
-            <div style={{ fontSize: "12px", color: "#555", marginTop: "3px" }}>Silk Road GH delivery network</div>
-          </div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#555", fontSize: "22px", cursor: "pointer", minHeight: "auto" }}>✕</button>
-        </div>
-
-        {/* Mode toggle */}
-        <div style={{ padding: "16px 24px", display: "flex", gap: "8px" }}>
-          {[["login", "Log In"], ["register", "Sign Up"]].map(([m, label]) => (
-            <button key={m} onClick={() => { setMode(m); setError(""); setErrors({}) }}
-              style={{ flex: 1, padding: "11px", borderRadius: "10px", border: `1.5px solid ${mode === m ? "#c8a97e" : "#1e1e1e"}`, background: mode === m ? "#c8a97e18" : "transparent", color: mode === m ? "#c8a97e" : "#555", cursor: "pointer", fontWeight: "700", fontSize: "14px", fontFamily: "inherit", transition: "all 0.2s" }}>
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ padding: "0 24px 28px", display: "flex", flexDirection: "column", gap: "14px" }}>
-
-          {error && (
-            <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#fca5a5" }}>
-              ⚠️ {error}
-            </div>
-          )}
-
-          {/* Register only fields */}
-          {mode === "register" && (
-            <>
-              <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "7px", textTransform: "uppercase", letterSpacing: ".06em" }}>FULL NAME</div>
-                <input placeholder="Your full name" value={form.name} onChange={e => set("name", e.target.value)} style={inp(errors.name)} />
-                {errors.name && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {errors.name}</div>}
-              </div>
-
-              <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "7px", textTransform: "uppercase", letterSpacing: ".06em" }}>PHONE NUMBER</div>
-                <input placeholder="e.g. 0241234567" value={form.phone} onChange={e => set("phone", e.target.value)} style={inp(errors.phone)} />
-                {errors.phone && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {errors.phone}</div>}
-              </div>
-            </>
-          )}
-
-          <div>
-            <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "7px", textTransform: "uppercase", letterSpacing: ".06em" }}>EMAIL</div>
-            <input placeholder="your@email.com" type="email" value={form.email} onChange={e => set("email", e.target.value)} style={inp(errors.email)} />
-            {errors.email && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {errors.email}</div>}
-          </div>
-
-          <div>
-            <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "7px", textTransform: "uppercase", letterSpacing: ".06em" }}>PASSWORD</div>
-            <input placeholder="Min. 6 characters" type="password" value={form.password} onChange={e => set("password", e.target.value)} style={inp(errors.password)} />
-            {errors.password && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {errors.password}</div>}
-          </div>
-
-          {mode === "register" && (
-            <>
-              <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "7px", textTransform: "uppercase", letterSpacing: ".06em" }}>CONFIRM PASSWORD</div>
-                <input placeholder="Repeat your password" type="password" value={form.confirm} onChange={e => set("confirm", e.target.value)} style={inp(errors.confirm)} />
-                {errors.confirm && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {errors.confirm}</div>}
-              </div>
-
-              <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "10px", textTransform: "uppercase", letterSpacing: ".06em" }}>YOUR UNIVERSITY</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "7px" }}>
-                  {UNIS.map(u => (
-                    <button key={u} onClick={() => set("university", u)}
-                      style={{ padding: "9px 4px", borderRadius: "9px", border: `1.5px solid ${form.university === u ? "#c8a97e" : "#1e1e1e"}`, background: form.university === u ? "#c8a97e18" : "#161616", color: form.university === u ? "#c8a97e" : "#555", cursor: "pointer", fontWeight: "600", fontSize: "11px", textAlign: "center", fontFamily: "inherit" }}>
-                      {u}
-                    </button>
-                  ))}
-                </div>
-                {errors.university && <div style={{ fontSize: "12px", color: "#fca5a5", marginTop: "5px" }}>⚠️ {errors.university}</div>}
-              </div>
-
-              <div>
-                <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "10px", textTransform: "uppercase", letterSpacing: ".06em" }}>VEHICLE TYPE</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {VEHICLES.map(v => (
-                    <button key={v.id} onClick={() => set("vehicle", v.id)}
-                      style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px 16px", borderRadius: "12px", border: `1.5px solid ${form.vehicle === v.id ? "#c8a97e" : "#1e1e1e"}`, background: form.vehicle === v.id ? "#c8a97e18" : "#161616", cursor: "pointer", textAlign: "left", fontFamily: "inherit", transition: "all 0.2s" }}>
-                      <span style={{ fontSize: "24px" }}>{v.label.split(" ")[0]}</span>
-                      <div>
-                        <div style={{ fontSize: "14px", fontWeight: "700", color: form.vehicle === v.id ? "#c8a97e" : "#f0ede8" }}>{v.label.split(" ").slice(1).join(" ")}</div>
-                        <div style={{ fontSize: "12px", color: "#555", marginTop: "2px" }}>{v.desc}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "12px", padding: "14px", fontSize: "13px", color: "#6ee7b7", lineHeight: "1.7" }}>
-                ✅ By signing up you agree to Silk Road GH's delivery terms. You'll only see jobs when you're online.
-              </div>
-            </>
-          )}
-
-          <button className="btn-gold" onClick={handleSubmit} disabled={loading}
-            style={{ padding: "14px", borderRadius: "12px", fontSize: "15px", opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
-            {loading ? "⏳ Please wait..." : mode === "login" ? "Log In as Rider →" : "Create Rider Account →"}
-          </button>
-
-          <div style={{ textAlign: "center", fontSize: "13px", color: "#555" }}>
-            {mode === "login" ? "New rider? " : "Already have an account? "}
-            <button onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); setErrors({}) }}
-              style={{ background: "transparent", border: "none", color: "#c8a97e", cursor: "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit" }}>
-              {mode === "login" ? "Sign up here" : "Log in"}
-            </button>
-          </div>
-
-        </div>
+  return <div role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) onClose?.() }}
+    style={{ position: "fixed", inset: 0, zIndex: 3000, background: "#000b", display: "grid", placeItems: "center", padding: 16, overflowY: "auto" }}>
+    <section role="dialog" aria-modal="true" aria-label="Rider account" style={{ background: "#111", border: "1px solid #4b3c29", color: "#f5efe8", borderRadius: 18, width: "100%", maxWidth: 460, padding: 24, boxSizing: "border-box", maxHeight: "95vh", overflowY: "auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <h2 style={{ margin: 0, color: "#d6b78a" }}>🛵 Silk Road Riders</h2>
+        <button type="button" aria-label="Close" onClick={onClose} style={{ background: "transparent", border: 0, color: "#fff", fontSize: 26, cursor: "pointer" }}>×</button>
       </div>
-    </div>
-  )
+      <p style={{ color: "#aaa", fontSize: 13 }}>Sign in or apply to deliver for Silk Road GH.</p>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {[["login", "Log In"], ["register", "Apply as Rider"]].map(([value, text]) =>
+          <button type="button" key={value} onClick={() => { setMode(value); setError(""); setMessage("") }}
+            style={{ flex: 1, padding: 11, borderRadius: 9, border: "1px solid #66513b", background: mode === value ? "#d6b78a" : "#222", color: mode === value ? "#111" : "#eee", fontWeight: 700, cursor: "pointer" }}>{text}</button>)}
+      </div>
+      <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
+        {mode === "register" && <>
+          <label style={labelStyle}>Full name<input style={inputStyle} name="name" value={form.name} onChange={change} required autoComplete="name" /></label>
+          <label style={labelStyle}>Phone number<input style={inputStyle} name="phone" value={form.phone} onChange={change} required autoComplete="tel" /></label>
+          <label style={labelStyle}>University<input style={inputStyle} name="university" value={form.university} onChange={change} /></label>
+          <label style={labelStyle}>Vehicle<select style={inputStyle} name="vehicle" value={form.vehicle} onChange={change}><option value="motorbike">Motorbike</option><option value="bicycle">Bicycle</option><option value="walking">Walking</option></select></label>
+          <label style={labelStyle}>Clear face photograph<input type="file" accept="image/jpeg,image/png,image/webp" required onChange={e => setPhoto(e.target.files?.[0] || null)} style={inputStyle} /></label>
+          {photo && <p style={{ fontSize: 12, color: "#93c5fd", margin: 0 }}>Selected: {photo.name}</p>}
+          <p style={{ fontSize: 12, color: "#aaa", margin: 0 }}>Your application remains pending until an administrator approves your photograph and account. Do not upload someone else's photograph.</p>
+        </>}
+        <label style={labelStyle}>Email<input type="email" style={inputStyle} name="email" value={form.email} onChange={change} required autoComplete="email" /></label>
+        <label style={labelStyle}>Password<input type="password" style={inputStyle} name="password" value={form.password} onChange={change} required minLength={mode === "register" ? 8 : undefined} autoComplete={mode === "register" ? "new-password" : "current-password"} /></label>
+        {error && <p role="alert" style={{ color: "#fca5a5", margin: 0, fontSize: 13 }}>{error}</p>}
+        {message && <p role="status" style={{ color: "#86efac", margin: 0, fontSize: 13 }}>{message}</p>}
+        <button type="submit" disabled={busy} style={{ padding: 13, border: 0, borderRadius: 10, background: "#d6b78a", color: "#111", fontWeight: 800, cursor: "pointer" }}>{busy ? "Please wait…" : mode === "register" ? "Submit Rider Application" : "Log In"}</button>
+      </form>
+    </section>
+  </div>
 }
