@@ -702,7 +702,7 @@ function NotificationsTab({ user, onSaleComplete }) {
                     </div>
                   )}
 
-                  {n.deliveryMethod === "rider" && <SellerRiderIdentitySlot localOrderId={n.orderId} />}
+                  {(n.deliveryMethod === "rider" || hasDelivery) && <SellerRiderIdentitySlot localOrderId={n.orderId} />}
 
                   <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "10px", padding: "12px 14px", fontSize: "12px", color: "#fcd34d", lineHeight: "1.6" }}>
                     ⚠️ Payment in escrow. Released when buyer confirms delivery via OTP.
