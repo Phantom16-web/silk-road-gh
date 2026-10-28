@@ -1,0 +1,13 @@
+import React, {useEffect,useState} from "react";
+/** Mount inside the authenticated seller order detail view.
+ * apiBase should be the same API prefix used by your seller dashboard.
+ */
+export default function RiderIdentityCheck({orderId, token, apiBase="/api/group-rider-funding", onUpdated=()=>{}}){
+ const [info,setInfo]=useState(null),[error,setError]=useState(""),[busy,setBusy]=useState(false),[reason,setReason]=useState("");
+ const headers={Authorization:`Bearer ${token}`};
+ const load=async()=>{if(!orderId||!token)return;try{const r=await fetch(`${apiBase}/${encodeURIComponent(orderId)}/rider-identity`,{headers});const j=await r.json();if(r.status===404){setInfo(null);setError("");return;}if(!r.ok)throw Error(j.message||"No rider assignment");setInfo(j);setError("")}catch(e){setInfo(null);setError(e.message)}};
+ useEffect(()=>{load()},[orderId,token,apiBase]);
+ const act=async(path,body={})=>{setBusy(true);setError("");try{const r=await fetch(`${apiBase}/${encodeURIComponent(orderId)}/${path}`,{method:"POST",headers:{...headers,"Content-Type":"application/json"},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw Error(j.message||"Request failed");await load();onUpdated(j)}catch(e){setError(e.message)}finally{setBusy(false)}};
+ if(!orderId||!token)return null;
+ return <section style={{padding:16,border:"1px solid #d1d5db",borderRadius:12,maxWidth:420}}><h3>Verify your assigned rider</h3><p>Compare the rider standing in front of you with this approved profile photograph. Never hand over an item if the faces do not match.</p>{info?.rider&&<><img src={info.rider.photoUrl||""} alt="Approved rider profile" style={{width:180,height:180,objectFit:"cover",borderRadius:12}}/><p><strong>{info.rider.name}</strong></p><p>{info.rider.photoApproved?"Approved rider photograph":"Photo approval unavailable — do not hand over"}</p>{info.status==="accepted"&&!info.verified&&<><button disabled={busy||!info.rider.photoApproved} onClick={()=>act("verify-rider")}>Face matches — authorize handover</button><label style={{display:"block",marginTop:12}}>Face mismatch or identity concern<textarea value={reason} onChange={e=>setReason(e.target.value)} rows={3} maxLength={1000} style={{display:"block",width:"100%"}}/></label><button disabled={busy||reason.trim().length<10} onClick={()=>act("report-rider-mismatch",{reason:reason.trim()})}>Report mismatch and cancel assignment</button></>}</>}{info?.verified&&<p>Identity confirmed by seller. Rider may collect the item.</p>}{error&&<p role="alert">{error}</p>}<button disabled={busy} onClick={load}>Refresh rider details</button></section>
+}
