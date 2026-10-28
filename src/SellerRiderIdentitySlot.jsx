@@ -10,7 +10,7 @@ export default function SellerRiderIdentitySlot({ localOrderId }) {
   const [orderId, setOrderId] = useState('');
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
-  const token = localStorage.getItem('silkroad_token') || '';
+  const token = localStorage.getItem('silkroad_token') || localStorage.getItem('token') || '';
 
   useEffect(() => {
     let cancelled = false;
