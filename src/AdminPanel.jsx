@@ -1543,6 +1543,38 @@ function MarketplaceEnvironmentTab({ onNeedReAuth }) {
     })
   }
 
+
+  const [launch, setLaunch] = useState(null)
+  const [launchBusy, setLaunchBusy] = useState(false)
+  const checkLaunch = async () => {
+    setLaunchBusy(true)
+    try {
+      const { ok, data } = await adminFetch("/environment/owner/launch-readiness")
+      if (!ok) throw new Error(data?.message || "Launch readiness unavailable")
+      setLaunch(data)
+    } catch (err) { setError(err.message || "Launch check failed") }
+    finally { setLaunchBusy(false) }
+  }
+  const launchToLive = () => {
+    if (!launch?.canLaunch || busy) return
+    const confirmation = window.prompt("PERMANENT DELETION: All TESTING orders, payments, checkout groups and deliveries will be deleted. Confirm no real money is involved and checkout and webhook workers are stopped.\\n\\nType PERMANENTLY DELETE TEST TRANSACTIONS AND GO LIVE")
+    if (confirmation !== "PERMANENTLY DELETE TEST TRANSACTIONS AND GO LIVE") return
+    if (!window.confirm("FINAL WARNING: Permanently delete all test transaction data and activate LIVE mode? This cannot be undone.")) return
+    onNeedReAuth(async token => {
+      setBusy(true); setError(""); setNotice("")
+      try {
+        const { ok, data } = await adminFetch("/environment/owner/launch-to-live", {
+          method: "POST", headers: { "x-reauth-token": token }, body: JSON.stringify({ confirmation }),
+        })
+        if (!ok) throw new Error(data?.message || "Launch refused")
+        setNotice(`Live Mode activated. Removed ${data.deletedOrders} test orders, ${data.deletedDeliveries} deliveries, ${data.deletedPayments} payments and ${data.deletedCheckoutGroups} checkout groups. Verify live checkout before opening to customers.`)
+        setLaunch(null)
+        await refresh()
+      } catch (err) { setError(err.message || "Launch failed") }
+      finally { setBusy(false) }
+    })
+  }
+
   const mode = environment?.mode
   const provider = payment?.providerEnvironment || "unconfigured"
   const matching = (mode === "testing" && provider === "test") || (mode === "live" && provider === "live")
@@ -1580,7 +1612,17 @@ function MarketplaceEnvironmentTab({ onNeedReAuth }) {
         {!environment.cleanupEnabled && <Alert type="warn">Set ENABLE_DEV_RECORD_PURGE=true on Render and redeploy to enable the reset.</Alert>}
       </div>}
       {mode === "live" && <PermanentDevCleanup onNeedReAuth={onNeedReAuth} onComplete={refresh} />}
-      <Alert type="info">Returning to Live Mode is deliberately not exposed here. It requires a separate launch-readiness review and verified live payment configuration.</Alert>
+      {mode === "testing" && <div style={{ padding: 20, border: `1px solid ${C.border2}`, borderRadius: 12, display: "grid", gap: 12 }}>
+        <SectionTitle>Testing → Live launch transition</SectionTitle>
+        <Alert type="warn">Before using this, stop public checkout and payment/webhook workers, back up MongoDB, and configure a Paystack sk_live_ secret. This deletes all test orders, deliveries, payments and checkout groups permanently. It does not certify live payouts, refunds or regulatory readiness.</Alert>
+        <Btn variant="ghost" disabled={busy || launchBusy} onClick={checkLaunch}>{launchBusy ? "Checking..." : "Check launch readiness"}</Btn>
+        {launch && <>
+          <div style={{ fontSize: 12, color: C.textMid }}>Records to delete: {launch.counts.orders} orders · {launch.counts.deliveries} deliveries · {launch.counts.payments} payments · {launch.counts.checkoutGroups} checkout groups</div>
+          {Object.entries(launch.checks).map(([key, ok]) => <div key={key} style={{ fontSize: 12, color: ok ? C.green : C.red }}>{ok ? "✓" : "✕"} {key}</div>)}
+          <Btn variant="danger" disabled={!launch.canLaunch || busy} onClick={launchToLive}>Permanently clear test transactions and enter Live Mode</Btn>
+        </>}
+      </div>}
+      <Alert type="info">A successful environment switch does not itself validate Paystack production payouts, refunds, or legal compliance. Run a controlled live end-to-end test before public launch.</Alert>
     </>}
   </div>
 }
