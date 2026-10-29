@@ -19,6 +19,7 @@ import RiderApp from "./RiderApp"
 import { getListings } from "./api"
 import ProductCard from "./ProductCard"
 import ProductModal from "./ProductModal"
+import AdvancedSearch from "./AdvancedSearch"
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 const ALL_LISTINGS = [
   { id: 1,  title: "Calculus Textbook",       price: 380,  category: "Books",       seller: "Ahmad K.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "8th edition, some highlights but all pages intact. Perfect for MTH 151.",                       delivery: ["Pickup", "Rider"],            section: "buy" },
@@ -372,7 +373,7 @@ function SearchResults({ query, onClose, onNavigate }) {
                       onMouseLeave={e => e.currentTarget.style.borderColor = "#1e1e1e"}
                     >
                       <img
-                        src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`}
+                        src={item.image || "/favicon.svg"}
                         alt={item.title}
                         style={{ width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }}
                       />
@@ -468,6 +469,33 @@ function App() {
     }
   })
   const [showRiderAuth, setShowRiderAuth] = useState(false)
+  useEffect(() => {
+    const token = localStorage.getItem("silkroad_rider_token")
+    if (!token) {
+      localStorage.removeItem("silkroad_rider")
+      setRiderUser(null)
+      return
+    }
+    let cancelled = false
+    fetch(`${API_URL}/rider-auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async response => {
+        if (response.status === 401 || response.status === 403 || response.status === 404) {
+          if (!cancelled && localStorage.getItem("silkroad_rider_token") === token) {
+            localStorage.removeItem("silkroad_rider_token")
+            localStorage.removeItem("silkroad_rider")
+            setRiderUser(null)
+          }
+          return
+        }
+        if (!response.ok) return // Preserve session during temporary network/server outages.
+        const rider = await response.json()
+        if (!cancelled && localStorage.getItem("silkroad_rider_token") === token && rider?._id) {
+          localStorage.setItem("silkroad_rider", JSON.stringify(rider))
+          setRiderUser(rider)
+        }
+      }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
   const [dbListings, setDbListings]           = useState([])
   const [listingsLoading, setListingsLoading] = useState(false)
   const [listingsPage, setListingsPage]       = useState(1)
@@ -564,32 +592,20 @@ function App() {
     }
   }, [hasMore, loadingMore, activePage, usingDb, listingsPage])
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setDbSearchResults([])
-      return
-    }
-    if (searchDebounceRef.current) {
-      clearTimeout(searchDebounceRef.current)
-    }
-    searchDebounceRef.current = setTimeout(async () => {
+    if (!searchQuery.trim()) { setDbSearchResults([]); setSearchLoading(false); return }
+    const ctrl = new AbortController()
+    const timer = setTimeout(async () => {
       setSearchLoading(true)
       try {
-        const { keyword } = parseSearch(searchQuery)
-        const data = await getListings({
-          search: keyword || searchQuery,
-          limit: 10
-        })
-        setDbSearchResults(Array.isArray(data) ? data : [])
-      } catch {
-        setDbSearchResults([])
-      }
-      setSearchLoading(false)
-    }, 350)
-    return () => {
-      if (searchDebounceRef.current) {
-        clearTimeout(searchDebounceRef.current)
-      }
-    }
+        const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+        const res = await fetch(`${base}/search/suggest?q=${encodeURIComponent(searchQuery.trim())}`, { signal: ctrl.signal })
+        if (!res.ok) throw new Error('Suggestions unavailable')
+        const result = await res.json()
+        if (!ctrl.signal.aborted) setDbSearchResults(result.suggestions || [])
+      } catch { if (!ctrl.signal.aborted) setDbSearchResults([]) }
+      finally { if (!ctrl.signal.aborted) setSearchLoading(false) }
+    }, 250)
+    return () => { clearTimeout(timer); ctrl.abort() }
   }, [searchQuery])
   useEffect(() => {
     const handleClick = (e) => {
@@ -703,33 +719,10 @@ function App() {
       setShowFullResults(true)
     }
   }
-  const dropdownResults = (() => {
-    if (!searchQuery.trim()) return []
-    const { detectedSection, keyword } = parseSearch(searchQuery)
-    const staticMatches = ALL_ITEMS.filter(item => {
-      if (item.section === "buy") return false
-      const matchesSection = detectedSection
-        ? item.section === detectedSection
-        : true
-      const matchesKeyword = keyword
-        ? item.title.toLowerCase().includes(keyword) ||
-          item.category.toLowerCase().includes(keyword)
-        : true
-      return matchesSection && matchesKeyword
-    })
-    const dbMatches =
-      detectedSection && detectedSection !== "buy"
-        ? []
-        : dbSearchResults.map(item => ({
-            id: item._id,
-            imageId: item._id,
-            title: item.title,
-            category: item.category,
-            section: "buy",
-            image: item.image,
-          }))
-    return [...dbMatches, ...staticMatches].slice(0, 8)
-  })()
+  const dropdownResults = dbSearchResults.map(item => ({
+    id: item._id, imageId: item._id, title: item.title, category: item.category,
+    section: item.type === 'product' ? 'buy' : item.type, image: item.image
+  })).slice(0, 8)
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
       <style>{`
@@ -933,7 +926,7 @@ function App() {
                         }
                       >
                         <img
-                          src={item.image || `https://picsum.photos/seed/${item.imageId}/100/100`}
+                          src={item.image || "/favicon.svg"}
                           alt={item.title}
                           style={{ width: "34px", height: "34px", borderRadius: "6px", objectFit: "cover", flexShrink: 0 }}
                         />
@@ -1037,7 +1030,7 @@ function App() {
         siteSettings={siteSettings}
       />
       {showFullResults && searchQuery.trim() && (
-        <SearchResults
+        <AdvancedSearch
           query={searchQuery}
           onClose={() => setShowFullResults(false)}
           onNavigate={section => {
@@ -1118,7 +1111,11 @@ function App() {
       )}
       {showRiderAuth && (
         <RiderAuth
-          onAuth={rider => {
+          onAuth={payload => {
+            const token = payload?.token
+            const rider = payload?.rider || payload
+            if (!token || !rider?._id) return
+            localStorage.setItem("silkroad_rider_token", token)
             localStorage.setItem("silkroad_rider", JSON.stringify(rider))
             setRiderUser(rider)
             setShowRiderAuth(false)

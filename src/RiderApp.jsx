@@ -56,7 +56,8 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
   const [clearConfirm, setClearConfirm]   = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
-  const [isOnline, setIsOnline]           = useState(rider.isOnline || false)
+  const [isOnline, setIsOnline]           = useState(Boolean(rider.isOnline))
+  const [onlineBusy, setOnlineBusy]       = useState(false)
   const [earnings, setEarnings]           = useState({
     total:      rider.totalEarned     || 0,
     deliveries: rider.totalDeliveries || 0,
@@ -133,10 +134,23 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
   }
 
   const handleToggleOnline = async () => {
+    if (onlineBusy) return
+    setOnlineBusy(true)
+    setActionError("")
     try {
       const res = await riderCall("/rider-auth/toggle-online", "PUT")
-      setIsOnline(res.isOnline)
-    } catch {}
+      setIsOnline(Boolean(res.isOnline))
+      setRider(previous => {
+        const next = { ...previous, isOnline: Boolean(res.isOnline) }
+        localStorage.setItem("silkroad_rider", JSON.stringify(next))
+        return next
+      })
+      await fetchJobsAndActive()
+    } catch (err) {
+      setActionError(err.message || "Unable to change availability. Please retry.")
+    } finally {
+      setOnlineBusy(false)
+    }
   }
 
   const handleAccept = async (deliveryId) => {
@@ -256,16 +270,19 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <span style={{ fontSize: "12px", color: isOnline ? "#6ee7b7" : "#555" }}>{isOnline ? "Online" : "Offline"}</span>
-          <div onClick={handleToggleOnline}
-            style={{ width: "44px", height: "24px", background: isOnline ? "#c8a97e" : "#2a2a2a", borderRadius: "24px", position: "relative", cursor: "pointer", transition: "background 0.2s", flexShrink: 0 }}>
-            <div style={{ position: "absolute", top: "3px", left: isOnline ? "22px" : "3px", width: "18px", height: "18px", background: "#fff", borderRadius: "50%", transition: "left 0.2s" }} />
-          </div>
+          <button type="button" role="switch" aria-checked={isOnline} aria-label="Rider online availability"
+            disabled={onlineBusy} onClick={handleToggleOnline}
+            style={{ width: "44px", height: "24px", border: 0, padding: 0, background: isOnline ? "#c8a97e" : "#2a2a2a", borderRadius: "24px", position: "relative", cursor: onlineBusy ? "wait" : "pointer", opacity: onlineBusy ? 0.6 : 1, transition: "background 0.2s", flexShrink: 0 }}>
+            <span style={{ position: "absolute", top: "3px", left: isOnline ? "22px" : "3px", width: "18px", height: "18px", background: "#fff", borderRadius: "50%", transition: "left 0.2s" }} />
+          </button>
           <button onClick={onSignOut}
             style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontSize: "12px", fontFamily: "inherit" }}>
             Sign Out
           </button>
         </div>
       </div>
+
+      {actionError && <div role="alert" style={{ background: "#451a1a", color: "#fecaca", padding: "10px 20px", fontSize: 13 }}>⚠️ {actionError}</div>}
 
       {/* ── STATS BAR ── */}
       <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1a1a1a", padding: "12px 20px", display: "flex", gap: "28px", flexShrink: 0 }}>
