@@ -1397,11 +1397,46 @@ function PaymentSettingsTab({ onNeedReAuth }) {
           <Btn disabled={busy || !settings.paystackAvailable || settings.paymentMode === "paystack"} onClick={() => change("paystack")}>Use Paystack</Btn>
         </div>
       </div>
+      <ManualMomoOwnerEditor onNeedReAuth={onNeedReAuth} />
       {!settings.paystackAvailable && <Alert type="warn">Paystack is not enabled for live checkout. Complete server-side verification, webhook handling, and reconciliation before activation.</Alert>}
     </>}
   </div>
 }
 
+function ManualMomoOwnerEditor({onNeedReAuth}) {
+  const [form,setForm]=useState({network:'MTN',number:'',accountName:'',enabled:false})
+  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false)
+  const load=useCallback(async()=>{
+    try {
+      const {ok,data}=await adminFetch('/settings/manual-momo')
+      if(!ok)throw Error(data.message||'Could not load MoMo settings')
+      setForm(data.manualMomo)
+    }catch(e){setError(e.message)}
+  },[])
+  useEffect(()=>{load()},[load])
+  const save=()=>{
+    if(!window.confirm('Change the receiving MoMo account for NEW checkouts? Existing payment instructions will retain their original account. Verify the registered account details carefully.'))return
+    onNeedReAuth(async token=>{
+      setBusy(true);setError('');setNotice('')
+      try{
+        const {ok,data}=await adminFetch('/settings/manual-momo',{method:'PUT',headers:{'x-reauth-token':token},body:JSON.stringify({network:form.network,number:form.number,accountName:form.accountName,enabled:form.enabled})})
+        if(!ok)throw Error(data.message||'Could not save MoMo settings')
+        setForm(data.manualMomo);setNotice('Manual MoMo settings saved for new checkouts.')
+      }catch(e){setError(e.message)}finally{setBusy(false)}
+    })
+  }
+  const field={width:'100%',boxSizing:'border-box',background:C.surface2,color:C.text,padding:12,border:`1px solid ${C.border2}`,borderRadius:8}
+  return <div style={{padding:20,border:`1px solid ${C.border}`,borderRadius:10,display:'grid',gap:12}}>
+    <strong style={{color:C.text}}>Manual MoMo receiving account · Owner only</strong>
+    <Alert type="info">Changes affect new live service checkouts. Existing service checkouts retain a snapshot of the original receiving details. Reauthentication is required.</Alert>
+    {error&&<Alert type="error">{error}</Alert>}{notice&&<Alert type="success">{notice}</Alert>}
+    <label style={{color:C.text}}>Network<select style={field} value={form.network} onChange={e=>setForm(v=>({...v,network:e.target.value}))}><option value="MTN">MTN MoMo</option><option value="Telecel">Telecel Cash</option><option value="AT">AT Money</option></select></label>
+    <label style={{color:C.text}}>Receiving number<input style={field} value={form.number||''} onChange={e=>setForm(v=>({...v,number:e.target.value}))} placeholder="024XXXXXXX"/></label>
+    <label style={{color:C.text}}>Registered account name<input style={field} value={form.accountName||''} onChange={e=>setForm(v=>({...v,accountName:e.target.value}))}/></label>
+    <label style={{color:C.text}}><input type="checkbox" checked={!!form.enabled} onChange={e=>setForm(v=>({...v,enabled:e.target.checked}))}/> Enable manual MoMo receiving account</label>
+    <Btn disabled={busy} onClick={save}>{busy?'Saving…':'Save receiving account'}</Btn>
+  </div>
+}
 // Owner-only marketplace environment control. The backend remains authoritative.
 function PermanentDevCleanup({ onNeedReAuth, onComplete }) {
   const [report, setReport] = useState(null)
