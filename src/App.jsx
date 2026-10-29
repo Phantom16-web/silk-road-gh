@@ -447,6 +447,7 @@ function App() {
   const [activePage, setActivePage]           = useState("buy")
   const [mobileMenuOpen, setMobileMenuOpen]   = useState(false)
   const [selectedProduct, setSelectedProduct] = useState(null)
+  const [selectedSearchListing, setSelectedSearchListing] = useState(null)
   const [footerModal, setFooterModal]         = useState(null)
   const [searchQuery, setSearchQuery]         = useState("")
   const [showDropdown, setShowDropdown]       = useState(false)
@@ -511,21 +512,6 @@ function App() {
   const usingDb         = dbListings.length > 0
   const displayListings = usingDb ? dbListings : ALL_LISTINGS.slice(0, visibleCount)
   const hasMore         = usingDb ? hasMoreListings : visibleCount < ALL_LISTINGS.length
-  if (riderUser) {
-    return (
-      <>
-        <RiderApp
-          rider={riderUser}
-          onSignOut={() => {
-            localStorage.removeItem("silkroad_rider_token")
-            localStorage.removeItem("silkroad_rider")
-            setRiderUser(null)
-          }}
-        />
-        <ToastContainer />
-      </>
-    )
-  }
   const fetchListings = async (page = 1, reset = false) => {
     if (page === 1) setListingsLoading(true)
     else setLoadingMore(true)
@@ -723,6 +709,21 @@ function App() {
     id: item._id, imageId: item._id, title: item.title, category: item.category,
     section: item.type === 'product' ? 'buy' : item.type, image: item.image
   })).slice(0, 8)
+  if (riderUser) {
+    return (
+      <>
+        <RiderApp
+          rider={riderUser}
+          onSignOut={() => {
+            localStorage.removeItem("silkroad_rider_token")
+            localStorage.removeItem("silkroad_rider")
+            setRiderUser(null)
+          }}
+        />
+        <ToastContainer />
+      </>
+    )
+  }
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
       <style>{`
@@ -1020,8 +1021,8 @@ function App() {
             )}
           </div>
         )}
-        {activePage === "rent" && <RentItems rate={rate} />}
-        {activePage === "service" && <RequestService rate={rate} />}
+        {activePage === "rent" && <RentItems rate={rate} initialListing={selectedSearchListing?.type === "rent" ? selectedSearchListing : null} />}
+        {activePage === "service" && <RequestService rate={rate} initialListing={selectedSearchListing?.type === "service" ? selectedSearchListing : null} />}
       </div>
       <Footer onOpen={setFooterModal} siteSettings={siteSettings} />
       <FooterModal
@@ -1033,9 +1034,13 @@ function App() {
         <AdvancedSearch
           query={searchQuery}
           onClose={() => setShowFullResults(false)}
-          onNavigate={section => {
+          onNavigate={item => {
+            if (!item?._id) return
+            const section = item.type === "product" ? "buy" : item.type
+            setSelectedSearchListing(item)
             setActivePage(section)
             setShowFullResults(false)
+            if (section === "buy") setSelectedProduct(item)
           }}
         />
       )}

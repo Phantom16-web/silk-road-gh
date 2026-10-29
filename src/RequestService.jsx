@@ -183,7 +183,7 @@ function JitsiSession({ roomId, displayName, onEnd }) {
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
-export default function RequestService({ rate, siteSettings }) {
+export default function RequestService({ rate, siteSettings, initialListing = null }) {
   const [activeCategory, setActiveCategory] = useState("All")
   const [detailService, setDetailService] = useState(null)
   const [selected, setSelected] = useState(null)
@@ -200,6 +200,12 @@ export default function RequestService({ rate, siteSettings }) {
   const [inSession, setInSession] = useState(false)
   const [dbServices, setDbServices] = useState([])
   const [loadingListings, setLoadingListings] = useState(false)
+  useEffect(() => {
+    if (!initialListing?._id) return
+    setDetailService(initialListing)
+    setSelected(null)
+    setStep(0)
+  }, [initialListing?._id])
 
   useEffect(() => {
     setLoadingListings(true)

@@ -17,7 +17,7 @@ async function api(path, options = {}) {
   return data
 }
 
-export default function RentItems({ rate }) {
+export default function RentItems({ rate, initialListing = null }) {
   const [listings, setListings] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
@@ -36,6 +36,13 @@ export default function RentItems({ rate }) {
   const [notice, setNotice] = useState("")
   const [tab, setTab] = useState("browse")
   const authenticated = Boolean(localStorage.getItem("silkroad_token"))
+  useEffect(() => {
+    if (!initialListing?._id) return
+    setTab("browse")
+    setSelected(initialListing)
+    setOrder(null)
+    setAvailability(null)
+  }, [initialListing?._id])
   useEffect(() => {
     let active = true
     setAvailability(null)
