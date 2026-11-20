@@ -24,8 +24,15 @@ export default async function handler(req, res) {
     const id = String(Array.isArray(raw) ? raw[0] : raw || "")
     const origin = (process.env.SITE_ORIGIN || DEFAULT_ORIGIN).replace(/\/+$/, "")
     const apiBase = process.env.API_URL || process.env.VITE_API_URL || ""
-    const { html, cacheControl, outcome } = await renderListingPage({ id, origin, apiBase })
+    const { html, cacheControl, outcome, debug } = await renderListingPage({ id, origin, apiBase })
     if (outcome === "backend-unavailable" || outcome === "no-api") console.warn(`[og] generic preview served for ${id || "(no id)"}: ${outcome}`)
+    // Open /api/listing?id=<listing id>&debug=1 in a browser to see exactly what the preview function saw.
+    if (String(Array.isArray(req.query?.debug) ? req.query.debug[0] : req.query?.debug || "") === "1") {
+      res.statusCode = 200
+      res.setHeader("Content-Type", "application/json; charset=utf-8")
+      res.setHeader("Cache-Control", "no-store")
+      return res.end(JSON.stringify(debug, null, 2))
+    }
     res.statusCode = 200
     res.setHeader("Content-Type", "text/html; charset=utf-8")
     res.setHeader("Cache-Control", cacheControl)
