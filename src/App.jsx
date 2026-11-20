@@ -16,10 +16,11 @@ import OrderTracker, {
 } from "./OrderTracker"
 import RiderAuth from "./RiderAuth"
 import RiderApp from "./RiderApp"
-import { getListings } from "./api"
+import { getListings, getListing } from "./api"
 import ProductCard from "./ProductCard"
 import ProductModal from "./ProductModal"
 import AdvancedSearch from "./AdvancedSearch"
+import { useRoute, navigate, listingPath, goBackOrHome } from "./router"
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 const ALL_LISTINGS = [
   { id: 1,  title: "Calculus Textbook",       price: 380,  category: "Books",       seller: "Ahmad K.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "8th edition, some highlights but all pages intact. Perfect for MTH 151.",                       delivery: ["Pickup", "Rider"],            section: "buy" },
@@ -47,39 +48,9 @@ const ALL_LISTINGS = [
   { id: 23, title: "Electric Kettle",          price: 120,  category: "Electronics", seller: "Abena S.",  university: "KNUST",    rating: 4.8, condition: "Good",      desc: "1.5L capacity, auto shut-off. Perfect for dorm room.",                                      delivery: ["Pickup", "Rider"],            section: "buy" },
   { id: 24, title: "Basketball",               price: 90,   category: "Sports",      seller: "Kwame T.",  university: "Ashesi",   rating: 4.5, condition: "Good",      desc: "Size 7 Spalding basketball. Good grip, minor scuff marks.",                                 delivery: ["Pickup"],                     section: "buy" },
 ]
-const RENTALS_SEARCH = [
-  { id: 101, title: "Canon EOS M50 Camera",          category: "Electronics", image: 21, section: "rent" },
-  { id: 102, title: "Projector – Epson X41",         category: "Electronics", image: 22, section: "rent" },
-  { id: 103, title: "Mountain Bike",                 category: "Sports",      image: 23, section: "rent" },
-  { id: 104, title: "MacBook Air M1",                category: "Electronics", image: 24, section: "rent" },
-  { id: 105, title: "Acoustic Guitar",               category: "Music",       image: 25, section: "rent" },
-  { id: 106, title: "Camping Tent (4-person)",       category: "Outdoors",    image: 26, section: "rent" },
-  { id: 107, title: "PS5 Console + 2 Controllers",   category: "Gaming",      image: 27, section: "rent" },
-  { id: 108, title: "Scientific Calculator (Casio)", category: "Academic",    image: 28, section: "rent" },
-]
-const SERVICES_SEARCH = [
-  { id: 201, title: "Mathematics Private Lessons",     category: "Lessons",       image: 31, section: "service" },
-  { id: 202, title: "Concert & Event Photography",     category: "Photography",   image: 32, section: "service" },
-  { id: 203, title: "Room & Hostel Cleaning",          category: "Cleaning",      image: 33, section: "service" },
-  { id: 204, title: "Python & Data Science Tutoring",  category: "Lessons",       image: 34, section: "service" },
-  { id: 205, title: "Graphic Design – Logo & Branding",category: "Design",        image: 35, section: "service" },
-  { id: 206, title: "DJ Services for Events",          category: "Entertainment", image: 36, section: "service" },
-  { id: 207, title: "French Language Lessons",         category: "Lessons",       image: 37, section: "service" },
-  { id: 208, title: "CV & Cover Letter Writing",       category: "Career",        image: 38, section: "service" },
-]
-const ALL_ITEMS = [
-  ...ALL_LISTINGS.map(i => ({ ...i, imageId: i.id })),
-  ...RENTALS_SEARCH.map(i => ({ ...i, imageId: i.image })),
-  ...SERVICES_SEARCH.map(i => ({ ...i, imageId: i.image })),
-]
 const SECTION_LABEL = { buy: "🛒 Buy Products", rent: "📦 Rent Items", service: "🛠️ Request Service" }
 const SECTION_COLOR = { buy: "#c8a97e", rent: "#93c5fd", service: "#6ee7b7" }
 const PAGE_SIZE = 16
-const SECTION_KEYWORDS = {
-  buy:     ["buy", "purchase", "product", "products", "shop", "shopping"],
-  rent:    ["rent", "rental", "rentals", "borrow", "lease", "hire"],
-  service: ["service", "services", "request", "booking", "book"],
-}
 const DEFAULT_SITE_SETTINGS = {
   contactPhone:    "054 388 3608",
   contactWhatsApp: "233543883608",
@@ -87,23 +58,6 @@ const DEFAULT_SITE_SETTINGS = {
   privacyText:     "We collect your name, contact information, location data (only during checkout), and transaction history to facilitate buying, selling, and delivery on the platform.",
   footerTagline:   "Ghana's student marketplace. Buy, sell, rent, and request services — all secured by escrow and powered by MTN MoMo.",
   deliveryFee:    10,
-}
-const parseSearch = (query) => {
-  const q = query.toLowerCase().trim()
-  const words = q.split(" ")
-  let detectedSection = null
-  let remainingWords = [...words]
-  for (const [section, keywords] of Object.entries(SECTION_KEYWORDS)) {
-    for (const kw of keywords) {
-      if (words.includes(kw)) {
-        detectedSection = section
-        remainingWords = words.filter(w => w !== kw)
-        break
-      }
-    }
-    if (detectedSection) break
-  }
-  return { detectedSection, keyword: remainingWords.join(" ").trim() }
 }
 // ── Product Modal ──────────────────────────────────────────────────────────────
 // ── Footer Modal ───────────────────────────────────────────────────────────────
@@ -266,137 +220,6 @@ function Footer({ onOpen, siteSettings }) {
         </div>
       </div>
     </footer>
-  )
-}
-// ── Search Results ─────────────────────────────────────────────────────────────
-function SearchResults({ query, onClose, onNavigate }) {
-  const { detectedSection, keyword } = parseSearch(query)
-  const [dbResults, setDbResults] = useState([])
-  const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    setLoading(true)
-    const q = keyword || query
-    getListings({ search: q, limit: 20 })
-      .then(data => setDbResults(Array.isArray(data) ? data : []))
-      .catch(() => setDbResults([]))
-      .finally(() => setLoading(false))
-  }, [query])
-  const staticResults = ALL_ITEMS.filter(item => {
-    if (item.section === "buy") return false
-    const matchesSection = detectedSection ? item.section === detectedSection : true
-    const matchesKeyword = keyword
-      ? item.title.toLowerCase().includes(keyword) || item.category.toLowerCase().includes(keyword)
-      : true
-    return matchesSection && matchesKeyword
-  })
-  const dbBuyResults = (detectedSection && detectedSection !== "buy")
-    ? []
-    : dbResults.map(item => ({
-        id: item._id,
-        imageId: item._id,
-        title: item.title,
-        category: item.category,
-        section: "buy",
-        image: item.image,
-      }))
-  const results = [...dbBuyResults, ...staticResults]
-  const grouped = {
-    buy: results.filter(r => r.section === "buy"),
-    rent: results.filter(r => r.section === "rent"),
-    service: results.filter(r => r.section === "service"),
-  }
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "80px 20px 20px" }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: "#111", borderRadius: "16px", width: "100%", maxWidth: "680px", maxHeight: "80vh", overflowY: "auto", border: "1px solid #1e1e1e" }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#111", zIndex: 1 }}>
-          <div>
-            <span style={{ fontSize: "14px", color: "#888" }}>
-              {loading ? "Searching..." : `${results.length} results for`}
-              {" "}
-              <strong style={{ color: "#f0ede8" }}>
-                "{query}"
-              </strong>
-            </span>
-            {detectedSection && (
-              <span style={{ marginLeft: "8px", fontSize: "11px", fontWeight: "700", color: SECTION_COLOR[detectedSection], background: `${SECTION_COLOR[detectedSection]}22`, padding: "2px 8px", borderRadius: "20px" }}>
-                {SECTION_LABEL[detectedSection]}
-              </span>
-            )}
-          </div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#666", fontSize: "20px", cursor: "pointer" }}>
-            ✕
-          </button>
-        </div>
-        {loading ? (
-          <div style={{ padding: "48px", textAlign: "center", color: "#555" }}>
-            <div style={{ fontSize: "40px", marginBottom: "12px" }}>⏳</div>
-            <div style={{ fontSize: "14px" }}>Searching...</div>
-          </div>
-        ) : results.length === 0 ? (
-          <div style={{ padding: "48px", textAlign: "center", color: "#555" }}>
-            <div style={{ fontSize: "40px", marginBottom: "12px" }}>🔍</div>
-            <div style={{ fontSize: "16px", fontWeight: "600", marginBottom: "6px", color: "#888" }}>
-              No results found
-            </div>
-            <div style={{ fontSize: "13px" }}>
-              Try searching for something else
-            </div>
-          </div>
-        ) : (
-          <div style={{ padding: "16px" }}>
-            {Object.entries(grouped).map(([section, items]) => items.length > 0 && (
-              <div key={section} style={{ marginBottom: "24px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                  <div style={{ fontSize: "12px", fontWeight: "700", color: SECTION_COLOR[section], textTransform: "uppercase", letterSpacing: ".06em" }}>
-                    {SECTION_LABEL[section]}
-                  </div>
-                  <button
-                    onClick={() => { onNavigate(section); onClose() }}
-                    style={{ background: "transparent", border: "none", color: "#555", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}
-                  >
-                    See all →
-                  </button>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {items.map(item => (
-                    <div
-                      key={item.id}
-                      onClick={() => { onNavigate(item.section); onClose() }}
-                      style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px", borderRadius: "10px", background: "#1a1a1a", cursor: "pointer", border: "1px solid #1e1e1e" }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor = "#c8a97e44"}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = "#1e1e1e"}
-                    >
-                      <img
-                        src={item.image || "/favicon.svg"}
-                        alt={item.title}
-                        style={{ width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: "14px", fontWeight: "600", color: "#f0ede8", marginBottom: "2px" }}>
-                          {item.title}
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#666" }}>
-                          {item.category}
-                        </div>
-                      </div>
-                      <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}22`, padding: "3px 10px", borderRadius: "20px", flexShrink: 0 }}>
-                        {SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
   )
 }
 // ── Skeleton ───────────────────────────────────────────────────────────────────
@@ -593,6 +416,80 @@ function App() {
     }, 250)
     return () => { clearTimeout(timer); ctrl.abort() }
   }, [searchQuery])
+  // ── Real, shareable URLs for listings and search results ─────────────────────
+  // /listing/<id> and /search?q=… decide what is open. A tap on any result navigates to the listing's
+  // URL; this effect then fetches the COMPLETE listing and opens the right view with full data, so
+  // results genuinely open, and refresh, the Back button and shared links all behave.
+  const route = useRoute()
+  const routeKey = route.name === "listing" ? `listing:${route.id}` : route.name
+  const [listingState, setListingState] = useState({ status: "idle", id: null }) // idle | loading | unavailable | error
+  const [listingRetry, setListingRetry] = useState(0)
+  const [pageEpoch, setPageEpoch] = useState(0) // bumped when a listing view closes so Rent/Service pages reset
+  const prefillRef = useRef(null)
+  const prevRouteRef = useRef("home")
+  const openListing = (idOrItem, prefill = null) => {
+    const id = typeof idOrItem === "string" ? idOrItem : idOrItem?._id
+    if (!id) return
+    prefillRef.current = prefill && prefill._id === id ? prefill : null
+    navigate(listingPath(id))
+  }
+  const closeListing = () => {
+    setListingState({ status: "idle", id: null })
+    goBackOrHome()
+  }
+  const changePage = page => {
+    setSelectedProduct(null)
+    setSelectedSearchListing(null)
+    if (route.name !== "home") navigate("/", { replace: true })
+    setActivePage(page)
+  }
+  const openSearchResults = () => {
+    const text = searchQuery.trim()
+    if (!text) return
+    setShowDropdown(false)
+    navigate(`/search?q=${encodeURIComponent(text)}`)
+  }
+  useEffect(() => {
+    const previous = prevRouteRef.current
+    prevRouteRef.current = route.name
+    if (route.name === "listing") {
+      const id = route.id
+      const prefilled = prefillRef.current && prefillRef.current._id === id ? prefillRef.current : null
+      prefillRef.current = null
+      const show = listing => {
+        const section = listing.type === "product" ? "buy" : listing.type
+        setShowFullResults(false)
+        setActivePage(section)
+        if (section === "buy") { setSelectedSearchListing(null); setSelectedProduct(listing) }
+        else { setSelectedProduct(null); setSelectedSearchListing(listing) }
+        setListingState({ status: "idle", id })
+      }
+      if (prefilled) { show(prefilled); return undefined }
+      let cancelled = false
+      setSelectedProduct(null)
+      setListingState({ status: "loading", id })
+      getListing(id)
+        .then(data => {
+          if (cancelled) return
+          if (data && data._id) show(data)
+          else setListingState({ status: data?.code === "LISTING_UNAVAILABLE" ? "unavailable" : "error", id })
+        })
+        .catch(() => { if (!cancelled) setListingState({ status: "error", id }) })
+      return () => { cancelled = true }
+    }
+    // Not a listing: browsing normally, or Back / close brought us here.
+    setListingState(prev => (prev.id === null && prev.status === "idle" ? prev : { status: "idle", id: null }))
+    setSelectedProduct(null)
+    setSelectedSearchListing(null)
+    if (previous === "listing") setPageEpoch(n => n + 1)
+    if (route.name === "search") { setSearchQuery(route.params?.q || ""); setShowFullResults(true) }
+    else setShowFullResults(false)
+    return undefined
+  }, [routeKey, listingRetry]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const open = route.name === "listing" ? (selectedProduct || selectedSearchListing) : null
+    document.title = open?.title ? `${open.title} — Silk Road GH` : "Silk Road GH — Ghana's Student Marketplace"
+  }, [route.name, selectedProduct, selectedSearchListing])
   useEffect(() => {
     const handleClick = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
@@ -700,10 +597,8 @@ function App() {
     0
   )
   const handleSearchKey = (e) => {
-    if (e.key === "Enter" && searchQuery.trim()) {
-      setShowDropdown(false)
-      setShowFullResults(true)
-    }
+    if (e.key === "Enter") openSearchResults()
+    else if (e.key === "Escape") setShowDropdown(false)
   }
   const dropdownResults = dbSearchResults.map(item => ({
     id: item._id, imageId: item._id, title: item.title, category: item.category,
@@ -773,7 +668,7 @@ function App() {
         <div className="sr-topbar" style={{ background: "#0a0a0a", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1a1a1a" }}>
           <h1
             className="sr-brand"
-            onClick={() => { setActivePage("buy"); setMobileMenuOpen(false) }}
+            onClick={() => { changePage("buy"); setMobileMenuOpen(false) }}
             style={{ color: "#c8a97e", fontWeight: "bold", fontSize: "20px", flexShrink: 0, cursor: "pointer", margin: 0 }}
           >
             Silk Road
@@ -869,7 +764,7 @@ function App() {
             ].map(link => (
               <button
                 key={link.page}
-                onClick={() => { setActivePage(link.page); setMobileMenuOpen(false) }}
+                onClick={() => { changePage(link.page); setMobileMenuOpen(false) }}
                 style={{ background: "transparent", border: "none", color: activePage === link.page ? "#c8a97e" : "#aaa", cursor: "pointer", fontSize: "13px", fontWeight: "600", borderBottom: activePage === link.page ? "2px solid #c8a97e" : "2px solid transparent", padding: "12px 14px", whiteSpace: "nowrap", fontFamily: "inherit" }}
               >
                 {link.label}
@@ -897,6 +792,7 @@ function App() {
                     setSearchQuery("")
                     setShowDropdown(false)
                     setShowFullResults(false)
+                    if (route.name === "search") goBackOrHome()
                   }}
                   style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "15px" }}
                 >
@@ -915,8 +811,8 @@ function App() {
                       <div
                         key={item.id}
                         onClick={() => {
-                          setActivePage(item.section)
                           setShowDropdown(false)
+                          openListing(item.id)
                         }}
                         style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #222" }}
                         onMouseEnter={e =>
@@ -945,10 +841,7 @@ function App() {
                       </div>
                     ))}
                     <div
-                      onClick={() => {
-                        setShowDropdown(false)
-                        setShowFullResults(true)
-                      }}
+                      onClick={openSearchResults}
                       style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600" }}
                       onMouseEnter={e =>
                         e.currentTarget.style.background = "#222"
@@ -1004,7 +897,7 @@ function App() {
                       key={getItemId(item)}
                       item={item}
                       rate={rate}
-                      onSelect={() => setSelectedProduct(item)}
+                      onSelect={() => (item._id ? openListing(item._id, item) : setSelectedProduct(item))}
                       onAddToCart={() => addToCart(item)}
                     />
                   ))}
@@ -1021,8 +914,8 @@ function App() {
             )}
           </div>
         )}
-        {activePage === "rent" && <RentItems rate={rate} initialListing={selectedSearchListing?.type === "rent" ? selectedSearchListing : null} />}
-        {activePage === "service" && <RequestService rate={rate} initialListing={selectedSearchListing?.type === "service" ? selectedSearchListing : null} />}
+        {activePage === "rent" && <RentItems key={`rent-${pageEpoch}`} rate={rate} initialListing={selectedSearchListing?.type === "rent" ? selectedSearchListing : null} />}
+        {activePage === "service" && <RequestService key={`service-${pageEpoch}`} rate={rate} initialListing={selectedSearchListing?.type === "service" ? selectedSearchListing : null} />}
       </div>
       <Footer onOpen={setFooterModal} siteSettings={siteSettings} />
       <FooterModal
@@ -1030,27 +923,53 @@ function App() {
         onClose={() => setFooterModal(null)}
         siteSettings={siteSettings}
       />
-      {showFullResults && searchQuery.trim() && (
+      {showFullResults && (
         <AdvancedSearch
           query={searchQuery}
-          onClose={() => setShowFullResults(false)}
-          onNavigate={item => {
-            if (!item?._id) return
-            const section = item.type === "product" ? "buy" : item.type
-            setSelectedSearchListing(item)
-            setActivePage(section)
-            setShowFullResults(false)
-            if (section === "buy") setSelectedProduct(item)
-          }}
+          initial={route.name === "search" ? route.params : {}}
+          campus={user?.university || ""}
+          onClose={() => { if (route.name === "search") goBackOrHome(); else setShowFullResults(false) }}
+          onOpenListing={item => openListing(item._id)}
         />
       )}
       {selectedProduct && (
         <ProductModal
           item={selectedProduct}
-          onClose={() => setSelectedProduct(null)}
+          onClose={() => (route.name === "listing" ? closeListing() : setSelectedProduct(null))}
           onCart={addToCart}
           toUSD={ghs => (ghs / (rate || 1)).toFixed(2)}
         />
+      )}
+      {listingState.status !== "idle" && (
+        <div role="dialog" aria-modal="true" aria-label="Opening listing" style={{ position: "fixed", inset: 0, zIndex: 420, background: "rgba(0,0,0,0.78)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+          <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: "16px", padding: "28px 24px", maxWidth: "360px", width: "100%", textAlign: "center", color: "#f0ede8" }}>
+            {listingState.status === "loading" && (
+              <>
+                <div style={{ color: "#c8a97e", fontSize: "14px", marginBottom: "14px" }}>⏳ Opening listing...</div>
+                <button onClick={closeListing} style={{ background: "transparent", border: "none", color: "#777", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>Cancel</button>
+              </>
+            )}
+            {listingState.status === "unavailable" && (
+              <>
+                <div style={{ fontSize: "34px", marginBottom: "8px" }}>🔍</div>
+                <h3 style={{ margin: "0 0 8px", fontSize: "17px" }}>This listing is no longer available</h3>
+                <p style={{ margin: "0 0 18px", color: "#999", fontSize: "13px", lineHeight: 1.5 }}>It may have been sold or removed by the seller, or the link may be incorrect.</p>
+                <button onClick={closeListing} style={{ background: "#c8a97e", color: "#17120b", border: "none", borderRadius: "10px", padding: "11px 18px", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Browse the marketplace</button>
+              </>
+            )}
+            {listingState.status === "error" && (
+              <>
+                <div style={{ fontSize: "34px", marginBottom: "8px" }}>📡</div>
+                <h3 style={{ margin: "0 0 8px", fontSize: "17px" }}>Couldn't load this listing</h3>
+                <p style={{ margin: "0 0 18px", color: "#999", fontSize: "13px", lineHeight: 1.5 }}>Check your connection and try again.</p>
+                <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                  <button onClick={() => setListingRetry(n => n + 1)} style={{ background: "#c8a97e", color: "#17120b", border: "none", borderRadius: "10px", padding: "11px 18px", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Try again</button>
+                  <button onClick={closeListing} style={{ background: "#222", color: "#ddd", border: "1px solid #333", borderRadius: "10px", padding: "11px 18px", cursor: "pointer", fontFamily: "inherit" }}>Close</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
       {showAuth && (
         <Auth
