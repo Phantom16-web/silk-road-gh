@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/listing/:id([a-fA-F0-9]{24})",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(WhatsApp|whatsapp|facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|Twitterbot|TelegramBot|Slackbot|LinkedInBot|Discordbot|SkypeUriPreview|Pinterest|Applebot|Embedly|Googlebot|bingbot).*"
+        }
+      ],
+      "destination": "/api/listing?id=:id"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
