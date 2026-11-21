@@ -92,7 +92,6 @@ export function buildCheckoutPayload({ cart, localOrderId, form }) {
     payerName: String(form.name || "").trim(),
     payerPhone: phone.local,
     promoCode: null,
-    deliveryMethod: form.deliveryMethod === "rider" ? "rider" : "pickup",
   }
 }
 
