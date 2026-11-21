@@ -45,7 +45,7 @@ export default function PaystackPayment({ email, amount, publicKey, onSuccess, o
         justifyContent: "center",
         gap: "8px"
       }}>
-      📱 Pay with MTN MoMo via Paystack
+      📱 Pay with Mobile Money or card
     </button>
   )
 }
