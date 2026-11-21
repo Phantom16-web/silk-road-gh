@@ -110,6 +110,18 @@ textarea.co-input{resize:vertical;min-height:70px}
 .co-skel{height:120px;border-radius:14px;background:linear-gradient(90deg,#171615 25%,#211f1c 50%,#171615 75%);background-size:200% 100%;animation:coShimmer 1.4s linear infinite}
 @keyframes coShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .co-divider{height:1px;background:#2a2723}
+.co-amount{display:grid;gap:3px;text-align:center;padding:4px 0 2px}
+.co-amount span{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:#9a958b}
+.co-amount strong{font-size:36px;line-height:1.1;letter-spacing:-.02em;color:#e8c98f}
+.co-amount small{font-size:13px;color:#7c776d}
+.co-details{border:1px solid #2c2a27;border-radius:14px;background:#151413}
+.co-details summary{cursor:pointer;padding:14px 16px;font-weight:700;font-size:14px;color:#e5dfd3;list-style:none;display:flex;justify-content:space-between;align-items:center}
+.co-details summary::-webkit-details-marker{display:none}
+.co-details summary::after{content:"+";color:#c8a97e;font-size:20px;line-height:1}
+.co-details[open] summary::after{content:"–"}
+.co-details-body{padding:0 16px 16px;display:grid;gap:12px}
+.co-mapwrap{display:grid;gap:8px}
+.co-soft{font-size:13px;line-height:1.6;color:#b7b1a5;background:#171615;border:1px solid #2c2a27;border-radius:12px;padding:12px 14px}
 .co-sep{display:grid;gap:8px;border-top:1px solid #2a2723;padding-top:14px}
 .co-pkg-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .co-pkg-top small{font-size:10px;font-weight:800;letter-spacing:.13em;color:#b9a17a}.co-pkg-top strong{display:block;font-size:14px;overflow-wrap:anywhere}
@@ -146,6 +158,17 @@ function ProviderChips({ card }) {
   return <div className="co-chips" aria-label="Accepted payment methods">
     {NETWORK_KEYS.map(key => <span key={key} className="co-chip"><i style={{ background: NETWORKS[key].color }} />{NETWORKS[key].name}</span>)}
     {card && <span className="co-chip"><i style={{ background: "#9aa4b2" }} />Card</span>}
+  </div>
+}
+
+// Shows where the order is going: a GPS pin, or a typed address looked up on the map.
+function MapPreview({ query, pinned, compact }) {
+  if (!query) return null
+  const encoded = encodeURIComponent(query)
+  return <div className="co-mapwrap">
+    <div className="co-map"><iframe src={`https://www.google.com/maps?q=${encoded}&z=${pinned ? 17 : 15}&output=embed`} loading="lazy" title="Delivery location map" referrerPolicy="no-referrer-when-downgrade" style={compact ? { height: 130 } : undefined} /></div>
+    <a className="co-link" href={`https://www.google.com/maps/search/?api=1&query=${encoded}`} target="_blank" rel="noreferrer" style={{ justifySelf: "start" }}>Open in Google Maps</a>
+    {!pinned && !compact && <div className="co-hint">Not the right place? Tap “Use my current location” for an exact pin.</div>}
   </div>
 }
 
@@ -211,9 +234,9 @@ function PaystackPay({ checkoutId, claimToken, amount, defaultEmail, onVerified 
 
   const waiting = state === "awaiting" || state === "checking"
   return <div className="co-card hl">
-    <h3>Pay {formatCedi(amount)} securely</h3>
+    <h3>Pay securely</h3>
     {!waiting && <>
-      <p className="co-lead">On the next screen you’ll choose how to pay. Every option below works.</p>
+      <p className="co-lead">Pick MTN MoMo, Telecel Cash, AT Money or card on the next screen.</p>
       <ProviderChips card />
       {editEmail
         ? <Field id="co-email" label="Email for your receipt" error={state === "error" && !isEmail(email) ? message : ""}>
@@ -272,20 +295,25 @@ function ManualMomoPay({ amount, reference, buyerPhone, support, checkoutId, cla
   const target = NETWORKS[account.network] ? account.network : "MTN"
   return <div className="co-card hl">
     <h3>Pay with Mobile Money</h3>
-    <p className="co-lead">Send the exact amount below from <b>any</b> network: MTN, Telecel or AT.</p>
+    <p className="co-lead">Send the exact amount to the number below from <b>any</b> network: MTN, Telecel or AT.</p>
     <div className="co-paybox">
       <div className="co-payrow big"><div><small>Amount to send</small><strong>{formatCedi(amount)}</strong></div><CopyButton text={Number(amount).toFixed(2)} label="amount" /></div>
       <div className="co-payrow"><div><small>Send to ({NETWORKS[target].name})</small><strong>{account.number}</strong></div><CopyButton text={account.number} label="number" /></div>
       <div className="co-payrow"><div><small>Account name</small><strong>{account.accountName}</strong></div></div>
       {reference && <div className="co-payrow"><div><small>Reference / reason</small><strong>{reference}</strong></div><CopyButton text={reference} label="reference" /></div>}
     </div>
-    <div className="co-tabs" role="group" aria-label="Which network are you paying from?">
-      <span>I’m paying from:</span>
-      {NETWORK_KEYS.map(key => <button key={key} type="button" className={`co-tab ${from === key ? "on" : ""}`} aria-pressed={from === key} onClick={() => setFrom(key)}>{NETWORKS[key].name}</button>)}
-    </div>
-    <ol className="co-ol">{momoSteps({ from, to: target, amount, reference, number: account.number, accountName: account.accountName }).map((step, index) => <li key={index}>{step}</li>)}</ol>
+    <details className="co-details">
+      <summary>How to send it</summary>
+      <div className="co-details-body">
+        <div className="co-tabs" role="group" aria-label="Which network are you paying from?">
+          <span>I’m paying from:</span>
+          {NETWORK_KEYS.map(key => <button key={key} type="button" className={`co-tab ${from === key ? "on" : ""}`} aria-pressed={from === key} onClick={() => setFrom(key)}>{NETWORKS[key].name}</button>)}
+        </div>
+        <ol className="co-ol">{momoSteps({ from, to: target, amount, reference, number: account.number, accountName: account.accountName }).map((step, index) => <li key={index}>{step}</li>)}</ol>
+      </div>
+    </details>
     <div className="co-divider" />
-    <h4>After you’ve paid</h4>
+    <h4>Then confirm your payment</h4>
     <Field id="co-txn" label="Transaction ID" hint="Find it in the confirmation SMS from your network. It is not your order number. Only enter it after paying." error={error}>
       <input id="co-txn" className="co-input" autoComplete="off" value={txn} onChange={e => setTxn(e.target.value)} placeholder="e.g. the ID in your payment SMS" />
     </Field>
@@ -325,7 +353,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const [extraInfo, setExtraInfo] = useState(initialOrder?.extraInfo || "")
   const [name, setName] = useState(initialOrder?.payerName || user?.name || "")
   const [phone, setPhone] = useState(initialOrder?.payerPhone || user?.phone || "")
-  const [deliveryMethod, setDeliveryMethod] = useState(initialOrder?.deliveryMethod || "pickup")
+  // Buyers no longer choose how an order is delivered. The seller decides (deliver themselves or request a rider).
+  // This only keeps older saved rider orders working.
+  const deliveryMethod = initialOrder?.deliveryMethod || "pickup"
+  const [mapQuery, setMapQuery] = useState("")
   const [errors, setErrors] = useState({})
   const [locBusy, setLocBusy] = useState(false)
   const [locMessage, setLocMessage] = useState("")
@@ -448,6 +479,14 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   }, [step, deliveryMethod, delivered, otp, orderId])
 
   // ── Location ──────────────────────────────────────────────────────────────
+  // The map follows what the buyer types (after a short pause) or the GPS pin.
+  useEffect(() => {
+    const typed = locationText.trim()
+    const next = pin ? `${pin.lat},${pin.lng}` : typed.length >= 5 ? typed : ""
+    const timer = setTimeout(() => setMapQuery(next), pin ? 0 : 700)
+    return () => clearTimeout(timer)
+  }, [pin, locationText])
+
   const detectLocation = () => {
     setLocBusy(true); setLocMessage("")
     if (!navigator.geolocation) { setLocBusy(false); setLocMessage("This browser can’t share your location. Type your hostel or area instead."); return }
@@ -482,7 +521,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     saveOrder({
       id: orderId, type: "buy", cart: items, subtotal, discount: 0, promoCode: null, deliveryFee: 0,
       location: pin ? { lat: pin.lat, lng: pin.lng } : null, manualLocation: locationText.trim(), landmark: "",
-      extraInfo, contactInfo: phone, payerName: name.trim(), payerPhone: phone, deliveryMethod,
+      extraInfo, contactInfo: phone, payerName: name.trim(), payerPhone: phone, deliveryMethod: "pickup",
       paymentMethod: "pending_provider_selection", delivered: null, createdAt: Date.now(), expiresAt: Date.now() + 48 * 60 * 60 * 1000,
       platformFee, commissionRatePercent: data.commissionRatePercent, total: serverTotal,
       backendOrderId: data.orders[0].orderId, checkoutId: data.checkoutId, checkoutClaimToken: data.claimToken,
@@ -499,7 +538,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
     if (placingRef.current) return
     placingRef.current = true; setSaving(true); setPlaceError("")
     try {
-      const body = buildCheckoutPayload({ cart: items, localOrderId: orderId, form: { pin, locationText, extraInfo, name, phone, deliveryMethod } })
+      const body = buildCheckoutPayload({ cart: items, localOrderId: orderId, form: { pin, locationText, extraInfo, name, phone } })
       const data = await api("/orders/checkout", { method: "POST", headers: authHeader(), body })
       if (!data.checkoutId || !Array.isArray(data.orders) || !data.orders.length) throw new Error("We couldn’t confirm every seller’s order. Please contact support before trying again.")
       const check = checkServerTotal(data.total, subtotal)
@@ -594,7 +633,6 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
   const view = paymentStatusView(groupPaymentStatus)
   const paystackOffered = publicSettings?.paymentMode === "paystack"
   const locationLabel = pin ? (locationText.trim() ? `${locationText.trim()} (pinned)` : "Pinned on map") : locationText.trim()
-  const mapUrl = pin ? `https://www.google.com/maps?q=${pin.lat},${pin.lng}&z=17&output=embed` : null
   const icons = { wait: "⏳", review: "🔎", ok: "✅", stop: "🚫", alert: "⚠️" }
   const title = step === 0 ? "Delivery" : step === 1 ? "Review your order" : delivered !== null ? "Order update" : groupPaymentStatus === "verified" ? "Your order" : groupPaymentStatus === "pending" ? "Complete your payment" : "Your order"
   const stepNumber = step === 3 ? 2 : step
@@ -624,22 +662,12 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
         {/* ── 1. Delivery ── */}
         {step === 0 && <>
           <p className="co-lead">Tell us where this order is going. You won’t be charged yet.</p>
-          <Field id="co-loc" label="Shipment location" error={errors.location} hint={pin ? `Pinned to within about ${pin.accuracy || "a few"} m.${pin.accuracy > 100 ? " For a sharper pin, step outside and tap again." : ""} Add a landmark below if it helps.` : "Your hostel, hall or area. Add a landmark to help the rider find you."}>
+          <Field id="co-loc" label="Shipment location" error={errors.location} hint={pin ? `Pinned to within about ${pin.accuracy || "a few"} m.${pin.accuracy > 100 ? " For a sharper pin, step outside and tap again." : ""} Add a landmark above if it helps.` : "Your hostel, hall or area. Add a landmark to help the seller find you."}>
             <input id="co-loc" className={`co-input ${errors.location ? "bad" : ""}`} autoComplete="street-address" value={locationText} onChange={e => setLocationText(e.target.value)} placeholder="e.g. Mensah Sarbah Hall, opposite the library" />
           </Field>
           <button type="button" className={`co-pin ${pin ? "on" : ""}`} onClick={detectLocation} disabled={locBusy}>{locBusy ? "Finding you…" : pin ? "📍 Location pinned ✓ (tap to refresh)" : "📍 Use my current location"}</button>
           {locMessage && <div className="co-hint" role="status">{locMessage}</div>}
-          {mapUrl && <div className="co-map"><iframe src={mapUrl} loading="lazy" title="Your pinned location" /></div>}
-
-          <div className="co-field"><label id="co-method-label">How do you want to receive it?</label>
-            <div className="co-choices" role="radiogroup" aria-labelledby="co-method-label">
-              {[["pickup", "Pick up or meet the seller", "Arrange the handover with the seller. Free."], ["rider", "Rider delivery", "A Silk Road rider brings it to you. The seller pays the rider fee, not you."]].map(([value, label, hint]) => (
-                <button key={value} type="button" role="radio" aria-checked={deliveryMethod === value} className={`co-choice ${deliveryMethod === value ? "on" : ""}`} onClick={() => setDeliveryMethod(value)}>
-                  <span className="co-radio" /><span><strong>{label}</strong><small>{hint}</small></span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <MapPreview query={mapQuery} pinned={!!pin} />
 
           <Field id="co-name" label="Name" error={errors.name}>
             <input id="co-name" className={`co-input ${errors.name ? "bad" : ""}`} autoComplete="name" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" />
@@ -647,9 +675,10 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           <Field id="co-phone" label="Phone number" error={errors.phone} hint="The seller or rider calls this number to reach you.">
             <input id="co-phone" className={`co-input ${errors.phone ? "bad" : ""}`} type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="024 123 4567" />
           </Field>
-          <Field id="co-extra" label="Anything the seller should know?" optional>
+          <Field id="co-extra" label="Anything the seller should know?" optional hint="The seller sees this message with your order.">
             <textarea id="co-extra" className="co-input" rows={2} value={extraInfo} onChange={e => setExtraInfo(e.target.value)} placeholder="e.g. Call me when you arrive" />
           </Field>
+          <div className="co-soft">After you pay, the seller arranges delivery with you. They may bring it themselves or send a Silk Road rider.</div>
         </>}
 
         {/* ── 2. Review ── */}
@@ -657,13 +686,14 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           <div className="co-card">{itemsList}</div>
           <div className="co-card">
             <div className="co-row"><span>Deliver to</span><strong>{locationLabel}</strong></div>
-            <div className="co-row"><span>Method</span><strong>{deliveryMethod === "rider" ? "Rider delivery" : "Pick up / meet seller"}</strong></div>
+            <MapPreview query={mapQuery} pinned={!!pin} compact />
             <div className="co-row"><span>Contact</span><strong>{name.trim()} · {normalizeGhPhone(phone).local || phone}</strong></div>
+            {extraInfo.trim() && <div className="co-row"><span>Your message</span><strong>{extraInfo.trim()}</strong></div>}
             <button type="button" className="co-link" style={{ justifySelf: "start" }} onClick={() => setStep(0)}>Edit details</button>
           </div>
           <div className="co-card">
             <div className="co-row"><span>Items</span><strong>{formatCedi(subtotal)}</strong></div>
-            <div className="co-row"><span>Delivery</span><strong>{deliveryMethod === "rider" ? "Paid by the seller" : "Free"}</strong></div>
+            <div className="co-row"><span>Delivery</span><strong>Arranged by the seller</strong></div>
             <div className="co-total"><span>Total</span><span>{formatCedi(subtotal)}<small>({formatUsd(subtotal, rate)})</small></span></div>
           </div>
           <div className="co-card">
@@ -684,8 +714,9 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
         {/* ── 3. Pay, then track ── */}
         {step === 3 && delivered === null && !statusReady && <div className="co-skel" aria-label="Loading your order" />}
         {step === 3 && (delivered === null ? (!statusReady ? null : <>
-          <div className={`co-banner ${view.tone}`}><span className="ic">{icons[view.tone]}</span><div><b>{view.title}</b><span>{view.detail}</span></div></div>
-          <div className="co-row" style={{ padding: "0 2px" }}><span>Order total</span><strong style={{ fontSize: 20, color: "#e0c590" }}>{formatCedi(total)}</strong></div>
+          {groupPaymentStatus === "pending"
+            ? <div className="co-amount"><span>Amount to pay</span><strong>{formatCedi(total)}</strong><small>({formatUsd(total, rate)})</small></div>
+            : <div className={`co-banner ${view.tone}`}><span className="ic">{icons[view.tone]}</span><div><b>{view.title}</b><span>{view.detail}</span></div></div>}
 
           {checkoutId && claimToken ? <>
             {groupPaymentStatus === "pending" && checkoutPaymentMethod === "paystack" && <PaystackPay checkoutId={checkoutId} claimToken={claimToken} amount={total} defaultEmail={user?.email} onVerified={onPaid} />}
@@ -728,15 +759,20 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
             </div>}
           </> : <div className="co-card"><p className="co-lead" style={{ margin: 0 }}>We’re preparing your order details. If this takes too long, contact Silk Road support before trying to pay again.</p></div>}
 
-          <div className="co-card">
-            <h4>Your order</h4>
-            {itemsList}
-            <div className="co-divider" />
-            <div className="co-row"><span>Delivery</span><strong>{deliveryMethod === "rider" ? "Rider delivery requested" : "Arrange with seller"}</strong></div>
-            {(locationText || pin) && <div className="co-row"><span>Location</span><strong>{locationText.trim() || `${pin.lat}, ${pin.lng}`}</strong></div>}
-            {paymentRef && <div className="co-row"><span>Reference</span><strong>{paymentRef}</strong></div>}
-            <p className="co-fine">Keep this reference. Silk Road will never ask for your payment PIN.</p>
-          </div>
+          <details className="co-details">
+            <summary>Order details</summary>
+            <div className="co-details-body">
+              {itemsList}
+              <div className="co-divider" />
+              <div className="co-row"><span>Total</span><strong>{formatCedi(total)} ({formatUsd(total, rate)})</strong></div>
+              <div className="co-row"><span>Delivery</span><strong>{deliveryMethod === "rider" ? "Rider delivery requested" : "Arranged by the seller"}</strong></div>
+              {(locationText || pin) && <div className="co-row"><span>Location</span><strong>{locationText.trim() || `${pin.lat}, ${pin.lng}`}</strong></div>}
+              {extraInfo.trim() && <div className="co-row"><span>Your message</span><strong>{extraInfo.trim()}</strong></div>}
+              {paymentRef && <div className="co-row"><span>Reference</span><strong>{paymentRef}</strong></div>}
+              <MapPreview query={mapQuery} pinned={!!pin} compact />
+              <p className="co-fine">Keep this reference. Silk Road will never ask for your payment PIN.</p>
+            </div>
+          </details>
 
           {support && <a className="co-btn co-secondary" href={`https://wa.me/${support}`} target="_blank" rel="noreferrer">Need help? Chat on WhatsApp</a>}
           <button type="button" className="co-btn co-ghost" onClick={onClose}>Back to marketplace</button>
