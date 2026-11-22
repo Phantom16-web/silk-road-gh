@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { io } from "socket.io-client"
+import { RiderNotificationBell } from "./NotificationCenter"
+import { fireToast } from "./OrderTracker"
 
 const API_URL    = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 const SOCKET_URL = import.meta.env.VITE_API_URL
@@ -58,6 +60,7 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [isOnline, setIsOnline]           = useState(Boolean(rider.isOnline))
   const [onlineBusy, setOnlineBusy]       = useState(false)
+  const [isTestRider, setIsTestRider]     = useState(Boolean(rider.isTestRider))
   const [earnings, setEarnings]           = useState({
     total:      rider.totalEarned     || 0,
     deliveries: rider.totalDeliveries || 0,
@@ -77,8 +80,15 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
     })
     s.on("connect", () => {
       s.emit("register_rider", String(rider._id))
+      window.dispatchEvent(new Event("silkroad_rider_socket_connected"))
+    })
+    // Saved notifications for this rider go to the bell and show a toast.
+    s.on("delivery_completed", (data) => {
+      window.dispatchEvent(new CustomEvent("silkroad_rider_notification", { detail: { ...data, type: "delivery_completed" } }))
+      fireToast({ kind: "delivery_completed", title: "Delivery confirmed", message: data?.message || "The buyer confirmed delivery. Thank you!" })
     })
     s.on("new_delivery_job", (job) => {
+      fireToast({ kind: "new_delivery_job", title: "New delivery job", message: `${job.itemTitle || "A delivery"} is waiting for a rider.` })
       setActive(prev => {
         if (!prev) {
           setJobs(prevJobs => {
@@ -97,6 +107,9 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
 
   // ── Initial fetch ──────────────────────────────────────────────────────────
   useEffect(() => { fetchJobsAndActive() }, [])
+
+  // Test riders only see Testing Mode jobs. Ask the server so the badge is right even on an old session.
+  useEffect(() => { riderCall("/rider-auth/me").then(me => setIsTestRider(Boolean(me?.isTestRider))).catch(() => {}) }, [])
 
   // ── Auto-refresh active delivery every 10s ─────────────────────────────────
   useEffect(() => {
@@ -263,13 +276,14 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
             {rider.name.charAt(0).toUpperCase()}
           </div>
           <div>
-            <div style={{ fontSize: "15px", fontWeight: "700" }}>{rider.name}</div>
+            <div style={{ fontSize: "15px", fontWeight: "700", display: "flex", alignItems: "center", gap: "8px" }}>{rider.name}{isTestRider && <span title="Test rider: sees Testing Mode jobs only" style={{ fontSize: "9px", fontWeight: "800", letterSpacing: "0.14em", padding: "3px 7px", borderRadius: "999px", color: "#1a140e", background: "linear-gradient(135deg,#f0dba9,#c8a063)" }}>TEST</span>}</div>
             <div style={{ fontSize: "11px", color: "#555" }}>
               {rider.vehicle === "motorbike" ? "🛵 Motorbike" : rider.vehicle === "bicycle" ? "🚲 Bicycle" : "🚶 Walking"} · {rider.university}
             </div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <RiderNotificationBell />
           <span style={{ fontSize: "12px", color: isOnline ? "#6ee7b7" : "#555" }}>{isOnline ? "Online" : "Offline"}</span>
           <button type="button" role="switch" aria-checked={isOnline} aria-label="Rider online availability"
             disabled={onlineBusy} onClick={handleToggleOnline}
