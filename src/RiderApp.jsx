@@ -69,6 +69,7 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
   useEffect(() => {
     const s = io(SOCKET_URL, {
       autoConnect:          true,
+      auth:                 { token: localStorage.getItem("silkroad_rider_token") || "" },
       reconnection:         true,
       reconnectionDelay:    1000,
       reconnectionAttempts: Infinity,
