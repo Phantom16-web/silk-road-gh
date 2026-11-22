@@ -10,10 +10,10 @@ import AdminPanel from "./AdminPanel"
 import OrderTracker, {
   connectSellerSocket,
   disconnectSocket,
-  NotificationBell,
   ToastContainer,
   getOrders,
 } from "./OrderTracker"
+import { NotificationBell } from "./NotificationCenter"
 import RiderAuth from "./RiderAuth"
 import RiderApp from "./RiderApp"
 import { getListings, getListing } from "./api"
