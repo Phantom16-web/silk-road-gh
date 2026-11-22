@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { saveOrder, generateOrderId, updateOrder } from "./OrderTracker"
 import {
   NETWORKS, NETWORK_KEYS, guessNetwork, momoSteps, formatCedi, formatCediShort, formatUsd, cartSubtotal,
-  checkServerTotal, validateDelivery, buildCheckoutPayload, paymentStatusView, isEmail, normalizeGhPhone,
+  checkServerTotal, validateDelivery, buildCheckoutPayload, paymentStatusView, normalizeGhPhone,
 } from "./checkoutUtils"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
@@ -127,6 +127,45 @@ textarea.co-input{resize:vertical;min-height:70px}
 .co-pkg-top small{font-size:10px;font-weight:800;letter-spacing:.13em;color:#b9a17a}.co-pkg-top strong{display:block;font-size:14px;overflow-wrap:anywhere}
 @media(max-width:560px){.co-backdrop{padding:0;align-items:flex-end}.co-sheet{max-width:none;border-radius:22px 22px 0 0;max-height:96vh;max-height:96dvh}.co-body{padding:16px}.co-head,.co-stepper,.co-foot{padding-left:16px;padding-right:16px}}
 @media(prefers-reduced-motion:reduce){.co-pulse,.co-skel{animation:none}.co-btn{transition:none}}
+.mp{gap:16px}
+.mp-eyebrow{font-size:10px;font-weight:800;letter-spacing:.2em;color:#c8a97e;margin-bottom:4px}
+.mp h3,.mp-stage h3{margin:0;font-size:20px;letter-spacing:-.01em}
+.mp-stage{display:grid;gap:14px;justify-items:center;text-align:center}
+.mp-stage>*{max-width:100%}
+.mp-stage .co-lead{max-width:34ch}.mp-stage .co-lead b{color:#f0d9a6}
+.mp-nets{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.mp-net{display:grid;gap:9px;justify-items:center;padding:14px 6px 12px;border-radius:16px;border:1.5px solid #34322e;background:#171615;color:#cfc9bd;font:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:border-color .2s,background .2s,transform .2s,box-shadow .2s}
+.mp-net i{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:900;font-size:11px;letter-spacing:.02em;box-shadow:inset 0 -3px 0 #0003}
+.mp-net:hover{transform:translateY(-1px);border-color:#4a463d}
+.mp-net.on{border-color:#d7b982;background:linear-gradient(160deg,#2b2318,#181613);color:#f6e7c4;box-shadow:0 0 0 3px #d7b98222,0 12px 28px #0007}
+.mp-phone{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 15px;border-radius:14px;background:#14120f;border:1px solid #2f2b22}
+.mp-phone small{display:block;font-size:10px;font-weight:800;letter-spacing:.14em;color:#8f8a80;margin-bottom:3px}
+.mp-phone strong{font-size:19px;letter-spacing:.04em;color:#f3e3bd;font-variant-numeric:tabular-nums}
+.mp-alt{justify-self:center;color:#9a958b;font-size:13px}
+.mp-art{position:relative;width:108px;height:108px;display:grid;place-items:center;margin:2px 0}
+.mp-art svg{position:relative;width:54px;height:54px;fill:#1c1913;stroke:#e4c892;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;animation:mpBuzz 2.4s ease-in-out infinite;transform-origin:50% 90%}
+.mp-ring{position:absolute;inset:14px;border-radius:50%;border:1.5px solid #d7b98266;animation:mpRing 2.4s ease-out infinite}
+.mp-ring.r2{animation-delay:.6s}.mp-ring.r3{animation-delay:1.2s}
+@keyframes mpRing{0%{transform:scale(.55);opacity:.9}100%{transform:scale(1.35);opacity:0}}
+@keyframes mpBuzz{0%,60%,100%{transform:rotate(0)}66%{transform:rotate(-6deg)}72%{transform:rotate(6deg)}78%{transform:rotate(-5deg)}84%{transform:rotate(4deg)}90%{transform:rotate(0)}}
+.mp-steps{list-style:none;margin:0;padding:0;display:flex;gap:6px;width:100%;justify-content:center;font-size:11px;letter-spacing:.04em;color:#6f6a60}
+.mp-steps li{display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;background:#14120f;border:1px solid #26231d}
+.mp-steps i{width:8px;height:8px;border-radius:50%;background:#3a362d;display:block}
+.mp-steps .done{color:#9be5bf}.mp-steps .done i{background:#4fbf8a}
+.mp-steps .now{color:#f0d9a6;border-color:#5a4a2e}.mp-steps .now i{background:#d7b982;animation:coPulse 1.6s infinite;box-shadow:0 0 0 0 #d7b98288}
+.mp-timer{position:relative;display:grid;justify-items:center;gap:2px}
+.mp-timer svg{width:64px;height:64px;transform:rotate(-90deg)}
+.mp-timer circle{fill:none;stroke-width:4}.mp-timer .bg{stroke:#2a261d}.mp-timer .fg{stroke:#d7b982;stroke-linecap:round;transition:stroke-dashoffset 1s linear}
+.mp-timer span{position:absolute;top:21px;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;color:#f3e3bd}
+.mp-timer small{font-size:11px;color:#8f8a80}
+.mp-row{display:flex;gap:10px;width:100%}.mp-row .co-btn{flex:1;min-height:46px;font-size:14px}
+.mp-otp{text-align:center;font-size:26px;letter-spacing:.5em;font-weight:800;padding-left:calc(15px + .5em);max-width:260px}
+.mp-done{width:76px;height:76px;margin:4px 0}
+.mp-done svg{width:100%;height:100%;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.mp-done circle{stroke:#4fbf8a;stroke-dasharray:151;stroke-dashoffset:151;animation:mpDraw .7s ease forwards;fill:#112219}
+.mp-done path{stroke:#9be5bf;stroke-dasharray:40;stroke-dashoffset:40;animation:mpDraw .45s .55s ease forwards}
+@keyframes mpDraw{to{stroke-dashoffset:0}}
+@media(prefers-reduced-motion:reduce){.mp-ring,.mp-art svg,.mp-steps .now i,.mp-done circle,.mp-done path{animation:none;stroke-dashoffset:0}.mp-timer .fg{transition:none}}
 `
 
 // ── Small building blocks ────────────────────────────────────────────────────
@@ -172,91 +211,166 @@ function MapPreview({ query, pinned, compact }) {
   </div>
 }
 
-// ── Payment: Paystack (MTN, Telecel, AT and cards are all chosen on Paystack's page) ──
-function PaystackPay({ checkoutId, claimToken, amount, defaultEmail, onVerified }) {
-  const [email, setEmail] = useState(isEmail(defaultEmail) ? defaultEmail : "")
-  const [editEmail, setEditEmail] = useState(!isEmail(defaultEmail))
-  const [state, setState] = useState("ready") // ready | loading | awaiting | checking | verified | error
+// ── Payment: Mobile Money prompt sent straight to the buyer's phone ─────────────
+// No email, no hosted page: we use the phone number from checkout, the backend asks Paystack to
+// prompt that phone, and the buyer approves with their MoMo PIN. Card stays available as a fallback.
+const MOMO_CODES = { MTN: "mtn", Telecel: "vod", AT: "atl" }
+const PROMPT_SECONDS = 180
+
+function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, onVerified }) {
+  const [phone, setPhone] = useState(initialPhone || "")
+  const [editPhone, setEditPhone] = useState(!normalizeGhPhone(initialPhone).ok)
+  const [network, setNetwork] = useState(guessNetwork(initialPhone) || "MTN")
+  const [state, setState] = useState("ready") // ready | sending | prompt | otp | card | verified
   const [message, setMessage] = useState("")
-  const [url, setUrl] = useState("")
+  const [otp, setOtp] = useState("")
+  const [left, setLeft] = useState(PROMPT_SECONDS)
+  const [cardUrl, setCardUrl] = useState("")
+  const [maskedPhone, setMaskedPhone] = useState("")
   const busy = useRef(false)
   const startedAt = useRef(0)
+  const pickedByHand = useRef(false)
   const verifiedRef = useRef(onVerified)
   useEffect(() => { verifiedRef.current = onVerified })
+
+  const parsed = normalizeGhPhone(phone)
   const call = (path, body) => api(`/checkout-paystack/${encodeURIComponent(checkoutId)}/${path}`, { method: "POST", headers: { "x-checkout-token": claimToken }, body })
+
+  // The network follows the number until the buyer picks one themselves (numbers can be ported).
+  useEffect(() => { if (!pickedByHand.current) { const g = guessNetwork(phone); if (g) setNetwork(g) } }, [phone])
+
+  const finish = useCallback(result => {
+    setState("verified"); setMessage("")
+    setTimeout(() => verifiedRef.current?.(result), 1500)
+  }, [])
+
+  const handleOutcome = useCallback(result => {
+    if (result.verified || result.state === "verified") return finish(result)
+    if (result.state === "failed") { setState("ready"); setMessage(result.message || "That payment was not approved. You have not been charged. Please try again."); return }
+    if (result.phoneMasked) setMaskedPhone(result.phoneMasked)
+    if (result.needsOtp) { setState("otp"); setMessage(result.displayText || ""); return }
+    startedAt.current = Date.now(); setLeft(PROMPT_SECONDS); setState("prompt"); setMessage("")
+  }, [finish])
+
+  const send = async () => {
+    if (busy.current) return
+    if (!parsed.ok) { setEditPhone(true); setMessage("Enter a valid Ghana Mobile Money number, like 024 123 4567."); return }
+    busy.current = true; setState("sending"); setMessage("")
+    try { handleOutcome(await call("charge", { phone: parsed.local, provider: MOMO_CODES[network] })) }
+    catch (error) { setState("ready"); setMessage(error.message) }
+    finally { busy.current = false }
+  }
+
+  const submitOtp = async () => {
+    if (busy.current || !/^\d{4,8}$/.test(otp)) return
+    busy.current = true; setMessage("")
+    try { handleOutcome(await call("submit-otp", { otp })); setOtp("") }
+    catch (error) { setMessage(error.message) }
+    finally { busy.current = false }
+  }
+
+  const payByCard = async () => {
+    if (busy.current) return
+    busy.current = true; setState("sending"); setMessage("")
+    try {
+      const result = await call("initialize")
+      const url = new URL(result.authorizationUrl)
+      if (url.protocol !== "https:" || !["checkout.paystack.com", "paystack.com"].includes(url.hostname)) throw new Error("The payment provider returned an unexpected address. Please contact support.")
+      setCardUrl(url.href); startedAt.current = Date.now(); setState("card")
+      window.open(url.href, "_blank", "noopener,noreferrer")
+    } catch (error) { setState("ready"); setMessage(error.message) }
+    finally { busy.current = false }
+  }
 
   const verify = useCallback(async silent => {
     if (busy.current) return
     busy.current = true
-    if (!silent) setState("checking")
     try {
-      const result = await api(`/checkout-paystack/${encodeURIComponent(checkoutId)}/verify`, { method: "POST", headers: { "x-checkout-token": claimToken } })
-      if (result.verified) { setState("verified"); setMessage(""); verifiedRef.current?.(result) }
-      else {
-        setState("awaiting")
-        if (!silent) setMessage(`Not confirmed yet (${result.providerStatus || "pending"}). If you already approved the payment, wait a moment and check again. Please don’t pay twice.`)
-      }
-    } catch (error) {
-      setState("awaiting")
-      if (!silent) setMessage(`${error.message} Please don’t pay again until this is sorted out.`)
-    } finally { busy.current = false }
-  }, [checkoutId, claimToken])
-
-  const pay = async () => {
-    if (busy.current) return
-    if (!isEmail(email)) { setState("error"); setMessage("Enter a valid email address for your receipt."); setEditEmail(true); return }
-    busy.current = true; setState("loading"); setMessage("")
-    try {
-      const result = await call("initialize", { email: email.trim() })
-      const parsed = new URL(result.authorizationUrl)
-      if (parsed.protocol !== "https:" || !["checkout.paystack.com", "paystack.com"].includes(parsed.hostname)) throw new Error("The payment provider returned an unexpected address. Please contact support.")
-      setUrl(parsed.href); startedAt.current = Date.now(); setState("awaiting")
-      window.open(parsed.href, "_blank", "noopener,noreferrer")
-    } catch (error) { setState("error"); setMessage(error.message) }
+      const result = await call("verify")
+      if (result.verified) finish(result)
+      else if (result.canRetry && result.providerStatus === "failed") { setState("ready"); setMessage("That payment did not go through. You have not been charged. Please try again.") }
+      else if (!silent) setMessage("Not confirmed yet. If you already approved it, give it a few seconds. Please don’t pay twice.")
+    } catch (error) { if (!silent) setMessage(`${error.message} Please don’t pay again until this is sorted out.`) }
     finally { busy.current = false }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkoutId, claimToken, finish])
 
-  // After payment starts, confirm automatically: every 6 s for 2 minutes, then every 15 s, and whenever the buyer comes back to this tab.
+  // Waiting for the buyer: count down the prompt window and check with the server every 4 seconds.
   useEffect(() => {
-    if (state !== "awaiting") return undefined
-    let timer
-    const tick = () => { if (document.visibilityState === "visible") verify(true) }
-    const schedule = () => {
-      const elapsed = Date.now() - startedAt.current
-      if (elapsed > 20 * 60 * 1000) return
-      timer = setTimeout(() => { tick(); schedule() }, elapsed < 120000 ? 6000 : 15000)
-    }
-    schedule()
-    document.addEventListener("visibilitychange", tick)
-    window.addEventListener("focus", tick)
-    return () => { clearTimeout(timer); document.removeEventListener("visibilitychange", tick); window.removeEventListener("focus", tick) }
+    if (state !== "prompt" && state !== "card" && state !== "otp") return undefined
+    const tick = () => setLeft(Math.max(0, PROMPT_SECONDS - Math.floor((Date.now() - startedAt.current) / 1000)))
+    const clock = setInterval(tick, 1000)
+    const poll = setInterval(() => { if (document.visibilityState === "visible") verify(true) }, 4000)
+    const wake = () => { if (document.visibilityState === "visible") verify(true) }
+    document.addEventListener("visibilitychange", wake)
+    return () => { clearInterval(clock); clearInterval(poll); document.removeEventListener("visibilitychange", wake) }
   }, [state, verify])
 
-  const waiting = state === "awaiting" || state === "checking"
-  return <div className="co-card hl">
-    <h3>Pay securely</h3>
-    {!waiting && <>
-      <p className="co-lead">Pick MTN MoMo, Telecel Cash, AT Money or card on the next screen.</p>
-      <ProviderChips card />
-      {editEmail
-        ? <Field id="co-email" label="Email for your receipt" error={state === "error" && !isEmail(email) ? message : ""}>
-            <input id="co-email" className="co-input" type="email" inputMode="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" maxLength={254} />
-          </Field>
-        : <div className="co-hint">Your receipt goes to <b>{email}</b> · <button type="button" className="co-link" onClick={() => setEditEmail(true)}>Change</button></div>}
-      <button type="button" className="co-btn co-primary" disabled={state === "loading" || (editEmail && !isEmail(email))} onClick={pay}>{state === "loading" ? "Preparing secure payment…" : `Pay ${formatCedi(amount)}`}</button>
-    </>}
-    {waiting && <>
-      <ol className="co-ol">
-        <li>Open the secure payment page.</li>
-        <li>Choose MTN MoMo, Telecel Cash, AT Money or card.</li>
-        <li>Approve the prompt on your phone with your PIN.</li>
-        <li>Come back here. We confirm it automatically.</li>
+  const net = NETWORKS[network]
+  const waiting = state === "prompt" || state === "card"
+  const mm = String(Math.floor(left / 60)).padStart(1, "0") + ":" + String(left % 60).padStart(2, "0")
+  const C = 2 * Math.PI * 26
+
+  if (state === "verified") return <div className="co-card hl mp-stage" role="status">
+    <div className="mp-done"><svg viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24" /><path d="M15 27l8 8 15-17" /></svg></div>
+    <h3>Payment received</h3>
+    <p className="co-lead">Your seller orders are funded and safely held until you confirm delivery.</p>
+  </div>
+
+  return <div className="co-card hl mp">
+    {state === "otp" && <div className="mp-stage">
+      <div className="mp-eyebrow">ONE MORE STEP</div>
+      <h3>Enter your code</h3>
+      <p className="co-lead">{message || `Enter the code ${net.name} sent you by SMS to continue.`}</p>
+      <input className="co-input mp-otp" inputMode="numeric" autoComplete="one-time-code" maxLength={8} value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ""))} placeholder="••••••" aria-label="Code from SMS" autoFocus />
+      <button type="button" className="co-btn co-primary" disabled={!/^\d{4,8}$/.test(otp)} onClick={submitOtp}>Continue</button>
+    </div>}
+
+    {waiting && <div className="mp-stage">
+      <div className="mp-art" aria-hidden="true">
+        <span className="mp-ring r1" /><span className="mp-ring r2" /><span className="mp-ring r3" />
+        <svg viewBox="0 0 64 64"><rect x="19" y="6" width="26" height="52" rx="6" /><path d="M28 12h8" /><circle cx="32" cy="50" r="2" /><path d="M25 27h14M25 33h14M25 39h8" /></svg>
+      </div>
+      {state === "prompt" ? <>
+        <h3>Check your phone</h3>
+        <p className="co-lead">We sent a prompt to <b>{maskedPhone || (parsed.ok ? parsed.local : "your phone")}</b>. Enter your {net.name} PIN to approve <b>{formatCedi(amount)}</b>.</p>
+      </> : <>
+        <h3>Finish on the payment page</h3>
+        <p className="co-lead">Complete your card payment in the tab we opened. We’ll confirm it here automatically.</p>
+        <a className="co-btn co-secondary" href={cardUrl} target="_blank" rel="noopener noreferrer">Reopen payment page ↗</a>
+      </>}
+      <ol className="mp-steps" aria-label="Payment progress">
+        <li className="done"><i />Request sent</li>
+        <li className="now"><i />You approve</li>
+        <li><i />We confirm</li>
       </ol>
-      <a className="co-btn co-primary" href={url} target="_blank" rel="noopener noreferrer">Open secure payment ↗</a>
-      <button type="button" className="co-btn co-secondary" disabled={state === "checking"} onClick={() => verify(false)}>{state === "checking" ? "Checking…" : "I’ve paid — check now"}</button>
+      {left > 0
+        ? <div className="mp-timer"><svg viewBox="0 0 60 60" aria-hidden="true"><circle className="bg" cx="30" cy="30" r="26" /><circle className="fg" cx="30" cy="30" r="26" strokeDasharray={C} strokeDashoffset={C * (1 - left / PROMPT_SECONDS)} /></svg><span>{mm}</span><small>The prompt expires soon</small></div>
+        : <div className="co-note">Taking longer than usual. If nothing appeared on your phone, send it again.</div>}
+      <div className="mp-row">
+        {state === "prompt" && <button type="button" className="co-btn co-secondary" disabled={left > 150} onClick={send}>Send it again</button>}
+        <button type="button" className="co-btn co-secondary" onClick={() => verify(false)}>I’ve approved it</button>
+      </div>
       <div className="co-live"><span className="co-pulse" />Waiting for confirmation…</div>
+    </div>}
+
+    {(state === "ready" || state === "sending") && <>
+      <div><div className="mp-eyebrow">MOBILE MONEY</div><h3>Pay from your phone</h3></div>
+      <p className="co-lead" style={{ margin: 0 }}>We’ll send a payment prompt straight to your phone. Approve it with your PIN. No card or email needed.</p>
+      <div className="mp-nets" role="radiogroup" aria-label="Mobile Money network">
+        {NETWORK_KEYS.map(key => <button key={key} type="button" role="radio" aria-checked={network === key} className={`mp-net ${network === key ? "on" : ""}`} onClick={() => { pickedByHand.current = true; setNetwork(key) }}>
+          <i style={{ background: NETWORKS[key].color, color: key === "MTN" ? "#1a140e" : "#fff" }}>{key === "Telecel" ? "TC" : key}</i>{NETWORKS[key].name}
+        </button>)}
+      </div>
+      {editPhone
+        ? <Field id="co-pay-phone" label="Mobile Money number" error={message && !parsed.ok ? message : ""}>
+            <input id="co-pay-phone" className="co-input" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={e => { setPhone(e.target.value); setMessage("") }} placeholder="024 123 4567" />
+          </Field>
+        : <div className="mp-phone"><div><small>PROMPT GOES TO</small><strong>{parsed.local.slice(0, 3)} {parsed.local.slice(3, 6)} {parsed.local.slice(6)}</strong></div><button type="button" className="co-link" onClick={() => setEditPhone(true)}>Change</button></div>}
+      <button type="button" className="co-btn co-primary" disabled={state === "sending" || (editPhone && !parsed.ok)} onClick={send}>{state === "sending" ? "Sending prompt…" : `Send prompt · ${formatCedi(amount)}`}</button>
+      {message && parsed.ok && <div role="alert" className="co-note bad">{message}</div>}
+      <button type="button" className="co-link mp-alt" disabled={state === "sending"} onClick={payByCard}>Pay with a card instead</button>
     </>}
-    {message && !(state === "error" && !isEmail(email)) && <div role="status" className={`co-note ${state === "error" ? "bad" : ""}`}>{message}</div>}
     <p className="co-fine">Never share your MoMo PIN or one-time code with anyone, including Silk Road staff. Your order is only marked paid after our server confirms it with Paystack.</p>
   </div>
 }
@@ -699,7 +813,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
           <div className="co-card">
             <h4>How you’ll pay</h4>
             <ProviderChips card={paystackOffered} />
-            <p className="co-hint" style={{ margin: 0 }}>{paystackOffered ? "You’ll pick MTN MoMo, Telecel Cash, AT Money or card on a secure payment page." : "Pay by Mobile Money from MTN, Telecel or AT. The next screen shows exactly where to send it."}</p>
+            <p className="co-hint" style={{ margin: 0 }}>{paystackOffered ? "We’ll send a payment prompt to your phone. Approve it with your MoMo PIN. No email or card needed." : "Pay by Mobile Money from MTN, Telecel or AT. The next screen shows exactly where to send it."}</p>
           </div>
           {placeError && <div className="co-note bad" role="alert">{placeError}</div>}
         </>}
@@ -719,7 +833,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
             : <div className={`co-banner ${view.tone}`}><span className="ic">{icons[view.tone]}</span><div><b>{view.title}</b><span>{view.detail}</span></div></div>}
 
           {checkoutId && claimToken ? <>
-            {groupPaymentStatus === "pending" && checkoutPaymentMethod === "paystack" && <PaystackPay checkoutId={checkoutId} claimToken={claimToken} amount={total} defaultEmail={user?.email} onVerified={onPaid} />}
+            {groupPaymentStatus === "pending" && checkoutPaymentMethod === "paystack" && <PaystackPay checkoutId={checkoutId} claimToken={claimToken} amount={total} phone={phone} onVerified={onPaid} />}
             {groupPaymentStatus === "pending" && checkoutPaymentMethod !== "paystack" && checkoutEnvironment === "testing" && <PracticePay checkoutId={checkoutId} claimToken={claimToken} onSubmitted={onSubmitted} />}
             {groupPaymentStatus === "pending" && checkoutPaymentMethod !== "paystack" && checkoutEnvironment === "live" && <ManualMomoPay amount={total} reference={paymentRef} buyerPhone={phone} support={support} checkoutId={checkoutId} claimToken={claimToken} onSubmitted={onSubmitted} />}
             {groupPaymentStatus === "pending" && checkoutPaymentMethod !== "paystack" && checkoutEnvironment === null && <div className="co-skel" aria-label="Checking payment options" />}
@@ -733,7 +847,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
             {groupPaymentStatus === "verified" && <div className="co-card">
               <h3>Receive your order</h3>
               <p className="co-lead">When your items arrive, check that everything is right. Then get your delivery code and share it with the seller or rider. <b>Never share it before you have your items.</b></p>
-              {checkoutEnvironment === "testing" && <div className="co-note">This was a practice order, so there are no delivery codes.</div>}
+              {checkoutEnvironment === "testing" && <div className="co-note">Practice order: delivery codes work exactly like a real order, but no real money moves.</div>}
               {sellerOrders.map((o, index) => (
                 <div className="co-sep" key={o.orderId}>
                   <div className="co-pkg-top"><div><small>PACKAGE {index + 1}</small><strong>{o.title || `Your order ${index + 1}`}</strong></div><span className="co-item-price">{formatCedi(o.amount)}</span></div>
