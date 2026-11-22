@@ -1,0 +1,105 @@
+/* Silk Road notification centre: bell, drawer and toasts.
+   Palette: warm black, aged gold, and one calm accent per notification type. */
+.nc-bell,.nc-layer,.nc-toasts{--gold:#d7b982;--gold-hi:#f0dba9;--ink:#0d0c0b;--panel:#141311;--line:#2a2620;--muted:#a8a296;--dim:#7c776d;--green:#4fbf8a;--blue:#58a9e0;--amber:#f0b45c;--red:#e07474}
+
+/* ── Bell ─────────────────────────────────────────────────────────────── */
+.nc-bell{position:relative;width:40px;height:40px;border-radius:12px;display:inline-grid;place-items:center;flex-shrink:0;cursor:pointer;color:var(--gold);background:linear-gradient(160deg,#1a1814,#11100e);border:1px solid #2f2b25;transition:border-color .25s,box-shadow .25s,transform .2s,color .25s;-webkit-tap-highlight-color:transparent}
+.nc-bell:hover{border-color:#5a4a2e;color:var(--gold-hi);box-shadow:0 0 0 3px #d7b98216,0 8px 22px #0007}
+.nc-bell:active{transform:scale(.94)}
+.nc-bell:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.nc-bell.has{border-color:#5a4a2e;box-shadow:0 0 18px #d7b98222}
+.nc-bell.ring svg{animation:ncRing 1.2s ease-in-out;transform-origin:50% 12%}
+@keyframes ncRing{0%,100%{transform:rotate(0)}12%{transform:rotate(16deg)}26%{transform:rotate(-14deg)}40%{transform:rotate(10deg)}54%{transform:rotate(-7deg)}68%{transform:rotate(4deg)}}
+.nc-badge{position:absolute;top:-6px;right:-6px;min-width:19px;height:19px;padding:0 5px;box-sizing:border-box;border-radius:999px;display:grid;place-items:center;font-size:10.5px;font-weight:800;letter-spacing:.01em;color:#1b140d;background:linear-gradient(135deg,#f0dba9,#c8a063);border:2px solid #0d0c0b;animation:ncPop .35s cubic-bezier(.3,1.6,.5,1)}
+@keyframes ncPop{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
+
+/* ── Drawer ───────────────────────────────────────────────────────────── */
+.nc-layer{position:fixed;inset:0;z-index:10000;display:flex;justify-content:flex-end;font-family:inherit}
+.nc-backdrop{position:absolute;inset:0;background:rgba(6,5,4,.62);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);animation:ncFade .25s ease}
+@keyframes ncFade{from{opacity:0}to{opacity:1}}
+.nc-drawer{position:relative;width:min(430px,100vw);height:100%;display:flex;flex-direction:column;color:#f0ede8;background:radial-gradient(120% 60% at 100% 0%,#241d12 0%,transparent 55%),linear-gradient(180deg,#151311,#0c0b0a);border-left:1px solid var(--line);box-shadow:-30px 0 80px #000a;animation:ncSlide .38s cubic-bezier(.2,.9,.25,1)}
+@keyframes ncSlide{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+.nc-grab{display:none}
+.nc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:calc(22px + env(safe-area-inset-top,0px)) 22px 14px}
+.nc-eyebrow{font-size:10px;font-weight:800;letter-spacing:.28em;color:var(--gold);margin-bottom:6px}
+.nc-head h2{margin:0;font-size:25px;line-height:1.1;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.nc-pill{font-size:11px;font-weight:800;letter-spacing:.02em;padding:4px 10px;border-radius:999px;color:#1b140d;background:linear-gradient(135deg,#f0dba9,#c8a063)}
+.nc-head-actions{display:flex;gap:8px;flex-shrink:0}
+.nc-icon-btn{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#cfc9bd;background:#1a1814;border:1px solid #2f2b25;transition:background .2s,color .2s,transform .2s}
+.nc-icon-btn:hover{background:#26221b;color:#fff}.nc-icon-btn:active{transform:scale(.92)}
+.nc-icon-btn:focus-visible,.nc-item:focus-visible,.nc-tabs button:focus-visible,.nc-ghost:focus-visible,.nc-solid:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+.nc-tabs{position:relative;display:grid;grid-template-columns:1fr 1fr;margin:0 22px;border-bottom:1px solid var(--line)}
+.nc-tabs button{background:none;border:0;padding:12px 0 13px;font:inherit;font-size:13.5px;font-weight:700;color:var(--dim);cursor:pointer;display:flex;justify-content:center;align-items:center;gap:7px;transition:color .2s}
+.nc-tabs button.on{color:var(--gold-hi)}
+.nc-tabs em{font-style:normal;font-size:10.5px;padding:2px 7px;border-radius:999px;background:#2b2418;color:var(--gold)}
+.nc-tab-bar{position:absolute;left:0;bottom:-1px;width:50%;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);transition:transform .32s cubic-bezier(.3,.9,.3,1)}
+
+.nc-scroll{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:6px 14px 18px;scrollbar-width:thin;scrollbar-color:#2f2b25 transparent}
+.nc-group h4{margin:18px 8px 8px;font-size:10.5px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+
+/* ── One notification ─────────────────────────────────────────────────── */
+.nc-item{--tone:var(--gold);position:relative;width:100%;box-sizing:border-box;display:grid;grid-template-columns:auto 1fr auto;gap:13px;align-items:center;text-align:left;padding:13px 14px;margin-bottom:8px;border-radius:18px;cursor:pointer;font:inherit;color:inherit;background:#12110f;border:1px solid #221f1a;transition:transform .2s,border-color .25s,background .25s,box-shadow .25s;animation:ncIn .45s cubic-bezier(.2,.9,.25,1) both;-webkit-tap-highlight-color:transparent}
+@keyframes ncIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.nc-item:hover{border-color:#3a342a;background:#171512;transform:translateY(-1px)}
+.nc-item:active{transform:scale(.985)}
+.nc-item.unread{background:linear-gradient(100deg,color-mix(in srgb,var(--tone) 11%,#15130f),#12110f 72%);border-color:color-mix(in srgb,var(--tone) 30%,#221f1a)}
+.nc-item.unread::before{content:"";position:absolute;left:0;top:16px;bottom:16px;width:3px;border-radius:0 3px 3px 0;background:var(--tone);box-shadow:0 0 12px var(--tone)}
+.tone-gold{--tone:var(--gold)}.tone-green{--tone:var(--green)}.tone-blue{--tone:var(--blue)}.tone-amber{--tone:var(--amber)}.tone-red{--tone:var(--red)}
+.nc-tile{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;color:var(--tone);background:linear-gradient(150deg,color-mix(in srgb,var(--tone) 20%,#14120f),#0f0e0c);border:1px solid color-mix(in srgb,var(--tone) 32%,#1c1a16);box-shadow:inset 0 1px 0 #ffffff0d,0 6px 16px #0006}
+.nc-copy{display:grid;gap:3px;min-width:0}
+.nc-copy strong{font-size:14.5px;font-weight:700;letter-spacing:-.005em;color:#f6f2ea}
+.nc-item:not(.unread) .nc-copy strong{color:#cfc9bd;font-weight:600}
+.nc-copy span{font-size:13px;line-height:1.45;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.nc-meta{display:grid;justify-items:end;gap:8px;align-self:start;padding-top:3px}
+.nc-meta time{font-size:11.5px;font-weight:600;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.nc-meta i{width:9px;height:9px;border-radius:50%;background:var(--tone);box-shadow:0 0 0 0 var(--tone);animation:ncDot 2s infinite}
+@keyframes ncDot{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--tone) 55%,transparent)}70%,100%{box-shadow:0 0 0 8px transparent}}
+
+/* ── Empty, loading ───────────────────────────────────────────────────── */
+.nc-empty{display:grid;justify-items:center;text-align:center;gap:6px;padding:56px 28px}
+.nc-empty h3{margin:6px 0 0;font-size:18px;font-weight:800;letter-spacing:-.01em}
+.nc-empty p{margin:0;max-width:30ch;font-size:13.5px;line-height:1.6;color:var(--dim)}
+.nc-empty-art{width:170px;height:148px;margin-bottom:4px}
+.nc-empty-art .a{fill:none;stroke:#2a2418;stroke-width:1.2;stroke-dasharray:3 6}.nc-empty-art .b{fill:#15120d;stroke:#2f2819;stroke-width:1.2}
+.nc-empty-art .spark{stroke:var(--gold);stroke-width:2;stroke-linecap:round;fill:none;animation:ncTwinkle 2.6s ease-in-out infinite}
+.nc-empty-art .s2{animation-delay:.8s}.nc-empty-art .s3{animation-delay:1.6s}
+@keyframes ncTwinkle{0%,100%{opacity:.25;transform:scale(.85)}50%{opacity:1;transform:scale(1)}}
+.nc-link{background:none;border:0;color:var(--gold);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;margin-top:6px}
+.nc-skel{display:grid;grid-template-columns:44px 1fr;gap:13px;align-items:center;padding:13px 14px;margin-bottom:8px;border-radius:18px;background:#12110f;border:1px solid #1d1b17}
+.nc-skel span,.nc-skel b,.nc-skel i{display:block;border-radius:10px;background:linear-gradient(90deg,#1a1814 25%,#25211a 50%,#1a1814 75%);background-size:200% 100%;animation:ncShimmer 1.4s linear infinite}
+.nc-skel span{width:44px;height:44px;border-radius:14px}.nc-skel b{height:12px;width:55%;margin-bottom:9px}.nc-skel i{height:10px;width:85%}
+@keyframes ncShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ── Footer ───────────────────────────────────────────────────────────── */
+.nc-foot{display:flex;gap:10px;padding:14px 18px calc(16px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:linear-gradient(180deg,#0f0e0c00,#0f0e0c 40%)}
+.nc-ghost,.nc-solid{min-height:46px;border-radius:14px;font:inherit;font-size:14px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;transition:transform .2s,opacity .2s,background .2s}
+.nc-ghost{flex:1;color:#e5dfd3;background:#1a1814;border:1px solid #33302a}.nc-ghost:hover:not(:disabled){background:#25221b}
+.nc-ghost:disabled{opacity:.4;cursor:default}
+.nc-solid{color:#1a140e;background:linear-gradient(110deg,#e4c892,#bb9660);border:1px solid transparent}.nc-solid:hover{transform:translateY(-1px)}
+
+/* ── Phones: the drawer becomes a bottom sheet ───────────────────────── */
+@media(max-width:560px){
+  .nc-layer{align-items:flex-end}
+  .nc-drawer{width:100%;height:min(88dvh,820px);border-left:0;border-top:1px solid var(--line);border-radius:26px 26px 0 0;box-shadow:0 -30px 80px #000c;animation:ncRise .42s cubic-bezier(.2,.9,.25,1)}
+  .nc-grab{display:block;width:42px;height:4px;border-radius:4px;background:#3a352b;margin:10px auto 0}
+  .nc-head{padding-top:12px}
+  @keyframes ncRise{from{transform:translateY(60px);opacity:0}to{transform:none;opacity:1}}
+}
+
+/* ── Toasts ───────────────────────────────────────────────────────────── */
+.nc-toasts{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:14px;z-index:10001;display:grid;gap:10px;width:min(370px,calc(100vw - 28px));pointer-events:none;font-family:inherit}
+.nc-toast{--tone:var(--gold);position:relative;overflow:hidden;pointer-events:auto;display:grid;grid-template-columns:auto 1fr auto;gap:13px;align-items:center;padding:14px 14px 16px;border-radius:20px;color:#f0ede8;background:linear-gradient(120deg,color-mix(in srgb,var(--tone) 12%,#171512),#100f0d 70%);border:1px solid color-mix(in srgb,var(--tone) 36%,#26221b);box-shadow:0 22px 50px #000b,0 0 0 1px #00000060,0 0 30px color-mix(in srgb,var(--tone) 14%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);animation:ncToastIn .5s cubic-bezier(.2,1.1,.3,1) both}
+@keyframes ncToastIn{from{opacity:0;transform:translateY(-16px) scale(.96)}to{opacity:1;transform:none}}
+.nc-toast .nc-tile{width:42px;height:42px}
+.nc-toast .nc-copy strong{font-size:14px}.nc-toast .nc-copy span{font-size:12.5px;-webkit-line-clamp:3}
+.nc-toast-x{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#ffffff0d;border:0;color:#b9b4aa;cursor:pointer;transition:background .2s,color .2s}
+.nc-toast-x:hover{background:#ffffff1a;color:#fff}
+.nc-toast-bar{position:absolute;left:0;bottom:0;height:3px;width:100%;background:var(--tone);transform-origin:left;opacity:.85;animation:ncBar 5s linear forwards}
+@keyframes ncBar{to{transform:scaleX(0)}}
+@media(max-width:560px){.nc-toasts{right:14px;left:14px;width:auto}}
+
+@media(prefers-reduced-motion:reduce){
+  .nc-bell.ring svg,.nc-badge,.nc-drawer,.nc-backdrop,.nc-item,.nc-toast,.nc-meta i,.nc-empty-art .spark,.nc-skel span,.nc-skel b,.nc-skel i{animation:none}
+  .nc-toast-bar{animation-duration:.01ms}.nc-tab-bar,.nc-bell,.nc-item{transition:none}
+}
