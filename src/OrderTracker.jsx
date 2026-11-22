@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from "react"
+import "./NotificationCenter.css"
+import { Icon } from "./NotificationIcon"
+import { kindOf } from "./notificationKinds"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 const SOCKET_URL = API_URL.replace(/\/api\/?$/, "")
@@ -42,7 +45,7 @@ export function markAllNotificationsRead(sellerId) {
     .then(res => { if (!res.ok) throw new Error("Could not mark read") })
     .catch(() => refreshSellerNotifications(sellerId))
 }
-function fireToast(toast) { toastQueue = [...toastQueue, { ...toast, id: Date.now() + Math.random() }]; toastListeners.forEach(fn => fn([...toastQueue])) }
+export function fireToast(toast) { toastQueue = [...toastQueue, { ...toast, id: Date.now() + Math.random() }]; toastListeners.forEach(fn => fn([...toastQueue])) }
 function dismissToast(id) { toastQueue = toastQueue.filter(t => t.id !== id); toastListeners.forEach(fn => fn([...toastQueue])) }
 
 export function connectSellerSocket(sellerId) {
@@ -59,27 +62,30 @@ export function connectSellerSocket(sellerId) {
     const socket = io(SOCKET_URL, { auth: { token }, reconnection: true, reconnectionDelay: 1000, reconnectionAttempts: Infinity, transports: ["websocket", "polling"] })
     socketInstance = socket
     registeredId = id
-    socket.on("connect", () => { socket.emit("register_seller", id); refreshSellerNotifications(id) })
+    socket.on("connect", () => { socket.emit("register_seller", id); refreshSellerNotifications(id); window.dispatchEvent(new Event("silkroad_socket_connected")) })
     socket.on("new_order", data => {
       if (String(data.sellerId) !== id) return
       const existing = getSellerNotifications(id)
       if (existing.some(n => n.id === data.id)) return
       setSellerNotifications(id, [{ ...data, sellerId: id, status: "unread" }, ...existing])
       window.dispatchEvent(new CustomEvent("silkroad_new_order", { detail: data }))
-      fireToast({ type: "order", title: "🛒 New Paid Order!", message: `An order worth ₵${Number(data.amount || 0).toLocaleString()} is ready for fulfillment.` })
+      fireToast({ kind: "new_order", title: "New paid order", message: `An order worth ₵${Number(data.amount || 0).toLocaleString()} is ready for fulfillment.` })
     })
     const events = {
-      delivery_accepted: ["silkroad_delivery_update", "✅ Rider Accepted!"],
-      delivery_picked_up: ["silkroad_delivery_update", "📦 Package Picked Up"],
-      delivery_at_door: ["silkroad_delivery_update", "🚪 Package at Door!"],
-      sale_completed: ["silkroad_sale_completed", "🎉 Sale Complete!"],
-      delivery_completed: ["silkroad_delivery_update", "✅ Delivery Confirmed!"],
-      delivery_cancelled_by_rider: ["silkroad_delivery_update", "⚠️ Rider Cancelled"],
-      delivery_otp: ["silkroad_delivery_otp", null],
+      delivery_accepted: "silkroad_delivery_update",
+      delivery_picked_up: "silkroad_delivery_update",
+      delivery_at_door: "silkroad_delivery_update",
+      sale_completed: "silkroad_sale_completed",
+      delivery_completed: "silkroad_delivery_update",
+      delivery_cancelled_by_rider: "silkroad_delivery_update",
+      delivery_otp: "silkroad_delivery_otp", // the code itself, for the order tracker
     }
-    Object.entries(events).forEach(([event, [custom, title]]) => socket.on(event, data => {
-      window.dispatchEvent(new CustomEvent(custom, { detail: data }))
-      if (title) fireToast({ type: event === "delivery_at_door" ? "otp" : "delivery", title, message: data?.message || "Your order status has changed.", persistent: event === "delivery_at_door" })
+    Object.entries(events).forEach(([event, custom]) => socket.on(event, data => window.dispatchEvent(new CustomEvent(custom, { detail: data }))))
+    // Every saved notification (the server sends a notificationId) goes to the bell and shows a toast.
+    // delivery_otp_ready is the same event the server also sends as delivery_otp; the bell only needs this one.
+    ;["delivery_accepted", "delivery_picked_up", "delivery_at_door", "delivery_otp_ready", "delivery_completed", "delivery_cancelled_by_rider", "sale_completed"].forEach(event => socket.on(event, data => {
+      window.dispatchEvent(new CustomEvent("silkroad_notification", { detail: { ...data, otp: undefined, type: event } }))
+      fireToast({ kind: event, title: kindOf(event).title, message: data?.message || "Your order status has changed.", persistent: event === "delivery_at_door" || event === "delivery_otp_ready" })
     }))
   }).catch(err => console.warn("Socket initialization failed", err))
 }
@@ -89,7 +95,15 @@ export function ToastContainer() {
   const [toasts, setToasts] = useState([])
   useEffect(() => { toastListeners.add(setToasts); return () => { toastListeners.delete(setToasts) } }, [])
   useEffect(() => { const first = toasts.find(t => !t.persistent); if (!first) return; const t = setTimeout(() => dismissToast(first.id), 5000); return () => clearTimeout(t) }, [toasts])
-  return <div style={{ position: "fixed", top: 16, right: 16, zIndex: 9999, maxWidth: 330, display: "grid", gap: 10 }}>{toasts.map(t => <div key={t.id} style={{ background: "#161a1e", border: "1px solid #c8a97e", borderRadius: 14, padding: 16, color: "#ddd", boxShadow: "0 8px 30px #0008" }}><div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}><strong style={{ color: "#c8a97e" }}>{t.title}</strong><button onClick={() => dismissToast(t.id)} style={{ background: "none", border: 0, color: "#ddd", cursor: "pointer" }}>✕</button></div><div style={{ fontSize: 12, marginTop: 7 }}>{t.message}</div></div>)}</div>
+  return <div className="nc-toasts" aria-live="polite">{toasts.map(t => {
+    const kind = kindOf(t.kind)
+    return <div key={t.id} className={`nc-toast tone-${kind.tone}`} role="status">
+      <span className="nc-tile"><Icon name={kind.icon} size={20} /></span>
+      <span className="nc-copy"><strong>{t.title}</strong><span>{t.message}</span></span>
+      <button type="button" className="nc-toast-x" onClick={() => dismissToast(t.id)} aria-label="Dismiss"><Icon name="close" size={15} /></button>
+      {!t.persistent && <span className="nc-toast-bar" aria-hidden="true" />}
+    </div>
+  })}</div>
 }
 export function NotificationBell({ sellerId, onClick }) {
   const [count, setCount] = useState(0)
