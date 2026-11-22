@@ -779,14 +779,22 @@ function RidersTab() {
     load(page)
   }
 
+  const toggleTest = async rider => {
+    const next = !rider.isTestRider
+    if (!window.confirm(next ? `Make ${rider.name} a TEST rider? They will only see Testing Mode jobs and will be set offline.` : `Make ${rider.name} a real rider again? They will only see live jobs and will be set offline.`)) return
+    const { ok, data } = await adminFetch(`/admin/riders/${rider._id}/test-mode`, { method: "PUT", body: JSON.stringify({ isTestRider: next }) })
+    if (!ok) window.alert(data?.message || "Could not change rider mode.")
+    load(page)
+  }
+
   const columns = [
-    { key: "name",            label: "Name",       render: r => <span style={{ color: C.text, fontWeight: 600 }}>{r.name}</span> },
+    { key: "name",            label: "Name",       render: r => <span style={{ color: C.text, fontWeight: 600 }}>{r.name}{r.isTestRider && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", padding: "2px 7px", borderRadius: 999, background: C.gold, color: "#1a140e" }}>TEST</span>}</span> },
     { key: "phone",           label: "Phone" },
     { key: "vehicle",         label: "Vehicle" },
     { key: "totalDeliveries", label: "Deliveries", render: r => r.totalDeliveries || 0 },
     { key: "totalEarned",     label: "Earned",     render: r => fmtGHS(r.totalEarned) },
     { key: "status",          label: "Status",     render: r => <span style={{ display: "flex", alignItems: "center" }}><StatusDot status={r.isActive ? "Active" : "Suspended"} />{r.isActive ? "Active" : "Inactive"}</span> },
-    { key: "actions",         label: "",           render: r => <Btn size="sm" variant={r.isActive ? "danger" : "success"} onClick={() => toggle(r)}>{r.isActive ? "Deactivate" : "Activate"}</Btn> },
+    { key: "actions",         label: "",           render: r => <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><Btn size="sm" variant={r.isActive ? "danger" : "success"} onClick={() => toggle(r)}>{r.isActive ? "Deactivate" : "Activate"}</Btn><Btn size="sm" onClick={() => toggleTest(r)}>{r.isTestRider ? "Make real rider" : "Make test rider"}</Btn></span> },
   ]
 
   return (
@@ -1397,9 +1405,44 @@ function PaymentSettingsTab({ onNeedReAuth }) {
           <Btn disabled={busy || !settings.paystackAvailable || settings.paymentMode === "paystack"} onClick={() => change("paystack")}>Use Paystack</Btn>
         </div>
       </div>
+      <PaystackEmailOwnerEditor onNeedReAuth={onNeedReAuth} />
       <ManualMomoOwnerEditor onNeedReAuth={onNeedReAuth} />
       {!settings.paystackAvailable && <Alert type="warn">Paystack is not enabled for live checkout. Complete server-side verification, webhook handling, and reconciliation before activation.</Alert>}
     </>}
+  </div>
+}
+
+// The ONE email Paystack receives for every payment. Buyers are never asked for an email.
+function PaystackEmailOwnerEditor({onNeedReAuth}) {
+  const [email,setEmail]=useState('')
+  const [configured,setConfigured]=useState(null)
+  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false)
+  const load=useCallback(async()=>{
+    try {
+      const {ok,data}=await adminFetch('/settings/paystack-email')
+      if(!ok)throw Error(data.message||'Could not load the Paystack email')
+      setEmail(data.email||'');setConfigured(!!data.configured)
+    }catch(e){setError(e.message)}
+  },[])
+  useEffect(()=>{load()},[load])
+  const save=()=>{
+    if(!window.confirm('Use this email for ALL Paystack payments from now on? Paystack receipts and customer records will use it.'))return
+    onNeedReAuth(async token=>{
+      setBusy(true);setError('');setNotice('')
+      try{
+        const {ok,data}=await adminFetch('/settings/paystack-email',{method:'PUT',headers:{'x-reauth-token':token},body:JSON.stringify({email})})
+        if(!ok)throw Error(data.message||'Could not save the Paystack email')
+        setEmail(data.email);setConfigured(true);setNotice('Paystack email saved. It is now used for every payment.')
+      }catch(e){setError(e.message)}finally{setBusy(false)}
+    })
+  }
+  const field={width:'100%',boxSizing:'border-box',background:C.surface2,color:C.text,padding:12,border:`1px solid ${C.border2}`,borderRadius:8}
+  return <div style={{padding:20,border:`1px solid ${C.border}`,borderRadius:10,display:'grid',gap:12}}>
+    <strong style={{color:C.text}}>Paystack email - Owner only</strong>
+    <Alert type={configured===false?'error':'info'}>{configured===false?'No email is set, so online Mobile Money payments are switched off until you save one.':'Every Paystack payment uses this single email. Buyers are never asked for one. Their phone number comes from checkout.'}</Alert>
+    {error&&<Alert type="error">{error}</Alert>}{notice&&<Alert type="success">{notice}</Alert>}
+    <label style={{color:C.text}}>Email for all payments<input type="email" style={field} value={email} onChange={e=>setEmail(e.target.value)} placeholder="payments@yourdomain.com"/></label>
+    <Btn disabled={busy||!email.trim()} onClick={save}>{busy?'Saving...':'Save Paystack email'}</Btn>
   </div>
 }
 
