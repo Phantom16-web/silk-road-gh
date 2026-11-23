@@ -217,7 +217,7 @@ function MapPreview({ query, pinned, compact }) {
 const MOMO_CODES = { MTN: "mtn", Telecel: "vod", AT: "atl" }
 const PROMPT_SECONDS = 180
 
-function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, onVerified }) {
+function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, testing = false, onVerified }) {
   const [phone, setPhone] = useState(initialPhone || "")
   const [editPhone, setEditPhone] = useState(!normalizeGhPhone(initialPhone).ok)
   const [network, setNetwork] = useState(guessNetwork(initialPhone) || "MTN")
@@ -254,9 +254,9 @@ function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, onVe
 
   const send = async () => {
     if (busy.current) return
-    if (!parsed.ok) { setEditPhone(true); setMessage("Enter a valid Ghana Mobile Money number, like 024 123 4567."); return }
+    if (!testing && !parsed.ok) { setEditPhone(true); setMessage("Enter a valid Ghana Mobile Money number, like 024 123 4567."); return }
     busy.current = true; setState("sending"); setMessage("")
-    try { handleOutcome(await call("charge", { phone: parsed.local, provider: MOMO_CODES[network] })) }
+    try { handleOutcome(await call("charge", testing ? {} : { phone: parsed.local, provider: MOMO_CODES[network] })) }
     catch (error) { setState("ready"); setMessage(error.message) }
     finally { busy.current = false }
   }
@@ -274,6 +274,7 @@ function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, onVe
     busy.current = true; setState("sending"); setMessage("")
     try {
       const result = await call("initialize")
+      if (result.verified) { setState("ready"); return finish(result) }
       const url = new URL(result.authorizationUrl)
       if (url.protocol !== "https:" || !["checkout.paystack.com", "paystack.com"].includes(url.hostname)) throw new Error("The payment provider returned an unexpected address. Please contact support.")
       setCardUrl(url.href); startedAt.current = Date.now(); setState("card")
@@ -314,7 +315,7 @@ function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, onVe
   if (state === "verified") return <div className="co-card hl mp-stage" role="status">
     <div className="mp-done"><svg viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24" /><path d="M15 27l8 8 15-17" /></svg></div>
     <h3>Payment received</h3>
-    <p className="co-lead">Your seller orders are funded and safely held until you confirm delivery.</p>
+    <p className="co-lead">{testing ? "Test payment approved automatically. No real money moved, so you can test delivery, riders and notifications." : "Your seller orders are funded and safely held until you confirm delivery."}</p>
   </div>
 
   return <div className="co-card hl mp">
@@ -354,7 +355,14 @@ function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, onVe
       <div className="co-live"><span className="co-pulse" />Waiting for confirmation…</div>
     </div>}
 
-    {(state === "ready" || state === "sending") && <>
+    {testing && (state === "ready" || state === "sending") && <>
+      <div><div className="mp-eyebrow">TEST MODE</div><h3>Approve test payment</h3></div>
+      <p className="co-lead" style={{ margin: 0 }}>No prompt is sent and no real money moves. This payment is approved instantly so you can test delivery, riders and notifications.</p>
+      <button type="button" className="co-btn co-primary" disabled={state === "sending"} onClick={send}>{state === "sending" ? "Approving…" : `Approve test payment · ${formatCedi(amount)}`}</button>
+      {message && <div role="alert" className="co-note bad">{message}</div>}
+    </>}
+
+    {!testing && (state === "ready" || state === "sending") && <>
       <div><div className="mp-eyebrow">MOBILE MONEY</div><h3>Pay from your phone</h3></div>
       <p className="co-lead" style={{ margin: 0 }}>We’ll send a payment prompt straight to your phone. Approve it with your PIN. No card or email needed.</p>
       <div className="mp-nets" role="radiogroup" aria-label="Mobile Money network">
@@ -371,7 +379,7 @@ function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, onVe
       {message && parsed.ok && <div role="alert" className="co-note bad">{message}</div>}
       <button type="button" className="co-link mp-alt" disabled={state === "sending"} onClick={payByCard}>Pay with a card instead</button>
     </>}
-    <p className="co-fine">Never share your MoMo PIN or one-time code with anyone, including Silk Road staff. Your order is only marked paid after our server confirms it with Paystack.</p>
+    {!testing && <p className="co-fine">Never share your MoMo PIN or one-time code with anyone, including Silk Road staff. Your order is only marked paid after our server confirms it with Paystack.</p>}
   </div>
 }
 
@@ -833,7 +841,7 @@ export default function Checkout({ cart, rate, onClose, initialOrder, siteSettin
             : <div className={`co-banner ${view.tone}`}><span className="ic">{icons[view.tone]}</span><div><b>{view.title}</b><span>{view.detail}</span></div></div>}
 
           {checkoutId && claimToken ? <>
-            {groupPaymentStatus === "pending" && checkoutPaymentMethod === "paystack" && <PaystackPay checkoutId={checkoutId} claimToken={claimToken} amount={total} phone={phone} onVerified={onPaid} />}
+            {groupPaymentStatus === "pending" && checkoutPaymentMethod === "paystack" && <PaystackPay checkoutId={checkoutId} claimToken={claimToken} amount={total} phone={phone} testing={checkoutEnvironment === "testing"} onVerified={onPaid} />}
             {groupPaymentStatus === "pending" && checkoutPaymentMethod !== "paystack" && checkoutEnvironment === "testing" && <PracticePay checkoutId={checkoutId} claimToken={claimToken} onSubmitted={onSubmitted} />}
             {groupPaymentStatus === "pending" && checkoutPaymentMethod !== "paystack" && checkoutEnvironment === "live" && <ManualMomoPay amount={total} reference={paymentRef} buyerPhone={phone} support={support} checkoutId={checkoutId} claimToken={claimToken} onSubmitted={onSubmitted} />}
             {groupPaymentStatus === "pending" && checkoutPaymentMethod !== "paystack" && checkoutEnvironment === null && <div className="co-skel" aria-label="Checking payment options" />}
