@@ -2,6 +2,12 @@
 // One place that decides how every notification type looks.
 export const KINDS = {
   new_order: { icon: "bag", tone: "gold", title: "New paid order" },
+  payment_received: { icon: "shield", tone: "green", title: "Payment received" },
+  delivery_code_generated: { icon: "shield", tone: "amber", title: "Buyer is ready to confirm" },
+  payout_sent: { icon: "check", tone: "green", title: "Payout sent" },
+  payout_needs_account: { icon: "alert", tone: "amber", title: "Add your payout account" },
+  payout_held: { icon: "alert", tone: "amber", title: "Payout on hold" },
+  delivery_requested: { icon: "bike", tone: "gold", title: "A rider was requested" },
   new_delivery_job: { icon: "bike", tone: "gold", title: "New delivery job" },
   delivery_accepted: { icon: "bike", tone: "gold", title: "Rider accepted" },
   delivery_picked_up: { icon: "package", tone: "blue", title: "Package picked up" },
