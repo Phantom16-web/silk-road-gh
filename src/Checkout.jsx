@@ -128,6 +128,8 @@ textarea.co-input{resize:vertical;min-height:70px}
 @media(max-width:560px){.co-backdrop{padding:0;align-items:flex-end}.co-sheet{max-width:none;border-radius:22px 22px 0 0;max-height:96vh;max-height:96dvh}.co-body{padding:16px}.co-head,.co-stepper,.co-foot{padding-left:16px;padding-right:16px}}
 @media(prefers-reduced-motion:reduce){.co-pulse,.co-skel{animation:none}.co-btn{transition:none}}
 .mp{gap:16px}
+.mp-test{display:flex;align-items:center;gap:8px;justify-self:start;font-size:10px;font-weight:800;letter-spacing:.16em;color:#1a140e;padding:5px 11px;border-radius:999px;background:linear-gradient(135deg,#f0dba9,#c8a063)}
+.mp-test i{width:6px;height:6px;border-radius:50%;background:#1a140e;animation:coPulse 1.6s infinite}
 .mp-eyebrow{font-size:10px;font-weight:800;letter-spacing:.2em;color:#c8a97e;margin-bottom:4px}
 .mp h3,.mp-stage h3{margin:0;font-size:20px;letter-spacing:-.01em}
 .mp-stage{display:grid;gap:14px;justify-items:center;text-align:center}
@@ -254,9 +256,19 @@ function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, test
 
   const send = async () => {
     if (busy.current) return
-    if (!testing && !parsed.ok) { setEditPhone(true); setMessage("Enter a valid Ghana Mobile Money number, like 024 123 4567."); return }
+    if (!parsed.ok) { setEditPhone(true); setMessage("Enter a valid Ghana Mobile Money number, like 024 123 4567."); return }
     busy.current = true; setState("sending"); setMessage("")
-    try { handleOutcome(await call("charge", testing ? {} : { phone: parsed.local, provider: MOMO_CODES[network] })) }
+    try {
+      const body = { phone: parsed.local, provider: MOMO_CODES[network] }
+      if (testing) {
+        // Looks and feels exactly like a live payment: the prompt screen appears and counts down,
+        // then the server approves the test payment. No real money moves.
+        setMaskedPhone(`${parsed.local.slice(0, 3)} \u2022\u2022\u2022 ${parsed.local.slice(6)}`)
+        startedAt.current = Date.now(); setLeft(PROMPT_SECONDS); setState("prompt")
+        const [result] = await Promise.all([call("charge", body), new Promise(resolve => setTimeout(resolve, 4500))])
+        handleOutcome(result)
+      } else handleOutcome(await call("charge", body))
+    }
     catch (error) { setState("ready"); setMessage(error.message) }
     finally { busy.current = false }
   }
@@ -299,13 +311,14 @@ function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, test
   // Waiting for the buyer: count down the prompt window and check with the server every 4 seconds.
   useEffect(() => {
     if (state !== "prompt" && state !== "card" && state !== "otp") return undefined
+    if (testing) { const clock = setInterval(() => setLeft(Math.max(0, PROMPT_SECONDS - Math.floor((Date.now() - startedAt.current) / 1000))), 1000); return () => clearInterval(clock) }
     const tick = () => setLeft(Math.max(0, PROMPT_SECONDS - Math.floor((Date.now() - startedAt.current) / 1000)))
     const clock = setInterval(tick, 1000)
     const poll = setInterval(() => { if (document.visibilityState === "visible") verify(true) }, 4000)
     const wake = () => { if (document.visibilityState === "visible") verify(true) }
     document.addEventListener("visibilitychange", wake)
     return () => { clearInterval(clock); clearInterval(poll); document.removeEventListener("visibilitychange", wake) }
-  }, [state, verify])
+  }, [state, verify, testing])
 
   const net = NETWORKS[network]
   const waiting = state === "prompt" || state === "card"
@@ -319,6 +332,7 @@ function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, test
   </div>
 
   return <div className="co-card hl mp">
+    {testing && <div className="mp-test"><i />TEST MODE \u00B7 SIMULATION, NO REAL MONEY</div>}
     {state === "otp" && <div className="mp-stage">
       <div className="mp-eyebrow">ONE MORE STEP</div>
       <h3>Enter your code</h3>
@@ -355,14 +369,7 @@ function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, test
       <div className="co-live"><span className="co-pulse" />Waiting for confirmation…</div>
     </div>}
 
-    {testing && (state === "ready" || state === "sending") && <>
-      <div><div className="mp-eyebrow">TEST MODE</div><h3>Approve test payment</h3></div>
-      <p className="co-lead" style={{ margin: 0 }}>No prompt is sent and no real money moves. This payment is approved instantly so you can test delivery, riders and notifications.</p>
-      <button type="button" className="co-btn co-primary" disabled={state === "sending"} onClick={send}>{state === "sending" ? "Approving…" : `Approve test payment · ${formatCedi(amount)}`}</button>
-      {message && <div role="alert" className="co-note bad">{message}</div>}
-    </>}
-
-    {!testing && (state === "ready" || state === "sending") && <>
+    {(state === "ready" || state === "sending") && <>
       <div><div className="mp-eyebrow">MOBILE MONEY</div><h3>Pay from your phone</h3></div>
       <p className="co-lead" style={{ margin: 0 }}>We’ll send a payment prompt straight to your phone. Approve it with your PIN. No card or email needed.</p>
       <div className="mp-nets" role="radiogroup" aria-label="Mobile Money network">
@@ -377,9 +384,9 @@ function PaystackPay({ checkoutId, claimToken, amount, phone: initialPhone, test
         : <div className="mp-phone"><div><small>PROMPT GOES TO</small><strong>{parsed.local.slice(0, 3)} {parsed.local.slice(3, 6)} {parsed.local.slice(6)}</strong></div><button type="button" className="co-link" onClick={() => setEditPhone(true)}>Change</button></div>}
       <button type="button" className="co-btn co-primary" disabled={state === "sending" || (editPhone && !parsed.ok)} onClick={send}>{state === "sending" ? "Sending prompt…" : `Send prompt · ${formatCedi(amount)}`}</button>
       {message && parsed.ok && <div role="alert" className="co-note bad">{message}</div>}
-      <button type="button" className="co-link mp-alt" disabled={state === "sending"} onClick={payByCard}>Pay with a card instead</button>
+      {!testing && <button type="button" className="co-link mp-alt" disabled={state === "sending"} onClick={payByCard}>Pay with a card instead</button>}
     </>}
-    {!testing && <p className="co-fine">Never share your MoMo PIN or one-time code with anyone, including Silk Road staff. Your order is only marked paid after our server confirms it with Paystack.</p>}
+    <p className="co-fine">{testing ? "This is a practice payment. Nothing is charged, and the order behaves exactly like a real one." : "Never share your MoMo PIN or one-time code with anyone, including Silk Road staff. Your order is only marked paid after our server confirms it with Paystack."}</p>
   </div>
 }
 
