@@ -83,9 +83,9 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
       window.dispatchEvent(new Event("silkroad_rider_socket_connected"))
     })
     // Saved notifications for this rider go to the bell and show a toast.
-    s.on("delivery_completed", (data) => {
-      window.dispatchEvent(new CustomEvent("silkroad_rider_notification", { detail: { ...data, type: "delivery_completed" } }))
-      fireToast({ kind: "delivery_completed", title: "Delivery confirmed", message: data?.message || "The buyer confirmed delivery. Thank you!" })
+    s.on("notification", (data) => {
+      window.dispatchEvent(new CustomEvent("silkroad_rider_notification", { detail: data }))
+      fireToast({ kind: data?.type, title: data?.title || "Update", message: data?.message || "" })
     })
     s.on("new_delivery_job", (job) => {
       fireToast({ kind: "new_delivery_job", title: "New delivery job", message: `${job.itemTitle || "A delivery"} is waiting for a rider.` })
