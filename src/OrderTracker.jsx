@@ -81,12 +81,11 @@ export function connectSellerSocket(sellerId) {
       delivery_otp: "silkroad_delivery_otp", // the code itself, for the order tracker
     }
     Object.entries(events).forEach(([event, custom]) => socket.on(event, data => window.dispatchEvent(new CustomEvent(custom, { detail: data }))))
-    // Every saved notification (the server sends a notificationId) goes to the bell and shows a toast.
-    // delivery_otp_ready is the same event the server also sends as delivery_otp; the bell only needs this one.
-    ;["delivery_accepted", "delivery_picked_up", "delivery_at_door", "delivery_otp_ready", "delivery_completed", "delivery_cancelled_by_rider", "sale_completed"].forEach(event => socket.on(event, data => {
-      window.dispatchEvent(new CustomEvent("silkroad_notification", { detail: { ...data, otp: undefined, type: event } }))
-      fireToast({ kind: event, title: kindOf(event).title, message: data?.message || "Your order status has changed.", persistent: event === "delivery_at_door" || event === "delivery_otp_ready" })
-    }))
+    // Every saved notification arrives as one generic "notification" event: it feeds the bell and shows a toast.
+    socket.on("notification", data => {
+      window.dispatchEvent(new CustomEvent("silkroad_notification", { detail: data }))
+      fireToast({ kind: data?.type, title: data?.title || kindOf(data?.type).title, message: data?.message || "Your order status has changed.", persistent: ["delivery_at_door", "delivery_otp_ready", "payout_needs_account"].includes(data?.type) })
+    })
   }).catch(err => console.warn("Socket initialization failed", err))
 }
 export function disconnectSocket() { ++connectionSequence; socketInstance?.disconnect(); socketInstance = null; registeredId = null }
