@@ -756,6 +756,52 @@ function OrdersTab() {
 // RIDERS TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Identity review: the admin looks at the rider's photo and details, then approves, rejects or revokes.
+function RiderReviewModal({ rider, onClose, onDone }) {
+  const [asTest, setAsTest] = useState(Boolean(rider.isTestRider))
+  const [busy, setBusy] = useState("")
+  const [error, setError] = useState("")
+  const decide = async (kind) => {
+    const body = kind === "approve" ? { photoReviewStatus: "approved", isApproved: true, ...(asTest !== Boolean(rider.isTestRider) ? { isTestRider: asTest } : {}) }
+      : kind === "reject" ? { photoReviewStatus: "rejected", isApproved: false }
+      : { photoReviewStatus: "pending", isApproved: false }
+    if (kind !== "approve" && !window.confirm(kind === "reject" ? `Reject ${rider.name}'s identity? They will not be able to take jobs.` : `Revoke ${rider.name}'s approval? They will go offline and stop receiving jobs.`)) return
+    setBusy(kind); setError("")
+    const { ok, data } = await adminFetch(`/riders/${rider._id}/status`, { method: "PUT", body: JSON.stringify(body) })
+    setBusy("")
+    if (!ok) { setError(data?.message || "Could not update this rider."); return }
+    onDone()
+  }
+  const row = (label, value) => <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, padding: "7px 0", borderBottom: `1px solid ${C.border}` }}><span style={{ color: C.textDim }}>{label}</span><span style={{ color: C.text, fontWeight: 600, textAlign: "right", wordBreak: "break-word" }}>{value || "-"}</span></div>
+  const approved = rider.photoReviewStatus === "approved" && rider.isApproved
+  return (
+    <Modal title="Rider identity review" onClose={onClose} width={520}>
+      <div style={{ display: "grid", gap: 16 }}>
+        <div style={{ borderRadius: 14, overflow: "hidden", background: "#000", border: `1px solid ${C.border}`, display: "grid", placeItems: "center", minHeight: 220 }}>
+          {rider.photoUrl ? <a href={rider.photoUrl} target="_blank" rel="noopener noreferrer" title="Open full size"><img src={rider.photoUrl} alt={`${rider.name}'s submitted photo`} style={{ display: "block", maxWidth: "100%", maxHeight: 360, objectFit: "contain" }} /></a>
+            : <span style={{ color: C.textDim, fontSize: 13, padding: 40 }}>No photo uploaded</span>}
+        </div>
+        <div>
+          {row("Name", rider.name)}{row("Phone", rider.phone)}{row("Email", rider.email)}{row("University", rider.university)}{row("Vehicle", rider.vehicle)}
+          {row("Applied", rider.createdAt ? new Date(rider.createdAt).toLocaleString("en-GH") : "")}
+          {row("Photo status", rider.photoReviewStatus)}{row("Approved to ride", rider.isApproved ? "Yes" : "No")}
+        </div>
+        <Alert type="info">Check that the face is clear, matches the person you expect, and is not a screenshot or a photo of a photo. Tap the photo to open it full size.</Alert>
+        <label style={{ display: "flex", gap: 10, alignItems: "center", color: C.textMid, fontSize: 13, cursor: "pointer" }}>
+          <input type="checkbox" checked={asTest} onChange={e => setAsTest(e.target.checked)} /> Make this a TEST rider (sees Testing Mode jobs only)
+        </label>
+        {error && <Alert type="error">{error}</Alert>}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {!approved && <Btn variant="success" disabled={Boolean(busy) || !rider.photoUrl} onClick={() => decide("approve")}>{busy === "approve" ? "Approving..." : "Approve rider"}</Btn>}
+          {!approved && rider.photoReviewStatus !== "rejected" && <Btn variant="danger" disabled={Boolean(busy)} onClick={() => decide("reject")}>{busy === "reject" ? "Rejecting..." : "Reject"}</Btn>}
+          {approved && <Btn variant="danger" disabled={Boolean(busy)} onClick={() => decide("revoke")}>{busy === "revoke" ? "Revoking..." : "Revoke approval"}</Btn>}
+          <Btn variant="ghost" onClick={onClose}>Close</Btn>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function RidersTab() {
   const [riders, setRiders]   = useState([])
   const [total, setTotal]     = useState(0)
@@ -763,11 +809,15 @@ function RidersTab() {
   const [pages, setPages]     = useState(1)
   const [search, setSearch]   = useState("")
   const [loading, setLoading] = useState(false)
+  const [waiting, setWaiting] = useState([])
+  const [reviewing, setReviewing] = useState(null)
 
   const load = useCallback(async (p = 1, q = search) => {
     setLoading(true)
-    const { data } = await adminFetch(`/admin/riders?page=${p}&search=${encodeURIComponent(q)}&limit=30`)
+    const [list, review] = await Promise.all([adminFetch(`/admin/riders?page=${p}&search=${encodeURIComponent(q)}&limit=30`), adminFetch("/riders/admin/review")])
+    const data = list.data
     setRiders(data.riders || []); setTotal(data.total || 0); setPage(data.page || 1); setPages(data.pages || 1)
+    setWaiting(Array.isArray(review.data) ? review.data.filter(r => r.photoReviewStatus !== "rejected") : [])
     setLoading(false)
   }, [search])
 
@@ -794,7 +844,8 @@ function RidersTab() {
     { key: "totalDeliveries", label: "Deliveries", render: r => r.totalDeliveries || 0 },
     { key: "totalEarned",     label: "Earned",     render: r => fmtGHS(r.totalEarned) },
     { key: "status",          label: "Status",     render: r => <span style={{ display: "flex", alignItems: "center" }}><StatusDot status={r.isActive ? "Active" : "Suspended"} />{r.isActive ? "Active" : "Inactive"}</span> },
-    { key: "actions",         label: "",           render: r => <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><Btn size="sm" variant={r.isActive ? "danger" : "success"} onClick={() => toggle(r)}>{r.isActive ? "Deactivate" : "Activate"}</Btn><Btn size="sm" onClick={() => toggleTest(r)}>{r.isTestRider ? "Make real rider" : "Make test rider"}</Btn></span> },
+    { key: "identity",        label: "Identity",   render: r => r.isApproved && r.photoReviewStatus === "approved" ? <Badge label="Verified" color={C.green} dim={C.greenDim} /> : r.photoReviewStatus === "rejected" ? <Badge label="Rejected" color={C.red} dim={C.redDim} /> : <Badge label="Needs review" color={C.gold} dim={C.goldDim} /> },
+    { key: "actions",         label: "",           render: r => <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><Btn size="sm" variant={r.isApproved && r.photoReviewStatus === "approved" ? "ghost" : "primary"} onClick={() => setReviewing(r)}>{r.isApproved && r.photoReviewStatus === "approved" ? "View ID" : "Review ID"}</Btn><Btn size="sm" variant={r.isActive ? "danger" : "success"} onClick={() => toggle(r)}>{r.isActive ? "Deactivate" : "Activate"}</Btn><Btn size="sm" onClick={() => toggleTest(r)}>{r.isTestRider ? "Make real rider" : "Make test rider"}</Btn></span> },
   ]
 
   return (
@@ -803,8 +854,25 @@ function RidersTab() {
         <SectionTitle>Riders <span style={{ color: C.textDim, fontWeight: 400, fontSize: 14 }}>({total})</span></SectionTitle>
         <SearchBar value={search} onChange={setSearch} onSearch={() => load(1, search)} placeholder="Search name or phone..." />
       </div>
+      {waiting.length > 0 && (
+        <div style={{ marginBottom: 24, padding: 18, border: `1px solid ${C.gold}55`, background: `${C.gold}0d`, borderRadius: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <span style={{ fontWeight: 800, color: C.text, fontSize: 15 }}>Waiting for identity review</span><Badge label={String(waiting.length)} color={C.gold} dim={C.goldDim} />
+            <span style={{ color: C.textDim, fontSize: 12 }}>Riders cannot take jobs until you approve their photo.</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(250px,1fr))", gap: 12 }}>
+            {waiting.map(r => (
+              <button key={r._id} type="button" onClick={() => setReviewing(r)} style={{ display: "flex", gap: 12, alignItems: "center", textAlign: "left", padding: 12, borderRadius: 12, background: C.surface, border: `1px solid ${C.border}`, color: C.text, cursor: "pointer" }}>
+                <span style={{ width: 52, height: 52, borderRadius: 12, overflow: "hidden", background: "#000", display: "grid", placeItems: "center", flexShrink: 0, color: C.textDim, fontSize: 11 }}>{r.photoUrl ? <img src={r.photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "No photo"}</span>
+                <span style={{ minWidth: 0 }}><span style={{ display: "block", fontWeight: 700, fontSize: 14 }}>{r.name}</span><span style={{ display: "block", color: C.textDim, fontSize: 12 }}>{r.phone} · {r.vehicle}</span><span style={{ display: "block", color: C.gold, fontSize: 12, fontWeight: 700, marginTop: 2 }}>Review identity →</span></span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {loading ? <LoadingState /> : <Table columns={columns} rows={riders} empty="No riders found." />}
       <Pagination page={page} pages={pages} onPage={p => { setPage(p); load(p) }} />
+      {reviewing && <RiderReviewModal rider={reviewing} onClose={() => setReviewing(null)} onDone={() => { setReviewing(null); load(page) }} />}
     </div>
   )
 }
