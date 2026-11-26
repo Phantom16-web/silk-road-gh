@@ -1,6 +1,8 @@
 import RemovedRecordsPanel from "./RemovedRecordsPanel.jsx"
 import OwnerCommissionStudio from "./OwnerCommissionStudio.jsx"
 import { useState, useEffect, useCallback } from "react"
+import "./AdminTheme.css"
+import { AIcon } from "./AccountIcons"
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 
@@ -32,25 +34,25 @@ async function adminFetch(path, options = {}) {
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const C = {
-  bg:        "#080808",
-  surface:   "#0f0f0f",
-  surface2:  "#161616",
-  border:    "#1e1e1e",
-  border2:   "#2a2a2a",
-  gold:      "#c8a97e",
-  goldDim:   "#c8a97e18",
-  goldMid:   "#c8a97e44",
-  green:     "#22c55e",
-  greenDim:  "#22c55e18",
-  red:       "#ef4444",
-  redDim:    "#ef444418",
-  blue:      "#3b82f6",
-  blueDim:   "#3b82f618",
-  yellow:    "#f59e0b",
-  yellowDim: "#f59e0b18",
-  text:      "#f0ede8",
-  textMid:   "#888888",
-  textDim:   "#444444",
+  bg:        "#090807",
+  surface:   "#12100e",
+  surface2:  "#181512",
+  border:    "#26221c",
+  border2:   "#34302a",
+  gold:      "#d7b982",
+  goldDim:   "#d7b98218",
+  goldMid:   "#d7b98244",
+  green:     "#4fbf8a",
+  greenDim:  "#4fbf8a18",
+  red:       "#e07474",
+  redDim:    "#e0747418",
+  blue:      "#58a9e0",
+  blueDim:   "#58a9e018",
+  yellow:    "#f0b45c",
+  yellowDim: "#f0b45c18",
+  text:      "#f4f0e8",
+  textMid:   "#a39d91",
+  textDim:   "#7c776d",
 }
 
 const tier_meta = {
@@ -62,7 +64,7 @@ const tier_meta = {
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 function Badge({ label, color, dim }) {
   return (
-    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", color, background: dim, border: `1px solid ${color}44`, padding: "2px 8px", borderRadius: 3, textTransform: "uppercase" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", fontSize: 10.5, fontWeight: 800, letterSpacing: ".06em", color, background: dim, border: `1px solid ${color}44`, padding: "3px 10px", borderRadius: 999, textTransform: "uppercase", whiteSpace: "nowrap" }}>
       {label}
     </span>
   )
@@ -96,7 +98,7 @@ function Table({ columns, rows, empty = "No records." }) {
   const matching=rows.filter(r=>!query||columns.some(c=>{const v=r[c.key];return typeof v==="string"||typeof v==="number" ? String(v).toLowerCase().includes(query.toLowerCase()) : false}))
   const pages=Math.max(1,Math.ceil(matching.length/size))
   const visible=matching.slice((Math.min(page,pages)-1)*size,Math.min(page,pages)*size)
-  return <div className="sr-records" style={{background:C.surface,border:`1px solid ${C.border2}`,borderRadius:16,overflow:"hidden"}}>
+  return <div className="sr-records" style={{background:`linear-gradient(170deg,${C.surface2},${C.surface})`,border:`1px solid ${C.border2}`,borderRadius:22,overflow:"hidden"}}>
     <div style={{padding:"16px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <div style={{color:C.textMid,fontSize:12}}>{matching.length} records</div>
       <input aria-label="Search records" placeholder="Search records..." value={query} onChange={e=>{setQuery(e.target.value);setPage(1)}} style={{background:C.surface2,border:`1px solid ${C.border2}`,borderRadius:9,color:C.text,padding:"10px 12px",fontSize:12,minWidth:170,maxWidth:"100%"}} />
@@ -114,10 +116,10 @@ function Pagination({ page, pages, onPage }) {
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 20, justifyContent: "flex-end" }}>
       <button onClick={() => onPage(page - 1)} disabled={page <= 1}
-        style={{ background: C.surface2, border: `1px solid ${C.border}`, color: page <= 1 ? C.textDim : C.text, padding: "6px 12px", borderRadius: 4, cursor: page <= 1 ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit" }}>←</button>
+        style={{ background: C.surface2, border: `1px solid ${C.border2}`, color: page <= 1 ? C.textDim : C.text, padding: "8px 14px", borderRadius: 10, cursor: page <= 1 ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit" }}>←</button>
       <span style={{ fontSize: 12, color: C.textMid }}>Page {page} of {pages}</span>
       <button onClick={() => onPage(page + 1)} disabled={page >= pages}
-        style={{ background: C.surface2, border: `1px solid ${C.border}`, color: page >= pages ? C.textDim : C.text, padding: "6px 12px", borderRadius: 4, cursor: page >= pages ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit" }}>→</button>
+        style={{ background: C.surface2, border: `1px solid ${C.border2}`, color: page >= pages ? C.textDim : C.text, padding: "8px 14px", borderRadius: 10, cursor: page >= pages ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit" }}>→</button>
     </div>
   )
 }
@@ -127,7 +129,7 @@ function Input({ label, type = "text", value, onChange, placeholder, error, mono
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {label && <label style={{ fontSize: 11, color: C.textMid, fontWeight: 600 }}>{label}</label>}
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        style={{ background: C.surface2, border: `1px solid ${error ? C.red : C.border}`, color: C.text, padding: "10px 14px", borderRadius: 6, fontSize: 13, outline: "none", fontFamily: mono ? "monospace" : "inherit", width: "100%", boxSizing: "border-box" }} />
+        className="ad-input" style={{ background: C.surface2, border: `1.5px solid ${error ? C.red : C.border2}`, color: C.text, padding: "12px 15px", borderRadius: 12, fontSize: 14, outline: "none", fontFamily: mono ? "monospace" : "inherit", width: "100%", boxSizing: "border-box" }} />
       {error && <div style={{ fontSize: 11, color: C.red }}>{error}</div>}
     </div>
   )
@@ -135,16 +137,16 @@ function Input({ label, type = "text", value, onChange, placeholder, error, mono
 
 function Btn({ children, onClick, disabled, variant = "primary", size = "md", fullWidth }) {
   const variants = {
-    primary: { bg: C.gold,     color: "#000",   border: C.gold    },
-    danger:  { bg: C.redDim,   color: C.red,    border: C.red     },
-    ghost:   { bg: "transparent", color: C.textMid, border: C.border },
-    success: { bg: C.greenDim, color: C.green,  border: C.green   },
+    primary: { bg: `linear-gradient(110deg, #f4e0b0, ${C.gold} 45%, #b8935a)`, color: "#1a140e", border: "transparent" },
+    danger:  { bg: C.redDim,   color: C.red,    border: `${C.red}66` },
+    ghost:   { bg: "#1a1814",  color: C.text,    border: C.border2 },
+    success: { bg: C.greenDim, color: C.green,  border: `${C.green}66` },
   }
-  const sizes = { sm: "6px 12px", md: "10px 20px", lg: "13px 28px" }
+  const sizes = { sm: "7px 14px", md: "11px 22px", lg: "14px 30px" }
   const v = variants[variant] || variants.primary
   return (
-    <button onClick={onClick} disabled={disabled}
-      style={{ background: v.bg, border: `1px solid ${v.border}`, color: v.color, padding: sizes[size], borderRadius: 6, cursor: disabled ? "not-allowed" : "pointer", fontWeight: 700, fontSize: size === "sm" ? 11 : 13, fontFamily: "inherit", opacity: disabled ? 0.5 : 1, width: fullWidth ? "100%" : "auto" }}>
+    <button className="ad-btn" onClick={onClick} disabled={disabled}
+      style={{ background: v.bg, border: `1px solid ${v.border}`, color: v.color, padding: sizes[size], borderRadius: 12, cursor: disabled ? "not-allowed" : "pointer", fontWeight: 800, fontSize: size === "sm" ? 12 : 13.5, fontFamily: "inherit", opacity: disabled ? 0.5 : 1, width: fullWidth ? "100%" : "auto", minHeight: "auto", boxShadow: variant === "primary" ? "0 8px 22px #d7b98222" : "none", whiteSpace: "nowrap" }}>
       {children}
     </button>
   )
@@ -157,11 +159,11 @@ function Modal({ title, onClose, children, width = 480 }) {
     return () => window.removeEventListener("keydown", handleKey)
   }, [onClose])
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={title} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, width: "100%", maxWidth: width, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
-        <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: C.surface, zIndex: 1 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{title}</span>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: C.textDim, fontSize: 20, cursor: "pointer" }}>{"✕"}</button>
+    <div className="ad-modal-layer" style={{ position: "fixed", inset: 0, background: "#050403b8", backdropFilter: "blur(8px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
+      <div className="ad-modal" role="dialog" aria-modal="true" aria-label={title} style={{ background: `linear-gradient(180deg, ${C.surface2}, ${C.surface})`, border: `1px solid ${C.border2}`, borderRadius: 24, width: "100%", maxWidth: width, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 40px 100px #000c" }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: C.surface2, zIndex: 1 }}>
+          <span style={{ fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: "-0.01em" }}>{title}</span>
+          <button onClick={onClose} aria-label="Close" style={{ background: "#1a1814", border: `1px solid ${C.border2}`, color: C.textMid, width: 36, height: 36, borderRadius: "50%", cursor: "pointer", display: "grid", placeItems: "center", minHeight: "auto", padding: 0 }}><AIcon name="close" size={16} /></button>
         </div>
         <div style={{ padding: 24 }}>{children}</div>
       </div>
@@ -173,7 +175,7 @@ function Alert({ type = "info", children }) {
   const map = { info: [C.blue, C.blueDim], warn: [C.yellow, C.yellowDim], error: [C.red, C.redDim], success: [C.green, C.greenDim] }
   const [color, bg] = map[type] || map.info
   return (
-    <div style={{ background: bg, border: `1px solid ${color}44`, borderRadius: 6, padding: "11px 14px", fontSize: 12, color, lineHeight: 1.6 }}>
+    <div role={type === "error" ? "alert" : undefined} style={{ background: bg, border: `1px solid ${color}44`, borderRadius: 14, padding: "12px 16px", fontSize: 13, color, lineHeight: 1.6 }}>
       {children}
     </div>
   )
@@ -384,7 +386,7 @@ function LoginScreen({ onSuccess }) {
   const tc = tierConfig[tier]
 
   return (
-    <div style={{ minHeight: "100vh", width: "100%", boxSizing: "border-box", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 20px 40px" }}>
+    <div className="ad-login" style={{ minHeight: "100vh", width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 20px 40px" }}>
       <div style={{ width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -403,7 +405,7 @@ function LoginScreen({ onSuccess }) {
           ))}
         </div>
 
-        <div style={{ background: C.surface, border: `1px solid ${tier === "owner" ? C.red + "44" : tier === "super_admin" ? C.goldMid : C.border}`, borderRadius: 10, padding: 28 }}>
+        <div className="ad-login-card" style={{ background: `linear-gradient(170deg, ${C.surface2}, ${C.surface})`, border: `1px solid ${tier === "owner" ? C.red + "55" : tier === "super_admin" ? C.goldMid : C.border2}`, borderRadius: 26, padding: 30, boxShadow: "0 40px 100px #000a" }}>
           <div style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>
               {recovery ? "Account Recovery" : `${tc.label} Login`}
@@ -762,12 +764,10 @@ function RiderReviewModal({ rider, onClose, onDone }) {
   const [busy, setBusy] = useState("")
   const [error, setError] = useState("")
   const decide = async (kind) => {
-    const body = kind === "approve" ? { photoReviewStatus: "approved", isApproved: true, ...(asTest !== Boolean(rider.isTestRider) ? { isTestRider: asTest } : {}) }
-      : kind === "reject" ? { photoReviewStatus: "rejected", isApproved: false }
-      : { photoReviewStatus: "pending", isApproved: false }
+    const body = { decision: kind, ...(kind === "approve" ? { isTestRider: asTest } : {}) }
     if (kind !== "approve" && !window.confirm(kind === "reject" ? `Reject ${rider.name}'s identity? They will not be able to take jobs.` : `Revoke ${rider.name}'s approval? They will go offline and stop receiving jobs.`)) return
     setBusy(kind); setError("")
-    const { ok, data } = await adminFetch(`/riders/${rider._id}/status`, { method: "PUT", body: JSON.stringify(body) })
+    const { ok, data } = await adminFetch(`/admin/riders/${rider._id}/review`, { method: "PUT", body: JSON.stringify(body) })
     setBusy("")
     if (!ok) { setError(data?.message || "Could not update this rider."); return }
     onDone()
@@ -814,7 +814,7 @@ function RidersTab() {
 
   const load = useCallback(async (p = 1, q = search) => {
     setLoading(true)
-    const [list, review] = await Promise.all([adminFetch(`/admin/riders?page=${p}&search=${encodeURIComponent(q)}&limit=30`), adminFetch("/riders/admin/review")])
+    const [list, review] = await Promise.all([adminFetch(`/admin/riders?page=${p}&search=${encodeURIComponent(q)}&limit=30`), adminFetch("/admin/riders/review")])
     const data = list.data
     setRiders(data.riders || []); setTotal(data.total || 0); setPage(data.page || 1); setPages(data.pages || 1)
     setWaiting(Array.isArray(review.data) ? review.data.filter(r => r.photoReviewStatus !== "rejected") : [])
@@ -1777,6 +1777,8 @@ function MarketplaceEnvironmentTab({ onNeedReAuth }) {
 // MAIN ADMIN PANEL
 // ─────────────────────────────────────────────────────────────────────────────
 
+const NAV_ICONS = { dashboard: "grid", users: "user", listings: "tag", orders: "bag", riders: "bike", deliveries: "truck", finance: "wallet", security: "shield", admins: "key", audit: "clock", "payment-settings": "lock", environment: "gear", commission: "trend", removed_records: "trash" }
+
 export default function AdminPanel({ onClose }) {
   const [adminUser, setAdminUser]         = useState(getAdminUser)
   const [authed, setAuthed]               = useState(!!getAdminToken())
@@ -1862,154 +1864,49 @@ export default function AdminPanel({ onClose }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 900, background: C.bg, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <style>{`
-        * { box-sizing: border-box }
-        input, select, button, textarea { font-family: inherit }
-        input::placeholder { color: #444 }
-        ::-webkit-scrollbar { width: 4px }
-        ::-webkit-scrollbar-track { background: transparent }
-        ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px }
-        .sr-metric-card { background:linear-gradient(155deg,#1b1a18,#121212);border:1px solid #332d23;border-radius:16px;padding:22px 20px;min-height:132px;display:flex;flex-direction:column;gap:12px;box-shadow:0 8px 28px #00000018;position:relative;overflow:hidden }
-        .sr-metric-card:before {content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--metric-accent)}
-        .sr-metric-label {font-size:12px;color:#aaa092;font-weight:600;letter-spacing:.02em}
-        .sr-metric-value {font-size:clamp(23px,2.2vw,34px);color:#f0ede8;font-weight:800;line-height:1.1;overflow-wrap:anywhere;letter-spacing:-.035em}
-        .sr-metric-footer {font-size:11px;color:#777067;margin-top:auto}
-        .sr-records {box-shadow:0 12px 34px #0000001f}
-        .sr-records tbody tr:hover {background:#c8a97e0b}
-        .sr-admin-sidebar button:focus-visible, .sr-admin-workspace button:focus-visible, .sr-records input:focus-visible, .sr-records select:focus-visible {outline:2px solid #c8a97e;outline-offset:2px}
-        .sr-admin-workspace {min-width:0}
-        .sr-admin-workspace > div {min-width:0}
-        @media (prefers-reduced-motion:reduce) { .sr-admin-sidebar {transition:none!important} }
-        .sr-table-mobile { display:none }
-        .sr-admin-sidebar { transform: translateX(-100%); }
-        .sr-admin-workspace { margin-left: 0; }
-        .sr-admin-mobile-menu { display:flex; }
-        .sr-admin-section { background:linear-gradient(125deg,#171613,#111111); border:1px solid #30291e; border-radius:18px; padding:22px 24px; margin-bottom:26px; }
-        .sr-admin-section h1 { margin:0; color:#f0ede8; font-size:clamp(21px,2.3vw,29px); letter-spacing:-.03em; }
-        .sr-admin-section p { margin:8px 0 0; color:#aaa092; font-size:13px; line-height:1.6; }
-        .sr-admin-section .sr-breadcrumb { color:#c8a97e; font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; margin-bottom:10px; }
-        @media(min-width:1000px) {
-          .sr-admin-sidebar { transform:translateX(0) !important; }
-          .sr-admin-workspace { margin-left:240px; }
-          .sr-admin-mobile-menu { display:none !important; }
-          .sr-admin-overlay { display:none !important; }
-        }
-        @media(max-width:650px) { .sr-admin-section {padding:18px 16px;border-radius:12px} }
-        @media(max-width:650px){ .sr-table-desktop{display:none} .sr-table-mobile{display:block} }
-        @keyframes spin { to { transform: rotate(360deg) } }
-        @keyframes slideInSidebar { from { transform: translateX(-100%) } to { transform: translateX(0) } }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
 
       {/* ── Overlay when sidebar open ── */}
       {sidebarOpen && (
-        <div className="sr-admin-overlay" onClick={() => setSidebarOpen(false)}
-          style={{ position: "fixed", inset: 0, background: "#000000aa", zIndex: 10 }} />
+        <div className="sr-admin-overlay ad-overlay" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* ── Sidebar — slides in from left, same as Account panel ── */}
-      <div className="sr-admin-sidebar" style={{
-        position: "fixed", top: 0, left: 0, bottom: 0, width: 240,
-        background: C.surface, borderRight: `1px solid ${C.border}`,
-        display: "flex", flexDirection: "column", zIndex: 20,
-        transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
-        transition: "transform 0.25s cubic-bezier(0.4,0,0.2,1)",
-      }}>
-
-        {/* Sidebar header */}
-        <div style={{ padding: "16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
-          <button onClick={() => setSidebarOpen(false)}
-            style={{ background: "transparent", border: `1px solid ${C.border}`, color: C.textMid, width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, minHeight: "auto" }}>
-            {"✕"}
-          </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 26, height: 26, background: `linear-gradient(135deg, ${C.gold}, #9a7040)`, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>{"🕸"}</div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: C.gold }}>Silk Road GH</div>
-              <div style={{ fontSize: 9, color: C.textDim, letterSpacing: ".06em" }}>ADMIN</div>
-            </div>
-          </div>
+      {/* Sidebar */}
+      <aside className={`ad-side ${sidebarOpen ? "open" : ""}`} aria-label="Admin navigation">
+        <div className="ad-brand">
+          <span className="ad-logo" aria-hidden="true">S</span>
+          <div><b>Silk Road</b><small>Administration</small></div>
+          <button type="button" className="ad-x" onClick={() => setSidebarOpen(false)} aria-label="Close menu"><AIcon name="close" size={16} /></button>
         </div>
-
-        {/* Current user pill */}
-        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ background: C.surface2, border: `1px solid ${tierMeta.color}33`, borderRadius: 8, padding: "10px 12px" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 6 }}>
-              {adminUser?.name || adminUser?.email}
-            </div>
-            <Badge label={tierMeta.label} color={tierMeta.color} dim={tierMeta.dim} />
-          </div>
+        <div className="ad-user">
+          <span className="av" aria-hidden="true">{String(adminUser?.name || adminUser?.email || "A").charAt(0).toUpperCase()}</span>
+          <div><b>{adminUser?.name || adminUser?.email}</b><Badge label={tierMeta.label} color={tierMeta.color} dim={tierMeta.dim} /></div>
         </div>
-
-        {/* Re-auth active indicator */}
-        {reAuthToken && adminUser?.tier === "owner" && (
-          <div style={{ margin: "10px 12px 0", background: C.greenDim, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "7px 10px", fontSize: 10, color: C.green, fontWeight: 700, letterSpacing: ".04em" }}>
-            RE-AUTH ACTIVE · 5 MIN
-          </div>
-        )}
-
-        {/* Nav items */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "10px" }}>
+        {reAuthToken && adminUser?.tier === "owner" && <div className="ad-reauth"><i />Re-auth active · 5 min</div>}
+        <nav className="ad-nav">
           {nav.map(item => (
-            <button key={item.id} onClick={() => goTo(item.id)}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 10,
-                background: tab === item.id ? C.goldDim : "transparent",
-                border: `1px solid ${tab === item.id ? C.goldMid : "transparent"}`,
-                color: tab === item.id ? C.gold : C.textMid,
-                padding: "11px 12px", borderRadius: 8, cursor: "pointer",
-                fontSize: 13, fontWeight: tab === item.id ? 700 : 500,
-                marginBottom: 3, textAlign: "left",
-              }}>
-              <span style={{ fontSize: 15, fontFamily: "monospace", opacity: tab === item.id ? 1 : 0.5 }}>{item.icon}</span>
-              {item.label}
+            <button key={item.id} type="button" className={tab === item.id ? "on" : ""} onClick={() => goTo(item.id)}>
+              <AIcon name={NAV_ICONS[item.id] || "grid"} size={18} /><span>{item.label}</span>
             </button>
           ))}
+        </nav>
+        <div className="ad-foot">
+          {adminUser?.tier === "owner" && <button type="button" onClick={() => { setSidebarOpen(false); setShowReAuth(true) }}><AIcon name="lock" size={16} />Re-authenticate</button>}
+          {onClose && <button type="button" onClick={() => { setSidebarOpen(false); onClose() }}><AIcon name="back" size={16} />Back to site</button>}
+          <button type="button" className="out" onClick={signOut}><AIcon name="logout" size={16} />Sign out</button>
         </div>
+      </aside>
 
-        {/* Sidebar footer */}
-        <div style={{ padding: "12px 10px", borderTop: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 6 }}>
-          {adminUser?.tier === "owner" && (
-            <button onClick={() => { setSidebarOpen(false); setShowReAuth(true) }}
-              style={{ width: "100%", background: "transparent", border: `1px solid ${C.border}`, color: C.textDim, padding: "9px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, textAlign: "left" }}>
-              Re-authenticate
-            </button>
-          )}
-          {onClose && (
-            <button onClick={() => { setSidebarOpen(false); onClose() }}
-              style={{ width: "100%", background: "transparent", border: `1px solid ${C.border}`, color: C.textDim, padding: "9px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, textAlign: "left" }}>
-              {"←"} Back to site
-            </button>
-          )}
-          <button onClick={signOut}
-            style={{ width: "100%", background: C.redDim, border: `1px solid ${C.red}44`, color: C.red, padding: "9px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, textAlign: "left" }}>
-            Sign Out
-          </button>
+      {/* Top bar */}
+      <header className="ad-top sr-admin-workspace">
+        <button type="button" className="ad-menu sr-admin-mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Open menu"><AIcon name="menu" size={20} /></button>
+        <div className="ad-top-title">
+          <h2>{tabLabel}</h2>
+          <span>{adminUser?.name || adminUser?.email}{adminUser?.role ? ` · ${adminUser.role.replace("_", " ")}` : ""}</span>
         </div>
-      </div>
-
-      {/* ── Top bar ── */}
-      <div className="sr-admin-workspace" style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-
-        {/* Hamburger — same style as Account panel */}
-        <button className="sr-admin-mobile-menu" onClick={() => setSidebarOpen(true)}
-          style={{ background: "transparent", border: `1px solid ${C.border}`, color: C.gold, width: 38, height: 38, borderRadius: 9, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, flexShrink: 0, minHeight: "auto" }}>
-          <span style={{ display: "block", width: 16, height: 2, background: C.gold, borderRadius: 2 }} />
-          <span style={{ display: "block", width: 16, height: 2, background: C.gold, borderRadius: 2 }} />
-          <span style={{ display: "block", width: 16, height: 2, background: C.gold, borderRadius: 2 }} />
-        </button>
-
-        {/* Current tab label */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{tabLabel}</div>
-          <div style={{ fontSize: 11, color: C.textDim }}>
-            {adminUser?.name || adminUser?.email}
-            {adminUser?.role ? ` · ${adminUser.role.replace("_", " ")}` : ""}
-          </div>
-        </div>
-
-        {/* Tier badge in top bar */}
+        <span className="ad-live"><i />Live</span>
         <Badge label={tierMeta.label} color={tierMeta.color} dim={tierMeta.dim} />
-      </div>
+      </header>
 
       {/* ── Main content ── */}
       <div className="sr-admin-workspace" style={{ flex: 1, overflowY: "auto", minHeight:0 }}>
