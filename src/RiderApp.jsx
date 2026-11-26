@@ -2,29 +2,16 @@ import { useState, useEffect, useRef } from "react"
 import { io } from "socket.io-client"
 import { RiderNotificationBell } from "./NotificationCenter"
 import { fireToast } from "./OrderTracker"
+import "./RiderStyles.css"
+import { AIcon } from "./AccountIcons"
 
 const API_URL    = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 const SOCKET_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace("/api", "")
   : "http://localhost:5000"
 
-const STATUS_COLORS = {
-  pending:   { bg: "#78350f18", color: "#fcd34d", border: "#92400e" },
-  accepted:  { bg: "#1e3a5f18", color: "#93c5fd", border: "#1d4ed8" },
-  picked_up: { bg: "#78350f18", color: "#fb923c", border: "#c2410c" },
-  delivered: { bg: "#064e3b18", color: "#6ee7b7", border: "#065f46" },
-  completed: { bg: "#064e3b18", color: "#6ee7b7", border: "#065f46" },
-  cancelled: { bg: "#7f1d1d18", color: "#fca5a5", border: "#7f1d1d" },
-}
-
-const STATUS_LABEL = {
-  pending:   "⏳ Pending",
-  accepted:  "✅ Accepted — Head to Pickup",
-  picked_up: "📦 Package Picked Up — Head to Buyer",
-  delivered: "🚪 Delivered — Enter Buyer's OTP",
-  completed: "🎉 Delivery Complete",
-  cancelled: "❌ Cancelled",
-}
+const STEPS = [["accepted", "Accepted"], ["picked_up", "Picked up"], ["delivered", "Delivered"], ["completed", "Confirmed"]]
+const STATUS_TITLE = { pending: "Waiting", accepted: "Head to the pick-up", picked_up: "Take it to the buyer", delivered: "Get the buyer’s code", completed: "Delivery complete", cancelled: "Cancelled" }
 
 async function riderCall(endpoint, method = "GET", body = null) {
   const token = localStorage.getItem("silkroad_rider_token")
@@ -264,409 +251,150 @@ export default function RiderApp({ rider: initialRider, onSignOut }) {
     setDeleteLoading(false)
   }
 
-  const sc = activeDelivery ? (STATUS_COLORS[activeDelivery.status] || STATUS_COLORS.pending) : null
+  const stepIndex = activeDelivery ? Math.max(0, STEPS.findIndex(([k]) => k === activeDelivery.status)) : 0
+  const money = n => `₵${Number(n || 0).toLocaleString()}`
+  const where = loc => loc?.address || (loc?.lat != null ? `${Number(loc.lat).toFixed(4)}, ${Number(loc.lng).toFixed(4)}` : "Shown after you accept")
+  const vehicleLabel = rider.vehicle === "motorbike" ? "Motorbike" : rider.vehicle === "bicycle" ? "Bicycle" : "On foot"
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#0a0a0a", zIndex: 500, display: "flex", flexDirection: "column", color: "#f0ede8" }}>
+    <div className="rd-root">
+      <header className="rd-head">
+        <div className="rd-av" aria-hidden="true">{rider.name.charAt(0).toUpperCase()}</div>
+        <div className="rd-who">
+          <b>{rider.name}{isTestRider && <span className="rd-test" title="Test rider: sees Testing Mode jobs only">TEST</span>}</b>
+          <small>{vehicleLabel} · {rider.university}</small>
+        </div>
+        <RiderNotificationBell />
+      </header>
 
-      {/* ── TOP BAR ── */}
-      <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1a1a1a", padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div style={{ width: "38px", height: "38px", borderRadius: "50%", background: "linear-gradient(135deg,#c8a97e,#9a7040)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "17px", fontWeight: "800", color: "#000" }}>
-            {rider.name.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <div style={{ fontSize: "15px", fontWeight: "700", display: "flex", alignItems: "center", gap: "8px" }}>{rider.name}{isTestRider && <span title="Test rider: sees Testing Mode jobs only" style={{ fontSize: "9px", fontWeight: "800", letterSpacing: "0.14em", padding: "3px 7px", borderRadius: "999px", color: "#1a140e", background: "linear-gradient(135deg,#f0dba9,#c8a063)" }}>TEST</span>}</div>
-            <div style={{ fontSize: "11px", color: "#555" }}>
-              {rider.vehicle === "motorbike" ? "🛵 Motorbike" : rider.vehicle === "bicycle" ? "🚲 Bicycle" : "🚶 Walking"} · {rider.university}
+      <div className="rd-body">
+        <div className="rd-col">
+          {actionError && tab !== "active" && <div role="alert" className="rd-err"><AIcon name="alert" size={17} /><span>{actionError}</span><button type="button" onClick={() => setActionError("")} aria-label="Dismiss"><AIcon name="close" size={15} /></button></div>}
+
+          {tab !== "me" && (<>
+            <section className={`rd-power ${isOnline ? "on" : ""}`}>
+              <div className="rd-radar" aria-hidden="true"><i /><i /><i /><AIcon name="bike" size={26} /></div>
+              <div><h2>{isOnline ? "You’re online" : "You’re offline"}</h2><p>{isOnline ? "New delivery jobs appear here the moment they’re posted." : "Go online to start receiving delivery jobs."}</p></div>
+              <button type="button" role="switch" aria-checked={isOnline} aria-label="Rider online availability" className={`rd-switch ${isOnline ? "on" : ""}`} disabled={onlineBusy} onClick={handleToggleOnline}><span /></button>
+            </section>
+            <div className="rd-stats">
+              <div className="rd-stat"><small>Total earned</small><b>{money(earnings.total)}</b></div>
+              <div className="rd-stat"><small>Deliveries</small><b>{earnings.deliveries}</b></div>
+              <div className="rd-stat"><small>Rating</small><b>{rider.rating > 0 ? rider.rating.toFixed(1) : "New"}</b></div>
             </div>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <RiderNotificationBell />
-          <span style={{ fontSize: "12px", color: isOnline ? "#6ee7b7" : "#555" }}>{isOnline ? "Online" : "Offline"}</span>
-          <button type="button" role="switch" aria-checked={isOnline} aria-label="Rider online availability"
-            disabled={onlineBusy} onClick={handleToggleOnline}
-            style={{ width: "44px", height: "24px", border: 0, padding: 0, background: isOnline ? "#c8a97e" : "#2a2a2a", borderRadius: "24px", position: "relative", cursor: onlineBusy ? "wait" : "pointer", opacity: onlineBusy ? 0.6 : 1, transition: "background 0.2s", flexShrink: 0 }}>
-            <span style={{ position: "absolute", top: "3px", left: isOnline ? "22px" : "3px", width: "18px", height: "18px", background: "#fff", borderRadius: "50%", transition: "left 0.2s" }} />
-          </button>
-          <button onClick={onSignOut}
-            style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "7px 14px", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontSize: "12px", fontFamily: "inherit" }}>
-            Sign Out
-          </button>
-        </div>
-      </div>
+          </>)}
 
-      {actionError && <div role="alert" style={{ background: "#451a1a", color: "#fecaca", padding: "10px 20px", fontSize: 13 }}>⚠️ {actionError}</div>}
+          {tab === "jobs" && (<>
+            <div className="rd-toolbar"><h3>Available jobs</h3>
+              <button type="button" className={`rd-refresh ${refreshing ? "spin" : ""}`} onClick={handleRefresh} disabled={refreshing}><AIcon name="refresh" size={15} stroke={2.2} />{refreshing ? "Updating" : "Refresh"}</button></div>
+            {loading && <div className="rd-empty"><p>Loading jobs…</p></div>}
+            {!isOnline && !loading && <div className="rd-empty"><div className="art"><AIcon name="clock" size={32} /></div><h3>Go online to see jobs</h3><p>Flip the switch above and nearby delivery requests will show up here.</p></div>}
+            {isOnline && !loading && jobs.length === 0 && <div className="rd-empty"><div className="art"><AIcon name="package" size={32} /></div><h3>No jobs yet</h3><p>Stay online. New requests appear instantly and you’ll get a notification.</p></div>}
+            {jobs.map((job, index) => {
+              const id = job._id || job.deliveryId
+              const km = Number(job.distanceKm) || 0
+              const eta = rider.vehicle === "motorbike" ? Math.round(km * 3) : rider.vehicle === "bicycle" ? Math.round(km * 6) : Math.round(km * 12)
+              return (
+                <article key={id} className="rd-card" style={{ animationDelay: `${Math.min(index, 6) * 50}ms` }}>
+                  <div className="rd-job-head">
+                    <div className="rd-thumb">{job.itemImage ? <img src={job.itemImage} alt="" /> : <AIcon name="package" size={24} />}</div>
+                    <div><strong>{job.itemTitle || "Package"}</strong><div className="rd-chips"><span className="rd-chip"><AIcon name="pin" size={12} />{km} km</span><span className="rd-chip"><AIcon name="clock" size={12} />~{eta} min</span></div></div>
+                    <div className="rd-fee"><b>{money(job.deliveryFee)}</b><small>you earn</small></div>
+                  </div>
+                  <div className="rd-route">
+                    <div className="rd-stop"><i /><div><small>Pick-up · seller</small><span>{job.pickupAddress || (job.pickupLocation ? `${job.pickupLocation.lat?.toFixed(4)}, ${job.pickupLocation.lng?.toFixed(4)}` : "Shown after you accept")}</span></div></div>
+                    <div className="rd-stop"><i className="b" /><div><small>Drop-off · buyer</small><span>{job.dropAddress || (job.dropLocation ? `${job.dropLocation.lat?.toFixed(4)}, ${job.dropLocation.lng?.toFixed(4)}` : "Shown after you accept")}</span></div></div>
+                  </div>
+                  <div className="rd-actions">
+                    <button type="button" className="rd-btn danger" onClick={() => handleDecline(id)} disabled={!!actionLoading}>Decline</button>
+                    <button type="button" className="rd-btn primary" onClick={() => handleAccept(id)} disabled={!!actionLoading || !!activeDelivery}>{actionLoading === id ? "Accepting…" : activeDelivery ? "Finish your current job" : <>Accept job <AIcon name="arrow" size={18} stroke={2.5} /></>}</button>
+                  </div>
+                </article>
+              )
+            })}
+          </>)}
 
-      {/* ── STATS BAR ── */}
-      <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1a1a1a", padding: "12px 20px", display: "flex", gap: "28px", flexShrink: 0 }}>
-        <div>
-          <div style={{ fontSize: "18px", fontWeight: "800", color: "#c8a97e" }}>₵{earnings.total.toLocaleString()}</div>
-          <div style={{ fontSize: "11px", color: "#555" }}>Total Earned</div>
-        </div>
-        <div>
-          <div style={{ fontSize: "18px", fontWeight: "800", color: "#c8a97e" }}>{earnings.deliveries}</div>
-          <div style={{ fontSize: "11px", color: "#555" }}>Deliveries</div>
-        </div>
-        {rider.rating > 0 && (
-          <div>
-            <div style={{ fontSize: "18px", fontWeight: "800", color: "#c8a97e" }}>⭐ {rider.rating.toFixed(1)}</div>
-            <div style={{ fontSize: "11px", color: "#555" }}>Rating</div>
-          </div>
-        )}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
-          {activeDelivery && (
-            <span style={{ fontSize: "11px", fontWeight: "700", color: "#93c5fd", background: "#1e3a5f18", border: "1px solid #1d4ed8", padding: "4px 10px", borderRadius: "20px" }}>
-              🚀 Active
-            </span>
-          )}
-          <button onClick={handleRefresh} disabled={refreshing}
-            style={{ background: "#161616", border: "1px solid #222", color: refreshing ? "#333" : "#888", padding: "6px 12px", borderRadius: "8px", cursor: refreshing ? "not-allowed" : "pointer", fontSize: "12px", fontFamily: "inherit", fontWeight: "600" }}>
-            {refreshing ? "⏳" : "🔄 Refresh"}
-          </button>
-        </div>
-      </div>
+          {tab === "active" && (!activeDelivery ? (
+            <div className="rd-empty"><div className="art"><AIcon name="bike" size={32} /></div><h3>No active delivery</h3><p>Accept a job from the Jobs tab and it will show up here with step-by-step guidance.</p>
+              <button type="button" className="rd-btn ghost" style={{ maxWidth: 220, marginTop: 8 }} onClick={handleRefresh}><AIcon name="refresh" size={16} />Refresh</button></div>
+          ) : (<>
+            <section className="rd-status">
+              <small>CURRENT STEP</small>
+              <h2>{STATUS_TITLE[activeDelivery.status] || activeDelivery.status}</h2>
+              <div className="rd-status-row"><span>{activeDelivery.distanceKm} km trip</span><b>{money(activeDelivery.deliveryFee)}</b></div>
+              {activeDelivery.status !== "cancelled" && <ol className="rd-steps" aria-label="Delivery progress">{STEPS.map(([key, label], i) => <li key={key} className={i < stepIndex || activeDelivery.status === "completed" ? "done" : i === stepIndex ? "now" : ""}><i>{i < stepIndex || activeDelivery.status === "completed" ? <AIcon name="check" size={11} stroke={3} /> : null}</i><span>{label}</span></li>)}</ol>}
+            </section>
 
-      {/* ── TABS ── */}
-      <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1a1a1a", display: "flex", padding: "0 20px", flexShrink: 0 }}>
-        {[
-          { id: "jobs",   label: jobs.length > 0 ? `📋 Jobs (${jobs.length})` : "📋 Jobs" },
-          { id: "active", label: "🚀 Active Delivery" },
-        ].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ background: "transparent", border: "none", color: tab === t.id ? "#c8a97e" : "#444", cursor: "pointer", fontSize: "13px", fontWeight: tab === t.id ? "700" : "500", borderBottom: `2px solid ${tab === t.id ? "#c8a97e" : "transparent"}`, padding: "12px 16px", whiteSpace: "nowrap", fontFamily: "inherit" }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+            <section className="rd-card rd-item">
+              <div className="rd-thumb">{activeDelivery.itemImage ? <img src={activeDelivery.itemImage} alt={activeDelivery.itemTitle} /> : <AIcon name="package" size={24} />}</div>
+              <div><b>{activeDelivery.itemTitle || "Package"}</b>{activeDelivery.notes && <span>{activeDelivery.notes}</span>}</div>
+            </section>
 
-      {/* ── SCROLLABLE CONTENT ── */}
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
-        <div style={{ flex: 1, padding: "20px" }}>
-
-          {/* ── JOBS TAB ── */}
-          {tab === "jobs" && (
-            <>
-              {!isOnline && (
-                <div style={{ background: "#78350f18", border: "1px solid #92400e", borderRadius: "14px", padding: "28px 20px", textAlign: "center", marginBottom: "20px" }}>
-                  <div style={{ fontSize: "32px", marginBottom: "10px" }}>😴</div>
-                  <div style={{ fontSize: "15px", fontWeight: "700", color: "#fcd34d", marginBottom: "6px" }}>You're Offline</div>
-                  <div style={{ fontSize: "13px", color: "#888" }}>Toggle online to start receiving delivery jobs.</div>
-                </div>
-              )}
-
-              {actionError && (
-                <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "12px 16px", fontSize: "13px", color: "#fca5a5", marginBottom: "16px" }}>
-                  ⚠️ {actionError}
-                </div>
-              )}
-
-              {loading && (
-                <div style={{ textAlign: "center", padding: "60px", color: "#444", fontSize: "13px" }}>⏳ Loading jobs...</div>
-              )}
-
-              {isOnline && !loading && jobs.length === 0 && (
-                <div style={{ textAlign: "center", padding: "60px 20px", color: "#444" }}>
-                  <div style={{ fontSize: "48px", marginBottom: "16px" }}>🛵</div>
-                  <div style={{ fontSize: "16px", fontWeight: "700", color: "#555", marginBottom: "8px" }}>No jobs yet</div>
-                  <div style={{ fontSize: "13px" }}>New delivery requests appear here instantly.</div>
-                </div>
-              )}
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                {jobs.map(job => {
-                  const id  = job._id || job.deliveryId
-                  const fee = job.deliveryFee
-                  const km  = job.distanceKm
-                  const eta = rider.vehicle === "motorbike" ? Math.round(km * 3)
-                            : rider.vehicle === "bicycle"   ? Math.round(km * 6)
-                            : Math.round(km * 12)
-                  return (
-                    <div key={id} style={{ background: "#111", borderRadius: "16px", border: "1px solid #1e1e1e", overflow: "hidden" }}>
-                      <div style={{ padding: "16px 18px", borderBottom: "1px solid #1a1a1a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div>
-                          <div style={{ fontSize: "15px", fontWeight: "700", color: "#f0ede8" }}>{job.itemTitle || "Package"}</div>
-                          <div style={{ fontSize: "12px", color: "#555", marginTop: "3px" }}>{km} km · ~{eta} min</div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e" }}>₵{fee}</div>
-                          <div style={{ fontSize: "11px", color: "#555" }}>delivery fee</div>
-                        </div>
-                      </div>
-                      <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                        <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
-                          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#c8a97e", marginTop: "5px", flexShrink: 0 }} />
-                          <div>
-                            <div style={{ fontSize: "10px", color: "#555", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em" }}>PICKUP (Seller)</div>
-                            <div style={{ fontSize: "13px", color: "#888", marginTop: "2px" }}>
-                              {job.pickupAddress || (job.pickupLocation ? `${job.pickupLocation.lat?.toFixed(4)}, ${job.pickupLocation.lng?.toFixed(4)}` : "Provided on accept")}
-                            </div>
-                            {job.sellerContact && <div style={{ fontSize: "12px", color: "#c8a97e", marginTop: "3px" }}>📞 {job.sellerContact}</div>}
-                          </div>
-                        </div>
-                        <div style={{ marginLeft: "4px", borderLeft: "2px dashed #1e1e1e", height: "14px" }} />
-                        <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
-                          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#6ee7b7", marginTop: "5px", flexShrink: 0 }} />
-                          <div>
-                            <div style={{ fontSize: "10px", color: "#555", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em" }}>DROP-OFF (Buyer)</div>
-                            <div style={{ fontSize: "13px", color: "#888", marginTop: "2px" }}>
-                              {job.dropAddress || (job.dropLocation ? `${job.dropLocation.lat?.toFixed(4)}, ${job.dropLocation.lng?.toFixed(4)}` : "Provided on accept")}
-                            </div>
-                            {job.buyerContact && <div style={{ fontSize: "12px", color: "#6ee7b7", marginTop: "3px" }}>📞 {job.buyerContact}</div>}
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ padding: "0 18px 18px", display: "flex", gap: "10px" }}>
-                        <button onClick={() => handleDecline(id)} disabled={!!actionLoading}
-                          style={{ flex: 1, background: "#7f1d1d18", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "12px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "14px", fontFamily: "inherit" }}>
-                          Decline
-                        </button>
-                        <button onClick={() => handleAccept(id)} disabled={!!actionLoading || !!activeDelivery}
-                          style={{ flex: 2, background: "#c8a97e", border: "none", color: "#000", padding: "12px", borderRadius: "10px", cursor: (!!actionLoading || !!activeDelivery) ? "not-allowed" : "pointer", fontWeight: "700", fontSize: "14px", fontFamily: "inherit", opacity: (!!actionLoading || !!activeDelivery) ? 0.5 : 1 }}>
-                          {actionLoading === id ? "⏳ Accepting..." : activeDelivery ? "On a job" : "✅ Accept Job"}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
+            <section className="rd-card rd-pad">
+              <span className="rd-label">Delivery route</span>
+              <div className="rd-route" style={{ padding: 0 }}>
+                <div className="rd-stop"><i /><div><small>Pick-up · seller</small><span>{where(activeDelivery.pickupLocation)}</span>
+                  {activeDelivery.sellerContact && <a className="rd-call" href={`tel:${activeDelivery.sellerContact}`}><AIcon name="phone" size={14} />Call seller</a>}</div></div>
+                <div className="rd-stop"><i className="b" /><div><small>Drop-off · buyer</small><span>{where(activeDelivery.dropLocation)}</span>
+                  {activeDelivery.buyerContact && <a className="rd-call g" href={`tel:${activeDelivery.buyerContact}`}><AIcon name="phone" size={14} />Call buyer</a>}</div></div>
               </div>
-            </>
-          )}
+            </section>
 
-          {/* ── ACTIVE DELIVERY TAB ── */}
-          {tab === "active" && (
-            <>
-              {!activeDelivery ? (
-                <div style={{ textAlign: "center", padding: "60px 20px", color: "#444" }}>
-                  <div style={{ fontSize: "48px", marginBottom: "16px" }}>📭</div>
-                  <div style={{ fontSize: "16px", fontWeight: "700", color: "#555", marginBottom: "8px" }}>No active delivery</div>
-                  <div style={{ fontSize: "13px", marginBottom: "20px" }}>Accept a job from the Jobs tab.</div>
-                  <button onClick={handleRefresh}
-                    style={{ background: "#161616", border: "1px solid #222", color: "#888", padding: "11px 20px", borderRadius: "10px", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
-                    🔄 Refresh
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {actionError && <div role="alert" className="rd-err"><AIcon name="alert" size={17} /><span>{actionError}</span><button type="button" onClick={() => setActionError("")} aria-label="Dismiss"><AIcon name="close" size={15} /></button></div>}
 
-                  {/* Status */}
-                  <div style={{ background: sc.bg, border: `1px solid ${sc.border}`, borderRadius: "14px", padding: "18px 20px" }}>
-                    <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "6px" }}>CURRENT STATUS</div>
-                    <div style={{ fontSize: "18px", fontWeight: "800", color: sc.color }}>
-                      {STATUS_LABEL[activeDelivery.status] || activeDelivery.status}
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px" }}>
-                      <div style={{ fontSize: "11px", color: "#555" }}>{activeDelivery.distanceKm} km</div>
-                      <div style={{ fontSize: "22px", fontWeight: "800", color: "#c8a97e" }}>₵{activeDelivery.deliveryFee}</div>
-                    </div>
-                  </div>
+            {activeDelivery.status === "accepted" && <button type="button" className="rd-btn primary" onClick={handlePickedUp} disabled={actionLoading === "pickup"}>{actionLoading === "pickup" ? "Updating…" : <><AIcon name="package" size={20} />I’ve picked up the package</>}</button>}
+            {activeDelivery.status === "picked_up" && <button type="button" className="rd-btn green" onClick={handleDelivered} disabled={actionLoading === "deliver"}>{actionLoading === "deliver" ? "Getting the code ready…" : <><AIcon name="check" size={20} />I’ve arrived · ask for the code</>}</button>}
 
-                  {/* Item */}
-                  <div style={{ background: "#161616", borderRadius: "14px", padding: "16px 18px", display: "flex", gap: "14px", alignItems: "center" }}>
-                    {activeDelivery.itemImage
-                      ? <img src={activeDelivery.itemImage} alt={activeDelivery.itemTitle} style={{ width: "56px", height: "56px", borderRadius: "10px", objectFit: "cover", flexShrink: 0 }} />
-                      : <div style={{ width: "56px", height: "56px", borderRadius: "10px", background: "#1e1e1e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", flexShrink: 0 }}>📦</div>
-                    }
-                    <div>
-                      <div style={{ fontSize: "15px", fontWeight: "700" }}>{activeDelivery.itemTitle || "Package"}</div>
-                      {activeDelivery.notes && <div style={{ fontSize: "12px", color: "#555", marginTop: "4px" }}>{activeDelivery.notes}</div>}
-                    </div>
-                  </div>
+            {activeDelivery.status === "delivered" && (<>
+              <div className="rd-otp-info"><AIcon name="shield" size={30} /><b>Ask the buyer for their code</b><span>They’ll see a 6-digit code on their order screen. Hand over the item first, then enter it below.</span></div>
+              <div><span className="rd-label">Buyer’s code</span>
+                <input className={`rd-otp ${otpError ? "bad" : ""}`} inputMode="numeric" autoComplete="one-time-code" placeholder="••••••" value={otpInput} maxLength={6} onChange={e => { setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError("") }} aria-label="Buyer's 6-digit code" /></div>
+              {otpError && <div role="alert" className="rd-err"><AIcon name="alert" size={17} /><span>{otpError}</span></div>}
+              <button type="button" className="rd-btn primary" onClick={handleConfirmOTP} disabled={otpInput.length !== 6 || otpLoading}>{otpLoading ? "Verifying…" : "Confirm & complete delivery"}</button>
+            </>)}
 
-                  {/* Route */}
-                  <div style={{ background: "#161616", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "14px" }}>
-                    <div style={{ fontSize: "11px", color: "#555", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".06em" }}>DELIVERY ROUTE</div>
-                    <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-                      <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#c8a97e", marginTop: "4px", flexShrink: 0 }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "4px" }}>PICKUP — Seller</div>
-                        <div style={{ fontSize: "13px", color: "#f0ede8" }}>
-                          {activeDelivery.pickupLocation?.address || `${activeDelivery.pickupLocation?.lat?.toFixed(4)}, ${activeDelivery.pickupLocation?.lng?.toFixed(4)}`}
-                        </div>
-                        {activeDelivery.sellerContact && (
-                          <a href={`tel:${activeDelivery.sellerContact}`}
-                            style={{ display: "inline-flex", alignItems: "center", gap: "6px", marginTop: "8px", background: "#c8a97e18", border: "1px solid #c8a97e44", borderRadius: "8px", padding: "7px 12px", color: "#c8a97e", fontSize: "13px", fontWeight: "700", textDecoration: "none" }}>
-                            📞 Call Seller
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                    <div style={{ marginLeft: "5px", borderLeft: "2px dashed #1e1e1e", height: "14px" }} />
-                    <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-                      <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#6ee7b7", marginTop: "4px", flexShrink: 0 }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "4px" }}>DROP-OFF — Buyer</div>
-                        <div style={{ fontSize: "13px", color: "#f0ede8" }}>
-                          {activeDelivery.dropLocation?.address || `${activeDelivery.dropLocation?.lat?.toFixed(4)}, ${activeDelivery.dropLocation?.lng?.toFixed(4)}`}
-                        </div>
-                        {activeDelivery.buyerContact && (
-                          <a href={`tel:${activeDelivery.buyerContact}`}
-                            style={{ display: "inline-flex", alignItems: "center", gap: "6px", marginTop: "8px", background: "#064e3b18", border: "1px solid #065f46", borderRadius: "8px", padding: "7px 12px", color: "#6ee7b7", fontSize: "13px", fontWeight: "700", textDecoration: "none" }}>
-                            📞 Call Buyer
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Error */}
-                  {actionError && (
-                    <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "12px 16px", fontSize: "13px", color: "#fca5a5" }}>
-                      ⚠️ {actionError}
-                      <button onClick={() => setActionError("")} style={{ float: "right", background: "transparent", border: "none", color: "#fca5a5", cursor: "pointer", fontSize: "16px", minHeight: "auto" }}>✕</button>
-                    </div>
-                  )}
-
-                  {/* ACCEPTED */}
-                  {activeDelivery.status === "accepted" && (
-                    <button onClick={handlePickedUp} disabled={actionLoading === "pickup"}
-                      style={{ background: "#c8a97e", border: "none", padding: "18px", borderRadius: "14px", fontWeight: "700", cursor: actionLoading === "pickup" ? "not-allowed" : "pointer", fontSize: "16px", color: "#000", fontFamily: "inherit", opacity: actionLoading === "pickup" ? 0.7 : 1 }}>
-                      {actionLoading === "pickup" ? "⏳ Updating..." : "📦 I've Picked Up the Package"}
-                    </button>
-                  )}
-
-                  {/* PICKED UP */}
-                  {activeDelivery.status === "picked_up" && (
-                    <button onClick={handleDelivered} disabled={actionLoading === "deliver"}
-                      style={{ background: "#064e3b", border: "1px solid #065f46", color: "#6ee7b7", padding: "18px", borderRadius: "14px", fontWeight: "700", cursor: actionLoading === "deliver" ? "not-allowed" : "pointer", fontSize: "16px", fontFamily: "inherit", opacity: actionLoading === "deliver" ? 0.7 : 1 }}>
-                      {actionLoading === "deliver" ? "⏳ Generating OTP..." : "🚪 I've Delivered — Request OTP from Buyer"}
-                    </button>
-                  )}
-
-                  {/* DELIVERED — enter OTP */}
-                  {activeDelivery.status === "delivered" && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                      <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "20px", textAlign: "center" }}>
-                        <div style={{ fontSize: "32px", marginBottom: "10px" }}>📱</div>
-                        <div style={{ fontSize: "15px", fontWeight: "700", color: "#6ee7b7", marginBottom: "8px" }}>Ask the buyer for their OTP</div>
-                        <div style={{ fontSize: "13px", color: "#888", lineHeight: "1.6" }}>
-                          The buyer has a 6-digit code on their <strong>Order Tracker</strong> screen.<br/>
-                          Tell them: "Open your order tracker and read me the 6-digit OTP."
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: "11px", color: "#555", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase", letterSpacing: ".06em" }}>ENTER OTP FROM BUYER</div>
-                        <input
-                          placeholder="000000"
-                          value={otpInput}
-                          onChange={e => { setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError("") }}
-                          maxLength={6}
-                          style={{ width: "100%", background: "#161616", border: `1.5px solid ${otpError ? "#991b1b" : "#c8a97e44"}`, color: "#c8a97e", padding: "16px", borderRadius: "12px", fontSize: "36px", fontWeight: "900", fontFamily: "monospace", letterSpacing: ".25em", textAlign: "center", outline: "none", boxSizing: "border-box" }}
-                        />
-                      </div>
-                      {otpError && (
-                        <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "12px", fontSize: "13px", color: "#fca5a5", textAlign: "center" }}>
-                          ⚠️ {otpError}
-                        </div>
-                      )}
-                      <button onClick={handleConfirmOTP} disabled={otpInput.length !== 6 || otpLoading}
-                        style={{ background: "#c8a97e", border: "none", padding: "16px", borderRadius: "14px", fontWeight: "700", cursor: (otpInput.length !== 6 || otpLoading) ? "not-allowed" : "pointer", fontSize: "16px", color: "#000", fontFamily: "inherit", opacity: (otpInput.length !== 6 || otpLoading) ? 0.5 : 1 }}>
-                        {otpLoading ? "⏳ Verifying..." : "✅ Confirm OTP & Complete Delivery"}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* COMPLETED */}
-                  {activeDelivery.status === "completed" && (
-                    <div style={{ background: "#064e3b18", border: "1px solid #065f46", borderRadius: "14px", padding: "32px", textAlign: "center" }}>
-                      <div style={{ fontSize: "56px", marginBottom: "12px" }}>🎉</div>
-                      <div style={{ fontSize: "20px", fontWeight: "800", color: "#6ee7b7", marginBottom: "8px" }}>Delivery Complete!</div>
-                      <div style={{ fontSize: "24px", fontWeight: "800", color: "#c8a97e", marginBottom: "8px" }}>+₵{activeDelivery.deliveryFee}</div>
-                      <div style={{ fontSize: "13px", color: "#888", marginBottom: "16px" }}>Added to your earnings.</div>
-                      <button onClick={handleForceClear}
-                        style={{ background: "#161616", border: "1px solid #222", color: "#888", padding: "11px 20px", borderRadius: "10px", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
-                        Continue to Next Job →
-                      </button>
-                    </div>
-                  )}
-
-                  {/* CANCEL — accepted or picked_up only */}
-                  {(activeDelivery.status === "accepted" || activeDelivery.status === "picked_up") && (
-                    <div style={{ marginTop: "4px" }}>
-                      {!cancelConfirm ? (
-                        <button onClick={() => setCancelConfirm(true)}
-                          style={{ width: "100%", background: "transparent", border: "1px solid #2a2a2a", color: "#444", padding: "12px", borderRadius: "12px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
-                          ❌ Cancel This Delivery
-                        </button>
-                      ) : (
-                        <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "14px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                          <div style={{ fontSize: "14px", fontWeight: "700", color: "#fca5a5", textAlign: "center" }}>⚠️ Cancel this delivery?</div>
-                          <div style={{ fontSize: "12px", color: "#888", textAlign: "center", lineHeight: "1.6" }}>The job goes back to the board for another rider.</div>
-                          <div style={{ display: "flex", gap: "10px" }}>
-                            <button onClick={() => setCancelConfirm(false)}
-                              style={{ flex: 1, background: "#161616", border: "1px solid #222", color: "#888", padding: "12px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
-                              Keep Going
-                            </button>
-                            <button onClick={handleCancelDelivery} disabled={actionLoading === "cancel"}
-                              style={{ flex: 1, background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "12px", borderRadius: "10px", cursor: actionLoading === "cancel" ? "not-allowed" : "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit", opacity: actionLoading === "cancel" ? 0.7 : 1 }}>
-                              {actionLoading === "cancel" ? "⏳..." : "Yes, Cancel"}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* FORCE CLEAR — completed or cancelled stuck deliveries */}
-                  {(activeDelivery.status === "completed" || activeDelivery.status === "cancelled") && (
-                    <div style={{ marginTop: "4px" }}>
-                      {!clearConfirm ? (
-                        <button onClick={() => setClearConfirm(true)}
-                          style={{ width: "100%", background: "transparent", border: "1px solid #1a1a1a", color: "#333", padding: "10px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "12px", fontFamily: "inherit" }}>
-                          🧹 Clear & Accept New Jobs
-                        </button>
-                      ) : (
-                        <div style={{ background: "#1a1a1a", border: "1px solid #222", borderRadius: "12px", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                          <div style={{ fontSize: "13px", color: "#888", textAlign: "center" }}>Clear this from your active slot?</div>
-                          <div style={{ display: "flex", gap: "10px" }}>
-                            <button onClick={() => setClearConfirm(false)}
-                              style={{ flex: 1, background: "#111", border: "1px solid #222", color: "#555", padding: "11px", borderRadius: "10px", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
-                              No
-                            </button>
-                            <button onClick={handleForceClear} disabled={actionLoading === "clear"}
-                              style={{ flex: 1, background: "#161616", border: "1px solid #333", color: "#888", padding: "11px", borderRadius: "10px", cursor: actionLoading === "clear" ? "not-allowed" : "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit" }}>
-                              {actionLoading === "clear" ? "⏳..." : "Yes, Clear"}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                </div>
-              )}
-            </>
-          )}
-
-        </div>
-
-        {/* ── DELETE ACCOUNT — bottom of screen, always visible ── */}
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #1a1a1a", flexShrink: 0 }}>
-          {!showDeleteConfirm ? (
-            <button onClick={() => setShowDeleteConfirm(true)}
-              style={{ width: "100%", background: "transparent", border: "1px solid #1a1a1a", color: "#333", padding: "11px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "12px", fontFamily: "inherit" }}>
-              🗑️ Delete Rider Account
-            </button>
-          ) : (
-            <div style={{ background: "#7f1d1d18", border: "1px solid #7f1d1d", borderRadius: "12px", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ fontSize: "13px", color: "#fca5a5", fontWeight: "700", textAlign: "center" }}>⚠️ Delete your rider account?</div>
-              <div style={{ fontSize: "12px", color: "#888", textAlign: "center" }}>This is permanent and cannot be undone.</div>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button onClick={() => setShowDeleteConfirm(false)}
-                  style={{ flex: 1, background: "#161616", border: "1px solid #222", color: "#888", padding: "11px", borderRadius: "10px", cursor: "pointer", fontWeight: "600", fontSize: "13px", fontFamily: "inherit" }}>
-                  Cancel
-                </button>
-                <button onClick={handleDeleteAccount} disabled={deleteLoading}
-                  style={{ flex: 1, background: "#7f1d1d", border: "1px solid #991b1b", color: "#fca5a5", padding: "11px", borderRadius: "10px", cursor: deleteLoading ? "not-allowed" : "pointer", fontWeight: "700", fontSize: "13px", fontFamily: "inherit", opacity: deleteLoading ? 0.7 : 1 }}>
-                  {deleteLoading ? "⏳ Deleting..." : "Yes, Delete"}
-                </button>
+            {activeDelivery.status === "completed" && (
+              <div className="rd-done">
+                <svg className="big" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24" /><path d="M15 27l8 8 15-17" /></svg>
+                <h3>Delivery complete</h3><div className="amt">+{money(activeDelivery.deliveryFee)}</div><p>Added to your earnings.</p>
+                <button type="button" className="rd-btn ghost" onClick={handleForceClear}>Continue to the next job <AIcon name="arrow" size={18} /></button>
               </div>
-            </div>
-          )}
-        </div>
+            )}
 
+            {(activeDelivery.status === "accepted" || activeDelivery.status === "picked_up") && (!cancelConfirm
+              ? <button type="button" className="rd-btn quiet" onClick={() => setCancelConfirm(true)}>Cancel this delivery</button>
+              : <div className="rd-confirm"><b>Cancel this delivery?</b><span>The job goes back to the board for another rider.</span>
+                  <div className="row"><button type="button" className="rd-btn ghost" onClick={() => setCancelConfirm(false)}>Keep going</button>
+                    <button type="button" className="rd-btn danger" onClick={handleCancelDelivery} disabled={actionLoading === "cancel"}>{actionLoading === "cancel" ? "Cancelling…" : "Yes, cancel"}</button></div></div>)}
+
+            {(activeDelivery.status === "completed" || activeDelivery.status === "cancelled") && (!clearConfirm
+              ? <button type="button" className="rd-btn quiet" onClick={() => setClearConfirm(true)}>Clear &amp; accept new jobs</button>
+              : <div className="rd-confirm"><b>Clear this from your active slot?</b>
+                  <div className="row"><button type="button" className="rd-btn ghost" onClick={() => setClearConfirm(false)}>No</button>
+                    <button type="button" className="rd-btn primary" onClick={handleForceClear} disabled={actionLoading === "clear"}>{actionLoading === "clear" ? "Clearing…" : "Yes, clear"}</button></div></div>)}
+          </>))}
+
+          {tab === "me" && (<>
+            <section className="rd-card rd-profile">
+              <div className="rd-av" aria-hidden="true">{rider.name.charAt(0).toUpperCase()}</div>
+              <h3>{rider.name}</h3><p>{vehicleLabel} · {rider.university}{isTestRider ? " · Test rider" : ""}</p>
+            </section>
+            <button type="button" className="rd-btn ghost" onClick={onSignOut}><AIcon name="logout" size={18} />Sign out</button>
+            {!showDeleteConfirm
+              ? <button type="button" className="rd-btn quiet" onClick={() => setShowDeleteConfirm(true)}>Delete rider account</button>
+              : <div className="rd-confirm"><b>Delete your rider account?</b><span>This is permanent and cannot be undone.</span>
+                  <div className="row"><button type="button" className="rd-btn ghost" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+                    <button type="button" className="rd-btn danger" onClick={handleDeleteAccount} disabled={deleteLoading}>{deleteLoading ? "Deleting…" : "Yes, delete"}</button></div></div>}
+          </>)}
+        </div>
       </div>
+
+      <nav className="rd-tabbar" aria-label="Rider navigation">
+        <button type="button" className={tab === "jobs" ? "on" : ""} onClick={() => setTab("jobs")}><AIcon name="package" size={21} /><span>Jobs</span>{jobs.length > 0 && <em>{jobs.length}</em>}</button>
+        <button type="button" className={tab === "active" ? "on" : ""} onClick={() => setTab("active")}><AIcon name="bike" size={21} /><span>Active</span>{activeDelivery && <i className="dot" aria-hidden="true" />}</button>
+        <button type="button" className={tab === "me" ? "on" : ""} onClick={() => setTab("me")}><AIcon name="user" size={21} /><span>Me</span></button>
+      </nav>
     </div>
   )
 }
+
