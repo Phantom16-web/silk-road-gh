@@ -17,6 +17,8 @@ import { NotificationBell } from "./NotificationCenter"
 import RiderAuth from "./RiderAuth"
 import RiderApp from "./RiderApp"
 import { getListings, getListing } from "./api"
+import "./Home.css"
+import { AIcon } from "./AccountIcons"
 import ProductCard from "./ProductCard"
 import ProductModal from "./ProductModal"
 import AdvancedSearch from "./AdvancedSearch"
@@ -154,74 +156,36 @@ function FooterModal({ type, onClose, siteSettings }) {
 // ── Footer ─────────────────────────────────────────────────────────────────────
 function Footer({ onOpen, siteSettings }) {
   return (
-    <footer style={{ background: "#0a0a0a", borderTop: "1px solid #1e1e1e", marginTop: "60px" }}>
-      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "48px 24px 24px" }}>
-        <div style={{ display: "flex", gap: "48px", flexWrap: "wrap", marginBottom: "40px" }}>
-          <div style={{ flex: 2, minWidth: "220px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-              <div style={{ width: "32px", height: "32px", background: "linear-gradient(135deg,#c8a97e,#9a7040)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>
-                🕸
-              </div>
-              <span style={{ fontSize: "20px", fontWeight: "700", color: "#c8a97e" }}>
-                Silk Road GH
-              </span>
-            </div>
-            <p style={{ fontSize: "13px", color: "#555", lineHeight: "1.7", maxWidth: "280px" }}>
-              {siteSettings.footerTagline}
-            </p>
+    <footer className="sr-footer">
+      <div className="sr-footer-in">
+        <div className="sr-fgrid">
+          <div>
+            <div className="sr-brand" style={{ cursor: "default" }}><span className="sr-logo">S</span><span><b>Silk Road GH</b></span></div>
+            <p>{siteSettings.footerTagline}</p>
           </div>
-          <div style={{ flex: 1, minWidth: "160px" }}>
-            <div style={{ fontSize: "12px", color: "#666", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "16px" }}>
-              Company
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <button onClick={() => onOpen("about")} style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit" }}>
-                About Silk Road
-              </button>
-              <button onClick={() => onOpen("privacy")} style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "14px", textAlign: "left", padding: 0, fontFamily: "inherit" }}>
-                Privacy Policy
-              </button>
-            </div>
+          <div>
+            <h5>Company</h5>
+            <ul>
+              <li><button className="sr-flink" onClick={() => onOpen("about")}>About Silk Road</button></li>
+              <li><button className="sr-flink" onClick={() => onOpen("privacy")}>Privacy Policy</button></li>
+            </ul>
           </div>
-          <div style={{ flex: 1, minWidth: "160px" }}>
-            <div style={{ fontSize: "12px", color: "#666", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "16px" }}>
-              Contact Us
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <a href={`tel:+${siteSettings.contactWhatsApp}`} style={{ color: "#c8a97e", fontSize: "14px", textDecoration: "none", fontWeight: "600" }}>
-                📞 {siteSettings.contactPhone}
-              </a>
-              <a href={`https://wa.me/${siteSettings.contactWhatsApp}`} target="_blank" rel="noreferrer" style={{ color: "#888", fontSize: "14px", textDecoration: "none" }}>
-                💬 WhatsApp Us
-              </a>
-            </div>
+          <div>
+            <h5>Contact us</h5>
+            <ul>
+              <li><a className="sr-flink" href={`tel:+${siteSettings.contactWhatsApp}`} style={{ color: "var(--sr-gold)", fontWeight: 700 }}>{siteSettings.contactPhone}</a></li>
+              <li><a className="sr-flink" href={`https://wa.me/${siteSettings.contactWhatsApp}`} target="_blank" rel="noreferrer">WhatsApp us</a></li>
+            </ul>
           </div>
-          <div style={{ flex: 1, minWidth: "160px" }}>
-            <div style={{ fontSize: "12px", color: "#666", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: "16px" }}>
-              Payments
+          <div>
+            <h5>Payments</h5>
+            <div className="sr-pay">
+              {[["MTN MoMo", "#ffcc00"], ["Telecel Cash", "#e60000"], ["AT Money", "#1e88e5"], ["Card", "#9aa4b2"]].map(([label, color]) => <span key={label}><i style={{ background: color }} />{label}</span>)}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                {[["MTN MoMo", "#ffcc00"], ["Telecel Cash", "#e60000"], ["AT Money", "#1e88e5"], ["Card", "#9aa4b2"]].map(([label, color]) => (
-                  <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "999px", padding: "6px 10px", fontSize: "11px", color: "#ccc" }}>
-                    <i style={{ width: "8px", height: "8px", borderRadius: "50%", background: color, display: "block" }} />{label}
-                  </span>
-                ))}
-              </div>
-              <div style={{ fontSize: "11px", color: "#555" }}>
-                Secured escrow payments
-              </div>
-            </div>
+            <p style={{ marginTop: 12 }}>Secured escrow payments: sellers are only paid once you confirm delivery.</p>
           </div>
         </div>
-        <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-          <div style={{ fontSize: "12px", color: "#444" }}>
-            © {new Date().getFullYear()} Silk Road GH. All rights reserved.
-          </div>
-          <div style={{ fontSize: "12px", color: "#444" }}>
-            Built for Ghanaian students 🇬🇭
-          </div>
-        </div>
+        <div className="sr-fbottom"><span>© {new Date().getFullYear()} Silk Road GH. All rights reserved.</span><span>Built for Ghanaian students</span></div>
       </div>
     </footer>
   )
@@ -229,38 +193,43 @@ function Footer({ onOpen, siteSettings }) {
 // ── Skeleton ───────────────────────────────────────────────────────────────────
 function ListingSkeleton() {
   return (
-    <div style={{ background: "#111", borderRadius: "12px", overflow: "hidden", border: "1px solid #1e1e1e" }}>
-      <style>{`@keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:.8} }`}</style>
-      <div style={{ width: "100%", height: "180px", background: "#1a1a1a", animation: "shimmer 1.5s ease infinite" }} />
-      <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
-        <div style={{ height: "10px", background: "#1a1a1a", borderRadius: "4px", width: "40%", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "16px", background: "#1a1a1a", borderRadius: "4px", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "10px", background: "#1a1a1a", borderRadius: "4px", width: "60%", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "24px", background: "#1a1a1a", borderRadius: "4px", width: "50%", animation: "shimmer 1.5s ease infinite" }} />
-        <div style={{ height: "36px", background: "#1a1a1a", borderRadius: "8px", animation: "shimmer 1.5s ease infinite" }} />
+    <div className="hm-skel" aria-hidden="true">
+      <i style={{ aspectRatio: "4/3" }} />
+      <div style={{ padding: 16, display: "grid", gap: 10 }}>
+        <i style={{ height: 14, borderRadius: 7, width: "85%" }} /><i style={{ height: 12, borderRadius: 6, width: "55%" }} />
+        <i style={{ height: 22, borderRadius: 8, width: "45%", marginTop: 6 }} /><i style={{ height: 44, borderRadius: 14, marginTop: 4 }} />
       </div>
     </div>
   )
 }
 
-// Authenticated identity: deliberately self-contained so App.jsx is the only replacement.
-function AccountIdentity({ user, onClick, compact = false }) {
+// Signed-in identity: a green-ringed chip that says "Signed in" in plain words.
+function AccountIdentity({ user, onClick }) {
   if (!user) return null
   const name = String(user.name || user.fullName || user.username || user.email?.split("@")[0] || "Member").trim()
   const firstName = name.split(/\s+/)[0]
   return (
-    <button type="button" className={`sr-identity ${compact ? "sr-identity--compact" : ""}`}
-      onClick={onClick} title={`Signed in as ${name}`}
-      aria-label={`Signed in as ${name}. Open your account`}>
-      <span className="sr-identity__avatar" aria-hidden="true">
-        {firstName.charAt(0).toUpperCase() || "S"}
-        <span className="sr-identity__online" />
-      </span>
-      <span className="sr-identity__copy">
-        <span className="sr-identity__eyebrow"><span className="sr-identity__dot" /> SIGNED IN · SILK ROAD</span>
-        <span className="sr-identity__name">Hi, {firstName}<span className="sr-identity__chevron">⌄</span></span>
-      </span>
+    <button type="button" className="sr-me" onClick={onClick} title={`Signed in as ${name}`} aria-label={`Signed in as ${name}. Open your account`}>
+      <span className="av" aria-hidden="true">{firstName.charAt(0).toUpperCase() || "S"}</span>
+      <span className="tx"><small>Signed in</small><b>{firstName}</b></span>
+      <AIcon name="chevron" size={16} />
     </button>
+  )
+}
+
+// Live exchange rate with a refresh that spins while it works and says how fresh the number is.
+function LiveRate({ rate, loading, at, onRefresh }) {
+  const [, force] = useState(0)
+  useEffect(() => { const t = setInterval(() => force(n => n + 1), 15000); return () => clearInterval(t) }, [])
+  const secs = at ? Math.max(0, Math.floor((Date.now() - at) / 1000)) : null
+  const age = secs == null ? "" : secs < 20 ? "just now" : secs < 3600 ? `${Math.floor(secs / 60) || 1}m ago` : "over an hour ago"
+  return (
+    <div className={`sr-rate ${loading ? "loading" : ""}`} role="status" aria-live="polite">
+      <span className="live"><i />{loading ? "UPDATING" : "LIVE"}</span>
+      <span className="val"><small>$1 =</small>₵{rate ? rate.toFixed(2) : "--"}</span>
+      {age && !loading && <span className="age">{age}</span>}
+      <button type="button" className={loading ? "spin" : ""} onClick={onRefresh} disabled={loading} aria-label="Refresh live exchange rate"><AIcon name="refresh" size={16} stroke={2.2} /></button>
+    </div>
   )
 }
 
@@ -268,11 +237,11 @@ function AccountIdentity({ user, onClick, compact = false }) {
 function App() {
   const [rate, setRate]                       = useState(null)
   const [rateLoading, setRateLoading]         = useState(true)
+  const [rateAt, setRateAt]                   = useState(null)
   const [cart, setCart]                       = useState([])
   const [cartOpen, setCartOpen]               = useState(false)
   const [checkoutOpen, setCheckoutOpen]       = useState(false)
   const [activePage, setActivePage]           = useState("buy")
-  const [mobileMenuOpen, setMobileMenuOpen]   = useState(false)
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [selectedSearchListing, setSelectedSearchListing] = useState(null)
   const [footerModal, setFooterModal]         = useState(null)
@@ -560,7 +529,8 @@ function App() {
         "https://open.er-api.com/v6/latest/USD"
       )
       setRate(res.data.rates.GHS)
-    } catch {}
+      setRateAt(Date.now())
+    } catch { /* keep the last known rate */ }
     setRateLoading(false)
   }
   useEffect(() => {
@@ -624,278 +594,120 @@ function App() {
     )
   }
   return (
-    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
-      <style>{`
-        @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+    <div className="sr-app">
+      <header className="sr-header">
+        <div className="sr-bar">
+          <button type="button" className="sr-brand" onClick={() => changePage("buy")} aria-label="Silk Road home">
+            <span className="sr-logo" aria-hidden="true">S</span>
+            <span><b>Silk Road</b><small>Student marketplace</small></span>
+          </button>
 
-        /* Marketplace grid: prevent the 130px desktop-card regression. */
-        .sr-listing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        @media (min-width: 700px) { .sr-listing-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-        @media (min-width: 1050px) { .sr-listing-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-        @media (max-width: 420px) { .sr-listing-grid { gap: 10px !important; } }
-
-        /* Premium signed-in identity, desktop and mobile */
-        .sr-identity { display:inline-flex;align-items:center;gap:10px;max-width:220px;min-width:0;padding:6px 12px 6px 6px;border:1px solid #c8a97e55;border-radius:15px;background:linear-gradient(135deg,#29231b 0%,#141414 65%,#101010 100%);color:#f8f2e9;cursor:pointer;text-align:left;box-shadow:0 2px 14px #0005,inset 0 1px #ffffff0b;transition:transform .18s,border-color .18s,box-shadow .18s;flex-shrink:0; }
-        .sr-identity:hover,.sr-identity:focus-visible { border-color:#c8a97e;box-shadow:0 0 0 3px #c8a97e22;transform:translateY(-1px); }
-        .sr-identity__avatar { position:relative;flex:none;width:37px;height:37px;border-radius:12px;background:linear-gradient(135deg,#f1d5a5,#b38b51);color:#1b140d;display:grid;place-items:center;font-size:17px;font-weight:850;box-shadow:inset 0 1px #fff6; }
-        .sr-identity__online { position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;background:#22c55e;border:2px solid #161616;border-radius:50%; }
-        .sr-identity__copy { display:flex;flex-direction:column;gap:2px;min-width:0; }
-        .sr-identity__eyebrow { color:#d5bd95;font-size:8px;font-weight:800;letter-spacing:.1em;white-space:nowrap; }
-        .sr-identity__dot { display:inline-block;width:5px;height:5px;margin-right:3px;border-radius:50%;background:#22c55e;vertical-align:middle; }
-        .sr-identity__name { font-size:13px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px; }
-        .sr-identity__chevron { margin-left:7px;color:#c8a97e; }
-        .sr-identity--compact { padding:4px 7px 4px 4px;border-radius:13px;max-width:160px;gap:7px; }
-        .sr-identity--compact .sr-identity__avatar { width:32px;height:32px;border-radius:10px;font-size:14px; }
-        .sr-identity--compact .sr-identity__eyebrow { font-size:7px; }
-        .sr-identity--compact .sr-identity__name { font-size:11px;max-width:105px; }
-        @media(max-width:640px) { .sr-mobile-controls { gap:5px;min-width:0; } .sr-mobile-controls > button { flex-shrink:0; } .sr-topbar { gap:6px; } }
-        @media(max-width:360px) { .sr-identity--compact { max-width:125px; } .sr-identity--compact .sr-identity__eyebrow { display:none; } .sr-identity--compact .sr-identity__name { max-width:70px; } }
-        @media(prefers-reduced-motion:reduce) { .sr-identity { transition:none; } }
-        .sr-desktop-actions { display: flex; align-items: center; gap: 6px; }
-        .sr-mobile-controls { display: none; align-items: center; gap: 8px; }
-        .sr-mobile-menu { display: none; }
-        .sr-mobile-action { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px; background: #151515; border: 1px solid #292929; border-radius: 9px; color: #eee; text-align: left; font: inherit; cursor: pointer; }
-        .sr-mobile-action-primary { color: #c8a97e; font-weight: 700; }
-        @media (max-width: 640px) {
-          .sr-desktop-actions { display: none !important; }
-          .sr-mobile-controls { display: flex; }
-          .sr-mobile-menu { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: #0d0d0d; border-bottom: 1px solid #292929; }
-          .sr-topbar { padding: 10px 12px !important; }
-          .sr-brand { font-size: 18px !important; }
-          .sr-nav-links { padding: 0 10px !important; }
-          .sr-nav-links button { padding: 11px 12px !important; font-size: 12px !important; }
-          .sr-search-wrap { padding: 8px 12px 10px !important; }
-        }
-      `}</style>
-      {/* ── NAVBAR ── */}
-      <nav style={{ position: "sticky", top: 0, zIndex: 90 }}>
-        <div className="sr-topbar" style={{ background: "#0a0a0a", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1a1a1a" }}>
-          <h1
-            className="sr-brand"
-            onClick={() => { changePage("buy"); setMobileMenuOpen(false) }}
-            style={{ color: "#c8a97e", fontWeight: "bold", fontSize: "20px", flexShrink: 0, cursor: "pointer", margin: 0 }}
-          >
-            Silk Road
-          </h1>
-          <div className="sr-desktop-actions" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <button
-              onClick={() => setShowSell(true)}
-              style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "8px 12px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", whiteSpace: "nowrap" }}
-            >
-              + Sell
-            </button>
-            <button
-              onClick={() => setShowRiderAuth(true)}
-              style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
-              title="Rider Login"
-            >
-              🛵
-            </button>
-            <button
-              onClick={() => setShowTracker(true)}
-              style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "7px 10px", borderRadius: "8px", cursor: "pointer", fontSize: "16px" }}
-              title="Track Order"
-            >
-              📦
-            </button>
-            {user && (
-              <NotificationBell
-                sellerId={user._id}
-                onClick={() => setShowAccount(true)}
-              />
-            )}
-            {user ? (
-              <AccountIdentity user={user} onClick={() => setShowAccount(true)} />
-            ) : (
-              <button
-                onClick={() => setShowAuth(true)}
-                style={{ background: "#c8a97e", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", whiteSpace: "nowrap" }}
-              >
-                Sign In
+          <div className="sr-search" ref={searchRef}>
+            <span className="lead"><AIcon name="search" size={18} /></span>
+            <input
+              type="search"
+              placeholder="Search products, rentals, services..."
+              aria-label="Search the marketplace"
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); setShowDropdown(true) }}
+              onKeyDown={handleSearchKey}
+              onFocus={() => searchQuery.trim() && setShowDropdown(true)}
+            />
+            {searchQuery && (
+              <button type="button" className="clear" aria-label="Clear search" onClick={() => { setSearchQuery(""); setShowDropdown(false); setShowFullResults(false); if (route.name === "search") goBackOrHome() }}>
+                <AIcon name="close" size={14} stroke={2.4} />
               </button>
             )}
-            <button
-              onClick={() => setCartOpen(true)}
-              style={{ position: "relative", background: "transparent", border: "none", color: "#fff", fontSize: "22px", cursor: "pointer", padding: "4px" }}
-            >
-              🛒
-              {cartCount > 0 && (
-                <span style={{ position: "absolute", top: "-2px", right: "-2px", background: "#c8a97e", color: "#000", fontSize: "9px", fontWeight: "800", borderRadius: "50%", width: "16px", height: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {cartCount}
-                </span>
-              )}
-            </button>
+            {showDropdown && searchQuery.trim() && dropdownResults.length > 0 && (
+              <div className="sr-drop" role="listbox">
+                {dropdownResults.map(item => (
+                  <div key={item.id} className="sr-drop-item" role="option" onClick={() => { setShowDropdown(false); openListing(item.id) }}>
+                    <img src={item.image || "/favicon.svg"} alt="" />
+                    <div className="t"><b>{item.title}</b><span>{item.category}</span></div>
+                    <span className="sr-tag" style={{ "--c": SECTION_COLOR[item.section] }}>{SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}</span>
+                  </div>
+                ))}
+                <div className="sr-drop-more" onClick={openSearchResults}>See all results →</div>
+              </div>
+            )}
+            {showDropdown && searchQuery.trim() && dropdownResults.length === 0 && (
+              <div className="sr-drop"><div className="sr-drop-empty">{searchLoading ? "Searching..." : `No results for "${searchQuery}"`}</div></div>
+            )}
           </div>
-          <div className="sr-mobile-controls">
-            {user && <AccountIdentity user={user} compact onClick={() => setShowAccount(true)} />}
-            <button
-              onClick={() => setCartOpen(true)}
-              aria-label={`Open cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}
-              style={{ position: "relative", background: "transparent", border: "1px solid #333", borderRadius: "8px", color: "#fff", fontSize: "21px", cursor: "pointer", padding: "6px 9px", minWidth: "42px", minHeight: "40px" }}
-            >
-              🛒
-              {cartCount > 0 && <span style={{ position: "absolute", top: "-4px", right: "-4px", background: "#c8a97e", color: "#000", fontSize: "9px", fontWeight: "800", borderRadius: "50%", width: "16px", height: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>{cartCount}</span>}
+
+          <div className="sr-actions">
+            <button type="button" className="sr-sell" onClick={() => setShowSell(true)}><AIcon name="plus" size={17} stroke={2.6} />Sell</button>
+            <button type="button" className="sr-icon hide-m" onClick={() => setShowTracker(true)} title="Track an order" aria-label="Track an order"><AIcon name="pin" size={19} /></button>
+            <button type="button" className="sr-icon hide-m" onClick={() => setShowRiderAuth(true)} title="Rider login" aria-label="Rider login"><AIcon name="bike" size={19} /></button>
+            {user && <NotificationBell sellerId={user._id} onClick={() => setShowAccount(true)} />}
+            <button type="button" className="sr-icon" onClick={() => setCartOpen(true)} aria-label={`Open cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}>
+              <AIcon name="cart" size={19} />
+              {cartCount > 0 && <span className="count" key={cartCount}>{cartCount}</span>}
             </button>
-            <button
-              onClick={() => setMobileMenuOpen(open => !open)}
-              aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
-              aria-expanded={mobileMenuOpen}
-              style={{ background: mobileMenuOpen ? "#292929" : "#151515", border: "1px solid #333", borderRadius: "8px", color: "#eee", fontSize: "21px", cursor: "pointer", padding: "6px 10px", minWidth: "42px", minHeight: "40px" }}
-            >
-              {mobileMenuOpen ? "✕" : "☰"}
-            </button>
+            {user ? <AccountIdentity user={user} onClick={() => setShowAccount(true)} />
+              : <button type="button" className="sr-signin" onClick={() => setShowAuth(true)}><AIcon name="user" size={17} />Sign in</button>}
           </div>
         </div>
-        {mobileMenuOpen && (
-          <div className="sr-mobile-menu">
-            <button className="sr-mobile-action sr-mobile-action-primary" onClick={() => { setShowSell(true); setMobileMenuOpen(false) }}>＋ Sell an item</button>
-            <button className="sr-mobile-action" onClick={() => { setShowTracker(true); setMobileMenuOpen(false) }}>📦 Track an order</button>
-            <button className="sr-mobile-action" onClick={() => { setShowRiderAuth(true); setMobileMenuOpen(false) }}>🛵 Rider login</button>
-            {user ? (
-              <button className="sr-mobile-action" onClick={() => { setShowAccount(true); setMobileMenuOpen(false) }}>👤 My account ({user.name})</button>
-            ) : (
-              <button className="sr-mobile-action sr-mobile-action-primary" onClick={() => { setShowAuth(true); setMobileMenuOpen(false) }}>↪ Sign in / Create account</button>
-            )}
-            {user && <button className="sr-mobile-action" onClick={() => { setShowAccount(true); setMobileMenuOpen(false) }}>🔔 Notifications</button>}
-          </div>
-        )}
-        <div style={{ background: "#111", borderBottom: "1px solid #1e1e1e" }}>
-          <div className="sr-nav-links" style={{ padding: "0 16px", display: "flex", gap: "4px", overflowX: "auto" }}>
-            {[
-              { label: "Buy Products", page: "buy" },
-              { label: "Rent Items", page: "rent" },
-              { label: "Request Service", page: "service" },
-            ].map(link => (
-              <button
-                key={link.page}
-                onClick={() => { changePage(link.page); setMobileMenuOpen(false) }}
-                style={{ background: "transparent", border: "none", color: activePage === link.page ? "#c8a97e" : "#aaa", cursor: "pointer", fontSize: "13px", fontWeight: "600", borderBottom: activePage === link.page ? "2px solid #c8a97e" : "2px solid transparent", padding: "12px 14px", whiteSpace: "nowrap", fontFamily: "inherit" }}
-              >
-                {link.label}
-              </button>
-            ))}
-          </div>
-          <div className="sr-search-wrap" style={{ padding: "8px 16px 12px" }}>
-            <div ref={searchRef} style={{ position: "relative" }}>
-              <input
-                placeholder="Search products, rentals, services..."
-                value={searchQuery}
-                onChange={e => {
-                  setSearchQuery(e.target.value)
-                  setShowDropdown(true)
-                }}
-                onKeyDown={handleSearchKey}
-                onFocus={() =>
-                  searchQuery.trim() && setShowDropdown(true)
-                }
-                style={{ width: "100%", padding: "10px 36px 10px 14px", borderRadius: "8px", border: "none", background: "#1e1e1e", color: "#fff", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
-              />
-              {searchQuery ? (
-                <button
-                  onClick={() => {
-                    setSearchQuery("")
-                    setShowDropdown(false)
-                    setShowFullResults(false)
-                    if (route.name === "search") goBackOrHome()
-                  }}
-                  style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "15px" }}
-                >
-                  ✕
-                </button>
-              ) : (
-                <span style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "15px", opacity: .4, pointerEvents: "none" }}>
-                  🔍
-                </span>
-              )}
-              {showDropdown &&
-                searchQuery.trim() &&
-                dropdownResults.length > 0 && (
-                  <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,.6)" }}>
-                    {dropdownResults.map(item => (
-                      <div
-                        key={item.id}
-                        onClick={() => {
-                          setShowDropdown(false)
-                          openListing(item.id)
-                        }}
-                        style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #222" }}
-                        onMouseEnter={e =>
-                          e.currentTarget.style.background = "#222"
-                        }
-                        onMouseLeave={e =>
-                          e.currentTarget.style.background = "transparent"
-                        }
-                      >
-                        <img
-                          src={item.image || "/favicon.svg"}
-                          alt={item.title}
-                          style={{ width: "34px", height: "34px", borderRadius: "6px", objectFit: "cover", flexShrink: 0 }}
-                        />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: "13px", fontWeight: "600", color: "#f0ede8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {item.title}
-                          </div>
-                          <div style={{ fontSize: "11px", color: "#555" }}>
-                            {item.category}
-                          </div>
-                        </div>
-                        <span style={{ fontSize: "10px", fontWeight: "700", color: SECTION_COLOR[item.section], background: `${SECTION_COLOR[item.section]}22`, padding: "2px 8px", borderRadius: "20px", flexShrink: 0 }}>
-                          {SECTION_LABEL[item.section].split(" ").slice(1).join(" ")}
-                        </span>
-                      </div>
-                    ))}
-                    <div
-                      onClick={openSearchResults}
-                      style={{ padding: "10px 14px", textAlign: "center", fontSize: "13px", color: "#c8a97e", cursor: "pointer", fontWeight: "600" }}
-                      onMouseEnter={e =>
-                        e.currentTarget.style.background = "#222"
-                      }
-                      onMouseLeave={e =>
-                        e.currentTarget.style.background = "transparent"
-                      }
-                    >
-                      See all results →
-                    </div>
-                  </div>
-                )}
-              {showDropdown &&
-                searchQuery.trim() &&
-                dropdownResults.length === 0 && (
-                  <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "12px", zIndex: 500, padding: "14px", textAlign: "center", color: "#555", fontSize: "13px" }}>
-                    {searchLoading
-                      ? "⏳ Searching..."
-                      : `No results for "${searchQuery}"`}
-                  </div>
-                )}
+
+        <div className="sr-tabs" role="tablist" aria-label="Marketplace sections">
+          {[["buy", "Buy", "bag"], ["rent", "Rent", "calendar"], ["service", "Services", "tool"]].map(([page, label, icon]) => (
+            <button key={page} type="button" role="tab" aria-selected={activePage === page} className={`sr-tab ${activePage === page ? "on" : ""}`} onClick={() => changePage(page)}>
+              <AIcon name={icon} size={16} />{label}
+            </button>
+          ))}
+        </div>
+
+        {user && (
+          <div className="sr-welcome" role="status">
+            <div>
+              <span className="pulse" aria-hidden="true" />
+              <span>You’re signed in as <b>{String(user.name || user.email || "you").split(" ")[0]}</b><span className="long">{user.university ? ` · ${user.university}` : ""}</span></span>
+              <button type="button" onClick={() => setShowAccount(true)}>My account <AIcon name="arrow" size={14} stroke={2.4} /></button>
             </div>
           </div>
-        </div>
-      </nav>
+        )}
+      </header>
       {/* ── PAGES ── */}
       <div style={{ flex: 1 }}>
         {activePage === "buy" && (
-          <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: rateLoading ? "#444" : "#22c55e", animation: rateLoading ? "none" : "livePulse 2s ease infinite", flexShrink: 0 }} />
-                <span style={{ color: "#666", fontSize: "13px" }}>
-                  {rateLoading
-                    ? "Fetching live rate..."
-                    : `$1 USD = ₵${rate?.toFixed(2)} GHS`}
-                </span>
+          <div className="sr-wrap">
+            <section className="sr-hero">
+              <span className="orb o1" aria-hidden="true" /><span className="orb o2" aria-hidden="true" />
+              <div className="sr-hero-in">
+                {user ? (<>
+                  <span className="sr-eyebrow">Welcome back</span>
+                  <h2>Hi {String(user.name || "there").split(" ")[0]}, <em>what are you after today?</em></h2>
+                  <p>Pick up where you left off, check an order, or list something to sell.</p>
+                  <div className="sr-quick">
+                    <button type="button" onClick={() => setShowAccount(true)}><span className="ic"><AIcon name="user" size={19} /></span>My account</button>
+                    <button type="button" onClick={() => setShowTracker(true)}><span className="ic"><AIcon name="pin" size={19} /></span>Track an order</button>
+                    <button type="button" onClick={() => setShowSell(true)}><span className="ic"><AIcon name="plus" size={19} stroke={2.6} /></span>Sell an item</button>
+                  </div>
+                </>) : (<>
+                  <span className="sr-eyebrow">Ghana’s campus marketplace</span>
+                  <h2>Buy, sell and rent <em>anything on campus.</em></h2>
+                  <p>Trusted student sellers, safe escrow payments with Mobile Money, and verified riders to bring it to your door.</p>
+                  <div className="sr-cta">
+                    <button type="button" className="sr-btn primary" onClick={() => document.getElementById("sr-listings")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Start shopping <AIcon name="arrow" size={18} stroke={2.4} /></button>
+                    <button type="button" className="sr-btn ghost" onClick={() => setShowAuth(true)}>Create free account</button>
+                  </div>
+                  <div className="sr-trust">
+                    <span><AIcon name="shield" size={15} />Escrow protected</span>
+                    <span><AIcon name="bike" size={15} />Verified riders</span>
+                    <span><AIcon name="phone" size={15} />Pay with MoMo</span>
+                  </div>
+                </>)}
               </div>
-              <button
-                onClick={fetchRate}
-                style={{ background: "#1e1e1e", border: "1px solid #333", color: "#c8a97e", padding: "4px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}
-              >
-                ↻ Refresh
-              </button>
+            </section>
+
+            <div className="sr-sectionhead" id="sr-listings">
+              <div><h3>Fresh on the marketplace</h3><p>Handpicked by students, delivered to your hostel.</p></div>
+              <LiveRate rate={rate} loading={rateLoading} at={rateAt} onRefresh={fetchRate} />
             </div>
-            <div className="sr-listing-grid" style={{ display: "grid", gap: "16px", minWidth: 0 }}>
+
+            <div className="sr-listing-grid">
               {listingsLoading
-                ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
-                    <ListingSkeleton key={i} />
-                  ))
+                ? Array.from({ length: PAGE_SIZE }).map((_, i) => <ListingSkeleton key={i} />)
                 : displayListings.map(item => (
                     <ProductCard
                       key={getItemId(item)}
@@ -906,16 +718,8 @@ function App() {
                     />
                   ))}
             </div>
-            {loadingMore && (
-              <div style={{ padding: "32px 0", textAlign: "center", color: "#555", fontSize: "13px" }}>
-                ⏳ Loading more listings...
-              </div>
-            )}
-            {!hasMore && displayListings.length > PAGE_SIZE && (
-              <div style={{ padding: "24px 0", textAlign: "center", color: "#333", fontSize: "12px" }}>
-                You've seen all listings
-              </div>
-            )}
+            {loadingMore && <div className="sr-more">Loading more listings...</div>}
+            {!hasMore && displayListings.length > PAGE_SIZE && <div className="sr-more">You’ve seen all listings</div>}
           </div>
         )}
         {activePage === "rent" && <RentItems key={`rent-${pageEpoch}`} rate={rate} initialListing={selectedSearchListing?.type === "rent" ? selectedSearchListing : null} />}
@@ -1052,115 +856,56 @@ function App() {
         />
       )}
       {cartOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex" }}>
-          <div
-            onClick={() => setCartOpen(false)}
-            style={{ flex: 1, background: "#000000aa" }}
-          />
-          <div style={{ width: "340px", background: "#111", borderLeft: "1px solid #1e1e1e", display: "flex", flexDirection: "column", height: "100vh", animation: "slideIn 0.3s ease" }}>
-            <style>{`@keyframes slideIn { from { transform: translateX(100%) } to { transform: translateX(0) } }`}</style>
-            <div style={{ padding: "20px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "18px", fontWeight: "700" }}>
-                Your Cart ({cartCount})
-              </span>
-              <button
-                onClick={() => setCartOpen(false)}
-                style={{ background: "transparent", border: "none", color: "#666", fontSize: "22px", cursor: "pointer" }}
-              >
-                ✕
-              </button>
-            </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+        <div className="sr-cart-layer" role="presentation">
+          <div className="sr-cart-backdrop" onClick={() => setCartOpen(false)} />
+          <aside className="sr-cart" role="dialog" aria-modal="true" aria-label="Your cart">
+            <header>
+              <div><h3>Your cart</h3><small>{cartCount === 0 ? "Nothing here yet" : `${cartCount} ${cartCount === 1 ? "item" : "items"}`}</small></div>
+              <button type="button" className="sr-x" onClick={() => setCartOpen(false)} aria-label="Close cart"><AIcon name="close" size={18} /></button>
+            </header>
+            <div className="sr-cart-list">
               {cart.length === 0 ? (
-                <div style={{ textAlign: "center", color: "#555", paddingTop: "60px" }}>
-                  <div style={{ fontSize: "40px", marginBottom: "12px" }}>
-                    🛒
-                  </div>
-                  <div>Your cart is empty</div>
+                <div className="sr-cart-empty">
+                  <div className="art"><AIcon name="cart" size={32} /></div>
+                  <b>Your cart is empty</b>
+                  <span>Find something you love and it will show up here.</span>
+                  <button type="button" className="sr-btn primary" style={{ marginTop: 8 }} onClick={() => setCartOpen(false)}>Keep browsing</button>
                 </div>
-              ) : (
-                cart.map(item => {
-                  const itemId    = getItemId(item)
-                  const itemPrice = item.price || item.dailyRate || 0
-                  const itemImage = item.image || `https://picsum.photos/seed/${item.id}/300/200`
-                  return (
-                    <div
-                      key={itemId}
-                      style={{ display: "flex", gap: "12px", padding: "14px 0", borderBottom: "1px solid #1e1e1e", alignItems: "center" }}
-                    >
-                      <img
-                        src={itemImage}
-                        alt={item.title}
-                        style={{ width: "56px", height: "56px", objectFit: "cover", borderRadius: "8px" }}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px" }}>
-                          {item.title}
+              ) : cart.map(item => {
+                const itemId = getItemId(item)
+                const itemPrice = item.price || item.dailyRate || 0
+                const itemImage = item.image || `https://picsum.photos/seed/${item.id}/300/200`
+                return (
+                  <div key={itemId} className="sr-line">
+                    <img src={itemImage} alt="" />
+                    <div>
+                      <b>{item.title}</b>
+                      <div className="p">₵{(itemPrice * item.qty).toLocaleString()}<small>${(itemPrice * item.qty / (rate || 1)).toFixed(2)}</small></div>
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <div className="sr-qty">
+                          <button type="button" onClick={() => updateQty(itemId, -1)} aria-label="Decrease quantity">−</button>
+                          <span>{item.qty}</span>
+                          <button type="button" onClick={() => updateQty(itemId, 1)} aria-label="Increase quantity">+</button>
                         </div>
-                        <div style={{ fontSize: "13px", color: "#c8a97e", fontWeight: "700" }}>
-                          ₵{(itemPrice * item.qty).toLocaleString()}
-                          <span style={{ color: "#555", fontWeight: "400" }}>
-                            {" "}
-                            (${(itemPrice * item.qty / (rate || 1)).toFixed(2)})
-                          </span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
-                          <button
-                            onClick={() => updateQty(itemId, -1)}
-                            style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}
-                          >
-                            −
-                          </button>
-                          <span style={{ fontSize: "13px" }}>
-                            {item.qty}
-                          </span>
-                          <button
-                            onClick={() => updateQty(itemId, 1)}
-                            style={{ width: "26px", height: "26px", background: "#1e1e1e", border: "1px solid #333", color: "#fff", borderRadius: "6px", cursor: "pointer" }}
-                          >
-                            +
-                          </button>
-                          <button
-                            onClick={() => removeItem(itemId)}
-                            style={{ marginLeft: "8px", background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: "12px" }}
-                          >
-                            Remove
-                          </button>
-                        </div>
+                        <button type="button" className="rm" onClick={() => removeItem(itemId)}>Remove</button>
                       </div>
                     </div>
-                  )
-                })
-              )}
+                  </div>
+                )
+              })}
             </div>
             {cart.length > 0 && (
-              <div style={{ padding: "20px", borderTop: "1px solid #1e1e1e" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
-                  <span style={{ color: "#888" }}>
-                    Total
-                  </span>
-                  <span style={{ fontSize: "18px", fontWeight: "700", color: "#c8a97e" }}>
-                    ₵{cartTotal.toLocaleString()}
-                    <span style={{ fontSize: "13px", color: "#555" }}>
-                      {" "}
-                      (${(cartTotal / (rate || 1)).toFixed(2)})
-                    </span>
-                  </span>
-                </div>
-                <button
-                  onClick={() => {
-                    setCartOpen(false)
-                    setCheckoutOpen(true)
-                  }}
-                  style={{ width: "100%", background: "#c8a97e", border: "none", padding: "14px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}
-                >
-                  Checkout
-                </button>
-              </div>
+              <footer>
+                <div className="sr-total"><span>Total</span><b>₵{cartTotal.toLocaleString()}</b></div>
+                <div className="sr-usd">≈ ${(cartTotal / (rate || 1)).toFixed(2)} USD</div>
+                <button type="button" className="sr-btn primary" onClick={() => { setCartOpen(false); setCheckoutOpen(true) }}>Checkout <AIcon name="arrow" size={18} stroke={2.4} /></button>
+                <div className="sr-secure"><AIcon name="lock" size={13} />Escrow protected · pay with MoMo</div>
+              </footer>
             )}
-          </div>
+          </aside>
         </div>
       )}
+
       {checkoutOpen && (
         <Checkout
           cart={trackedOrder?.cart || cart}
@@ -1175,6 +920,15 @@ function App() {
           onOrderPlaced={() => setCart([])}
         />
       )}
+      <nav className="sr-bottom" aria-label="Main navigation">
+        <button type="button" className={activePage === "buy" ? "on" : ""} onClick={() => changePage("buy")}><AIcon name="home" size={21} /><span>Shop</span></button>
+        <button type="button" className={activePage === "rent" ? "on" : ""} onClick={() => changePage("rent")}><AIcon name="calendar" size={21} /><span>Rent</span></button>
+        <button type="button" className="sell" onClick={() => setShowSell(true)} aria-label="Sell an item"><AIcon name="plus" size={24} stroke={2.8} /><span>Sell</span></button>
+        <button type="button" className={activePage === "service" ? "on" : ""} onClick={() => changePage("service")}><AIcon name="tool" size={21} /><span>Services</span></button>
+        <button type="button" onClick={() => (user ? setShowAccount(true) : setShowAuth(true))}>
+          <AIcon name="user" size={21} /><span>{user ? "Me" : "Sign in"}</span>{user && <i className="dot" aria-hidden="true" />}
+        </button>
+      </nav>
       <ToastContainer />
     </div>
   )
