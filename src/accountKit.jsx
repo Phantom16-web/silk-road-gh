@@ -4,7 +4,7 @@ import { cedi, cediShort, useCountUp } from "./accountUtils"
 export const CountMoney = ({ value, short }) => { const v = useCountUp(value); return <>{short ? cediShort(v) : cedi(v)}</> }
 
 // Smooth area chart (inline SVG, no library). points: [{label, value}]
-export function AreaChart({ points, height = 170 }) {
+export function AreaChart({ points, height = 170, format = cedi }) {
   const w = 560, pad = 8, max = Math.max(1, ...points.map(p => p.value))
   const x = i => pad + (i * (w - pad * 2)) / Math.max(1, points.length - 1)
   const y = v => height - 22 - (v / max) * (height - 44)
@@ -26,7 +26,7 @@ export function AreaChart({ points, height = 170 }) {
       <line x1={x(active)} x2={x(active)} y1="6" y2={height - 22} className="cursor" />
       <circle cx={x(active)} cy={y(points[active]?.value || 0)} r="5" className="dot" />
     </svg>
-    <div className="ac-chart-tip"><b>{cedi(points[active]?.value)}</b><span>{points[active]?.label}</span></div>
+    <div className="ac-chart-tip"><b>{format(points[active]?.value)}</b><span>{points[active]?.label}</span></div>
     <div className="ac-chart-axis"><span>{points[0]?.label}</span><span>{points[points.length - 1]?.label}</span></div>
   </div>
 }
@@ -48,8 +48,8 @@ export function Donut({ parts, center }) {
   </div>
 }
 
-export function Bars({ rows }) {
+export function Bars({ rows, format = cedi }) {
   const max = Math.max(1, ...rows.map(r => r.value))
-  return <ul className="ac-bars">{rows.map(r => <li key={r.label}><span title={r.label}>{r.label}</span><div><i style={{ width: `${Math.max(6, (r.value / max) * 100)}%` }} /></div><b>{cedi(r.value)}</b></li>)}</ul>
+  return <ul className="ac-bars">{rows.map(r => <li key={r.label}><span title={r.label}>{r.label}</span><div><i style={{ width: `${Math.max(6, (r.value / max) * 100)}%` }} /></div><b>{format(r.value)}</b></li>)}</ul>
 }
 
