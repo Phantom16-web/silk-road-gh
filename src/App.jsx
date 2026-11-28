@@ -19,6 +19,7 @@ import RiderApp from "./RiderApp"
 import { getListings, getListing } from "./api"
 import "./Home.css"
 import { AIcon } from "./AccountIcons"
+import HeroArt from "./HeroArt"
 import ProductCard from "./ProductCard"
 import ProductModal from "./ProductModal"
 import AdvancedSearch from "./AdvancedSearch"
@@ -191,10 +192,12 @@ function Footer({ onOpen, siteSettings }) {
   )
 }
 // ── Skeleton ───────────────────────────────────────────────────────────────────
+const CATEGORY_ICONS = { All: "grid", Electronics: "bolt", Fashion: "bag", Food: "heart", Books: "package", Beauty: "sparkle", Appliances: "gear", Furniture: "store", Sports: "trend", Services: "tool" }
+
 function ListingSkeleton() {
   return (
     <div className="hm-skel" aria-hidden="true">
-      <i style={{ aspectRatio: "4/3" }} />
+      <i style={{ height: 250 }} />
       <div style={{ padding: 16, display: "grid", gap: 10 }}>
         <i style={{ height: 14, borderRadius: 7, width: "85%" }} /><i style={{ height: 12, borderRadius: 6, width: "55%" }} />
         <i style={{ height: 22, borderRadius: 8, width: "45%", marginTop: 6 }} /><i style={{ height: 44, borderRadius: 14, marginTop: 4 }} />
@@ -238,6 +241,9 @@ function App() {
   const [rate, setRate]                       = useState(null)
   const [rateLoading, setRateLoading]         = useState(true)
   const [rateAt, setRateAt]                   = useState(null)
+  const [activeCategory, setActiveCategory]   = useState("All")
+  const [favs, setFavs]                       = useState(() => { try { return JSON.parse(localStorage.getItem("silkroad_favs") || "[]") } catch { return [] } })
+  const toggleFav = id => setFavs(prev => { const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]; try { localStorage.setItem("silkroad_favs", JSON.stringify(next)) } catch { /* private mode */ } return next })
   const [cart, setCart]                       = useState([])
   const [cartOpen, setCartOpen]               = useState(false)
   const [checkoutOpen, setCheckoutOpen]       = useState(false)
@@ -593,6 +599,13 @@ function App() {
       </>
     )
   }
+  const categoryList = (() => {
+    const counts = {}
+    displayListings.forEach(i => { const c = (i.category || "").trim(); if (c) counts[c] = (counts[c] || 0) + 1 })
+    return [["All", displayListings.length], ...Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12)]
+  })()
+  const shownListings = activeCategory === "All" ? displayListings : displayListings.filter(i => (i.category || "").trim() === activeCategory)
+
   return (
     <div className="sr-app">
       <header className="sr-header">
@@ -636,19 +649,21 @@ function App() {
           </div>
 
           <div className="sr-actions">
+            <button type="button" className="sr-link" onClick={() => setShowTracker(true)}><AIcon name="pin" size={17} />Track order</button>
+            <button type="button" className="sr-link" onClick={() => setShowRiderAuth(true)}><AIcon name="bike" size={17} />Ride with us</button>
             <button type="button" className="sr-sell" onClick={() => setShowSell(true)}><AIcon name="plus" size={17} stroke={2.6} />Sell</button>
-            <button type="button" className="sr-icon hide-m" onClick={() => setShowTracker(true)} title="Track an order" aria-label="Track an order"><AIcon name="pin" size={19} /></button>
-            <button type="button" className="sr-icon hide-m" onClick={() => setShowRiderAuth(true)} title="Rider login" aria-label="Rider login"><AIcon name="bike" size={19} /></button>
-            {user && <NotificationBell sellerId={user._id} onClick={() => setShowAccount(true)} />}
-            <button type="button" className="sr-icon" onClick={() => setCartOpen(true)} aria-label={`Open cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}>
-              <AIcon name="cart" size={19} />
-              {cartCount > 0 && <span className="count" key={cartCount}>{cartCount}</span>}
+            <button type="button" className="sr-cartbtn" onClick={() => setCartOpen(true)} aria-label={`Open cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}>
+              <AIcon name="cart" size={18} /><span className="lbl">Cart</span>
+              {cartCount > 0 && <span className="n" key={cartCount}>{cartCount}</span>}
             </button>
+            {user && <NotificationBell sellerId={user._id} onClick={() => setShowAccount(true)} />}
             {user ? <AccountIdentity user={user} onClick={() => setShowAccount(true)} />
               : <button type="button" className="sr-signin" onClick={() => setShowAuth(true)}><AIcon name="user" size={17} />Sign in</button>}
           </div>
         </div>
+      </header>
 
+      <div className="sr-subnav">
         <div className="sr-tabs" role="tablist" aria-label="Marketplace sections">
           {[["buy", "Buy", "bag"], ["rent", "Rent", "calendar"], ["service", "Services", "tool"]].map(([page, label, icon]) => (
             <button key={page} type="button" role="tab" aria-selected={activePage === page} className={`sr-tab ${activePage === page ? "on" : ""}`} onClick={() => changePage(page)}>
@@ -666,39 +681,54 @@ function App() {
             </div>
           </div>
         )}
-      </header>
+      </div>
       {/* ── PAGES ── */}
       <div style={{ flex: 1 }}>
         {activePage === "buy" && (
           <div className="sr-wrap">
             <section className="sr-hero">
               <span className="orb o1" aria-hidden="true" /><span className="orb o2" aria-hidden="true" />
-              <div className="sr-hero-in">
-                {user ? (<>
-                  <span className="sr-eyebrow">Welcome back</span>
-                  <h2>Hi {String(user.name || "there").split(" ")[0]}, <em>what are you after today?</em></h2>
-                  <p>Pick up where you left off, check an order, or list something to sell.</p>
-                  <div className="sr-quick">
-                    <button type="button" onClick={() => setShowAccount(true)}><span className="ic"><AIcon name="user" size={19} /></span>My account</button>
-                    <button type="button" onClick={() => setShowTracker(true)}><span className="ic"><AIcon name="pin" size={19} /></span>Track an order</button>
-                    <button type="button" onClick={() => setShowSell(true)}><span className="ic"><AIcon name="plus" size={19} stroke={2.6} /></span>Sell an item</button>
-                  </div>
-                </>) : (<>
-                  <span className="sr-eyebrow">Ghana’s campus marketplace</span>
-                  <h2>Buy, sell and rent <em>anything on campus.</em></h2>
-                  <p>Trusted student sellers, safe escrow payments with Mobile Money, and verified riders to bring it to your door.</p>
-                  <div className="sr-cta">
-                    <button type="button" className="sr-btn primary" onClick={() => document.getElementById("sr-listings")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Start shopping <AIcon name="arrow" size={18} stroke={2.4} /></button>
-                    <button type="button" className="sr-btn ghost" onClick={() => setShowAuth(true)}>Create free account</button>
-                  </div>
-                  <div className="sr-trust">
-                    <span><AIcon name="shield" size={15} />Escrow protected</span>
-                    <span><AIcon name="bike" size={15} />Verified riders</span>
-                    <span><AIcon name="phone" size={15} />Pay with MoMo</span>
-                  </div>
-                </>)}
+              <div className="sr-hero-grid">
+                <div className="sr-hero-in">
+                  {user ? (<>
+                    <span className="sr-eyebrow">Welcome back</span>
+                    <h2>Hi {String(user.name || "there").split(" ")[0]}, <em>what are you after today?</em></h2>
+                    <p>Pick up where you left off, check an order, or list something to sell.</p>
+                    <div className="sr-quick">
+                      <button type="button" onClick={() => setShowAccount(true)}><span className="ic"><AIcon name="user" size={19} /></span>My account</button>
+                      <button type="button" onClick={() => setShowTracker(true)}><span className="ic"><AIcon name="pin" size={19} /></span>Track an order</button>
+                      <button type="button" onClick={() => setShowSell(true)}><span className="ic"><AIcon name="plus" size={19} stroke={2.6} /></span>Sell an item</button>
+                    </div>
+                  </>) : (<>
+                    <span className="sr-eyebrow">Ghana’s campus marketplace</span>
+                    <h2>Buy, sell and rent <em>anything on campus.</em></h2>
+                    <p>Trusted student sellers, safe escrow payments with Mobile Money, and verified riders to bring it to your door.</p>
+                    <div className="sr-cta">
+                      <button type="button" className="sr-btn primary" onClick={() => document.getElementById("sr-listings")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Start shopping <AIcon name="arrow" size={18} stroke={2.4} /></button>
+                      <button type="button" className="sr-btn ghost" onClick={() => setShowAuth(true)}>Create free account</button>
+                    </div>
+                    <div className="sr-trust">
+                      <span><AIcon name="shield" size={15} />Escrow protected</span>
+                      <span><AIcon name="bike" size={15} />Verified riders</span>
+                      <span><AIcon name="phone" size={15} />Pay with MoMo</span>
+                    </div>
+                    <div className="sr-minilinks">
+                      <button type="button" onClick={() => setShowTracker(true)}><AIcon name="pin" size={14} />Track an order</button>
+                      <button type="button" onClick={() => setShowRiderAuth(true)}><AIcon name="bike" size={14} />Ride with Silk Road</button>
+                    </div>
+                  </>)}
+                </div>
+                <HeroArt items={displayListings} />
               </div>
             </section>
+
+            <div className="sr-cats" role="tablist" aria-label="Categories">
+              {categoryList.map(([name, count]) => (
+                <button key={name} type="button" role="tab" aria-selected={activeCategory === name} className={`sr-cat ${activeCategory === name ? "on" : ""}`} onClick={() => setActiveCategory(name)}>
+                  <span className="ic"><AIcon name={CATEGORY_ICONS[name] || "tag"} size={17} /></span>{name}{name !== "All" && <em>{count}</em>}
+                </button>
+              ))}
+            </div>
 
             <div className="sr-sectionhead" id="sr-listings">
               <div><h3>Fresh on the marketplace</h3><p>Handpicked by students, delivered to your hostel.</p></div>
@@ -708,16 +738,19 @@ function App() {
             <div className="sr-listing-grid">
               {listingsLoading
                 ? Array.from({ length: PAGE_SIZE }).map((_, i) => <ListingSkeleton key={i} />)
-                : displayListings.map(item => (
+                : shownListings.map(item => (
                     <ProductCard
                       key={getItemId(item)}
                       item={item}
+                      isFav={favs.includes(getItemId(item))}
+                      onToggleFav={() => toggleFav(getItemId(item))}
                       rate={rate}
                       onSelect={() => (item._id ? openListing(item._id, item) : setSelectedProduct(item))}
                       onAddToCart={() => addToCart(item)}
                     />
                   ))}
             </div>
+            {!listingsLoading && shownListings.length === 0 && <div className="sr-more">No listings in “{activeCategory}” yet. <button type="button" className="sr-flink" style={{ color: "var(--sr-gold)", fontWeight: 700 }} onClick={() => setActiveCategory("All")}>Show everything</button></div>}
             {loadingMore && <div className="sr-more">Loading more listings...</div>}
             {!hasMore && displayListings.length > PAGE_SIZE && <div className="sr-more">You’ve seen all listings</div>}
           </div>
