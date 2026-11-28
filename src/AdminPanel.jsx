@@ -3,6 +3,7 @@ import OwnerCommissionStudio from "./OwnerCommissionStudio.jsx"
 import { useState, useEffect, useCallback } from "react"
 import "./AdminTheme.css"
 import { AIcon } from "./AccountIcons"
+import { AreaChart, Donut, Bars } from "./accountKit"
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 
@@ -469,40 +470,111 @@ function ReAuthModal({ onSuccess, onClose }) {
 // DASHBOARD TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DashboardTab() {
+function Spark({ values, color = "#d7b982" }) {
+  const w = 120, h = 40, max = Math.max(1, ...values)
+  const x = i => 2 + (i * (w - 4)) / Math.max(1, values.length - 1), y = v => h - 5 - (v / max) * (h - 10)
+  const d = values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ")
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="ad-spark" preserveAspectRatio="none" aria-hidden="true">
+      <path d={`${d} L${x(values.length - 1)},${h} L${x(0)},${h} Z`} fill={color} opacity=".14" />
+      <path d={d} fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+const weekDelta = vals => { const before = vals.slice(0, 7).reduce((t, v) => t + v, 0), now = vals.slice(7).reduce((t, v) => t + v, 0); return before === 0 ? (now > 0 ? 100 : 0) : Math.round(((now - before) / before) * 100) }
+const when = iso => { const m = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000)); return m < 1 ? "just now" : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.floor(m / 60)}h ago` : `${Math.floor(m / 1440)}d ago` }
+const MIX = [["escrow_held", "In escrow", "#d7b982"], ["release_pending", "Releasing", "#58a9e0"], ["released", "Paid out", "#4fbf8a"], ["pending", "Awaiting payment", "#f0b45c"]]
+
+function DashboardTab({ go }) {
   const [data, setData]       = useState(null)
+  const [trends, setTrends]   = useState(null)
+  const [waiting, setWaiting] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [metric, setMetric]   = useState("volume")
 
   useEffect(() => {
-    adminFetch("/admin/dashboard").then(({ data }) => { setData(data); setLoading(false) })
+    let live = true
+    Promise.all([adminFetch("/admin/dashboard"), adminFetch("/admin/dashboard/trends"), adminFetch("/admin/riders/review")]).then(([d, t, r]) => {
+      if (!live) return
+      setData(d.data); setTrends(t.ok ? t.data : null); setWaiting(r.ok && Array.isArray(r.data) ? r.data.filter(x => x.photoReviewStatus !== "rejected").length : null); setLoading(false)
+    })
+    return () => { live = false }
   }, [])
 
   if (loading) return <LoadingState />
   if (!data)   return <EmptyState message="Could not load dashboard." />
 
+  const days = trends?.days || []
+  const series = key => days.map(d => d[key])
+  const kpis = [
+    { label: "Sales volume · 14 days", value: fmtGHS(series("volume").reduce((t, v) => t + v, 0)), vals: series("volume"), color: "#d7b982", icon: "wallet" },
+    { label: "Orders · 14 days", value: series("orders").reduce((t, v) => t + v, 0).toLocaleString(), vals: series("orders"), color: "#58a9e0", icon: "bag" },
+    { label: "New users · 14 days", value: series("signups").reduce((t, v) => t + v, 0).toLocaleString(), vals: series("signups"), color: "#4fbf8a", icon: "user" },
+    { label: "Held in escrow", value: fmtGHS(data.escrowHeld), vals: null, color: "#f0b45c", icon: "shield", sub: `${data.escrowOrders ?? 0} orders waiting for delivery` },
+  ]
+  const actions = [
+    { label: "Riders to review", n: waiting, icon: "bike", tab: "riders" },
+    { label: "Payouts releasing", n: data.releasePendingOrders, icon: "clock", tab: "orders" },
+    { label: "Refunds pending", n: data.refundPendingOrders, icon: "alert", tab: "orders" },
+    { label: "Deliveries in progress", n: data.activeDeliveries, icon: "truck", tab: "deliveries" },
+  ]
+  const mix = trends?.mix || {}
+  const parts = MIX.map(([k, label, color]) => ({ label, color, value: mix[k] || 0 }))
+  const orderTotal = parts.reduce((t, p) => t + p.value, 0)
+  const points = days.map(d => ({ label: new Date(d.date + "T00:00:00").toLocaleDateString([], { day: "numeric", month: "short" }), value: d[metric] }))
+  const formats = { volume: fmtGHS, orders: v => `${v} orders`, signups: v => `${v} signups` }
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
-      <div>
-        <SectionTitle>Platform Overview</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 185px), 1fr))", gap: 14, marginTop: 20 }}>
-          <Stat label="Total Users"       value={data.users?.toLocaleString()}            accent={C.gold}  />
-          <Stat label="Active Listings"   value={data.listings?.toLocaleString()}                          />
-          <Stat label="Total Orders"      value={data.orders?.toLocaleString()}                            />
-          <Stat label="Riders"            value={data.riders?.toLocaleString()}            accent={C.blue} />
-          <Stat label="Active Deliveries" value={data.activeDeliveries?.toLocaleString()}  accent={C.blue} />
-          <Stat label="Completed Orders"  value={data.completedOrders?.toLocaleString()}   accent={C.green}/>
+    <div className="ad-scope ad-dash">
+      <section className="ad-kpis">
+        {kpis.map(k => {
+          const d = k.vals ? weekDelta(k.vals) : null
+          return (
+            <div key={k.label} className="ad-kpi" style={{ "--k": k.color }}>
+              <div className="top"><span className="ic"><AIcon name={k.icon} size={18} /></span>{d != null && <span className={`delta ${d >= 0 ? "up" : "down"}`}>{d >= 0 ? "▲" : "▼"} {Math.abs(d)}%</span>}</div>
+              <small>{k.label}</small><b>{k.value}</b>
+              {k.vals ? <Spark values={k.vals} color={k.color} /> : <span className="sub">{k.sub}</span>}
+            </div>
+          )
+        })}
+      </section>
+
+      <section className="ad-quick">
+        {actions.map(a => (
+          <button key={a.label} type="button" className={a.n > 0 ? "hot" : ""} onClick={() => go?.(a.tab)}>
+            <span className="ic"><AIcon name={a.icon} size={19} /></span>
+            <span className="tx"><b>{a.n == null ? "·" : a.n}</b><small>{a.label}</small></span>
+            <AIcon name={a.n > 0 ? "arrow" : "check"} size={16} />
+          </button>
+        ))}
+      </section>
+
+      <section className="ad-grid">
+        <div className="ad-panel wide">
+          <header><div><h3>Platform activity</h3><p>Last 14 days, day by day</p></div>
+            <div className="ad-seg" role="tablist">{[["volume", "Sales"], ["orders", "Orders"], ["signups", "Signups"]].map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={metric === id} className={metric === id ? "on" : ""} onClick={() => setMetric(id)}>{label}</button>)}</div></header>
+          {days.length ? <AreaChart points={points} height={190} format={formats[metric]} /> : <p className="ad-empty">Trend data is not available yet.</p>}
         </div>
-      </div>
-      <div>
-        <SectionTitle>Financials</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 185px), 1fr))", gap: 14, marginTop: 20 }}>
-          <Stat label="Platform Revenue"  value={fmtGHS(data.revenue)}      accent={C.gold}   sub="Completed orders" />
-          <Stat label="Total GMV"         value={fmtGHS(data.totalVolume)}   accent={C.green}  sub="Gross merchandise value" />
-          <Stat label="In Escrow"         value={fmtGHS(data.escrowHeld)}    accent={C.yellow} sub="Held pending delivery" />
-          <Stat label="Pending Orders"    value={data.pendingOrders}         accent={C.yellow} />
-          <Stat label="Escrow Orders"     value={data.escrowOrders}          accent={C.blue}   />
+        <div className="ad-panel">
+          <header><div><h3>Order pipeline</h3><p>Where every order stands</p></div></header>
+          <Donut parts={parts} center={{ value: orderTotal, label: "orders" }} />
         </div>
-      </div>
+      </section>
+
+      <section className="ad-grid3">
+        <div className="ad-panel"><header><div><h3>Top sellers</h3><p>By sales volume</p></div></header>
+          {trends?.topSellers?.length ? <Bars rows={trends.topSellers.map(s => ({ label: s.name, value: s.volume }))} format={fmtGHS} /> : <p className="ad-empty">No sales yet.</p>}</div>
+        <div className="ad-panel"><header><div><h3>Listings by category</h3><p>What people are selling</p></div></header>
+          {trends?.categories?.length ? <Bars rows={trends.categories.map(c => ({ label: c.name, value: c.count }))} format={v => `${v}`} /> : <p className="ad-empty">No listings yet.</p>}</div>
+        <div className="ad-panel"><header><div><h3>Live activity</h3><p>The latest on the platform</p></div></header>
+          {trends?.recent?.length ? <ul className="ad-feed">{trends.recent.map((e, i) => <li key={i}><span className={`dot ${e.type}`}><AIcon name={e.type === "order" ? "bag" : "user"} size={14} /></span><div><b>{e.title}</b><span>{e.detail}</span></div><time>{when(e.at)}</time></li>)}</ul> : <p className="ad-empty">Nothing yet.</p>}</div>
+      </section>
+
+      <section className="ad-totals">
+        {[["Users", data.users], ["Listings", data.listings], ["Orders", data.orders], ["Riders", data.riders], ["Completed", data.completedOrders]].map(([l, v]) => <div key={l}><b>{Number(v || 0).toLocaleString()}</b><small>{l}</small></div>)}
+        <div><b>{fmtGHS(data.totalVolume)}</b><small>Lifetime GMV</small></div>
+        <div><b>{fmtGHS(data.revenue)}</b><small>Platform revenue</small></div>
+      </section>
     </div>
   )
 }
@@ -510,6 +582,41 @@ function DashboardTab() {
 // ─────────────────────────────────────────────────────────────────────────────
 // USERS TAB
 // ─────────────────────────────────────────────────────────────────────────────
+
+const canEdit = () => ["owner", "super_admin"].includes(getAdminUser()?.tier)
+
+function EditModal({ title, fields, initial, endpoint, onClose, onSaved }) {
+  const [form, setForm]   = useState(initial)
+  const [busy, setBusy]   = useState(false)
+  const [error, setError] = useState("")
+  const save = async () => {
+    setBusy(true); setError("")
+    const { ok, data } = await adminFetch(endpoint, { method: "PUT", body: JSON.stringify(form) })
+    setBusy(false)
+    if (!ok) { setError(data?.message || "Could not save the changes."); return }
+    onSaved(data)
+  }
+  return (
+    <Modal title={title} onClose={onClose} width={520}>
+      <div style={{ display: "grid", gap: 14 }}>
+        {fields.map(f => (
+          <label key={f.key} style={{ display: "grid", gap: 7, color: C.textMid, fontSize: 11.5, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase" }}>
+            {f.label}
+            {f.multiline
+              ? <textarea className="ad-input" rows={4} value={form[f.key] ?? ""} onChange={e => setForm(v => ({ ...v, [f.key]: e.target.value }))} style={{ background: C.surface2, border: `1.5px solid ${C.border2}`, color: C.text, padding: "12px 15px", borderRadius: 12, fontSize: 14, fontFamily: "inherit", resize: "vertical", outline: "none" }} />
+              : <input className="ad-input" type={f.type || "text"} value={form[f.key] ?? ""} onChange={e => setForm(v => ({ ...v, [f.key]: e.target.value }))} style={{ background: C.surface2, border: `1.5px solid ${C.border2}`, color: C.text, padding: "12px 15px", borderRadius: 12, fontSize: 14, fontFamily: "inherit", outline: "none", textTransform: "none", letterSpacing: 0, fontWeight: 500 }} />}
+          </label>
+        ))}
+        {error && <Alert type="error">{error}</Alert>}
+        <Alert type="info">Every edit is saved to the audit log with the old and new values.</Alert>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn disabled={busy} onClick={save}>{busy ? "Saving..." : "Save changes"}</Btn>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 
 function UsersTab() {
   const [users, setUsers]     = useState([])
@@ -519,6 +626,7 @@ function UsersTab() {
   const [search, setSearch]   = useState("")
   const [loading, setLoading] = useState(false)
   const [confirm, setConfirm] = useState(null)
+  const [editing, setEditing] = useState(null)
 
   const load = useCallback(async (p = 1, q = search) => {
     setLoading(true)
@@ -547,7 +655,8 @@ function UsersTab() {
     { key: "status",     label: "Status",     render: u => <span style={{ display: "flex", alignItems: "center" }}><StatusDot status={u.status || "Active"} />{u.status || "Active"}</span> },
     { key: "createdAt",  label: "Joined",     render: u => fmt(u.createdAt) },
     { key: "actions",    label: "",           render: u => (
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {canEdit() && <Btn size="sm" variant="ghost" onClick={() => setEditing(u)}><AIcon name="edit" size={13} /> Edit</Btn>}
         <Btn size="sm" variant="danger" onClick={() => removeUser(u)}>Remove account</Btn>
         {u.status === "Suspended"
           ? <Btn size="sm" variant="success" onClick={() => setConfirm({ action: "reinstate", user: u })}>Reinstate</Btn>
@@ -564,6 +673,7 @@ function UsersTab() {
       </div>
       {loading ? <LoadingState /> : <Table columns={columns} rows={users} empty="No users found." />}
       <Pagination page={page} pages={pages} onPage={p => { setPage(p); load(p) }} />
+      {editing && <EditModal title={`Edit ${editing.name}`} endpoint={`/admin/users/${editing._id}`} initial={{ name: editing.name || "", phone: editing.phone || "", university: editing.university || "" }} fields={[{ key: "name", label: "Full name" }, { key: "phone", label: "Phone", type: "tel" }, { key: "university", label: "University" }]} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(page) }} />}
       {confirm && (
         <Modal title={confirm.action === "suspend" ? "Suspend User" : "Reinstate User"} onClose={() => setConfirm(null)}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -600,6 +710,7 @@ function ListingsTab() {
   const [confirm, setConfirm]   = useState(null)
   const [removalReason, setRemovalReason] = useState("")
   const [actionError, setActionError] = useState("")
+  const [editing, setEditing]   = useState(null)
 
   const load = useCallback(async (p = 1, q = search) => {
     setLoading(true)
@@ -627,7 +738,8 @@ function ListingsTab() {
     { key: "price",    label: "Price",    render: l => l.price ? fmtGHS(l.price) : l.dailyRate ? `${fmtGHS(l.dailyRate)}/day` : "—" },
     { key: "status",   label: "Status",   render: l => <span style={{ display: "flex", alignItems: "center" }}><StatusDot status={l.status || "Active"} />{l.status || "Active"}</span> },
     { key: "actions",  label: "",         render: l => (
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {canEdit() && <Btn size="sm" variant="ghost" onClick={() => setEditing(l)}><AIcon name="edit" size={13} /> Edit</Btn>}
         {l.status !== "Flagged" && <Btn size="sm" variant="ghost" onClick={() => setConfirm({ action: "flag", listing: l })}>Flag</Btn>}
         <Btn size="sm" variant="danger" onClick={() => {setRemovalReason("");setActionError("");setConfirm({ action: "remove", listing: l })}}>Remove</Btn>
       </div>
@@ -642,6 +754,10 @@ function ListingsTab() {
       </div>
       {loading ? <LoadingState /> : <Table columns={columns} rows={listings} empty="No listings found." />}
       <Pagination page={page} pages={pages} onPage={p => { setPage(p); load(p) }} />
+      {editing && <EditModal title={`Edit listing`} endpoint={`/admin/listings/${editing._id}`}
+        initial={{ title: editing.title || "", category: editing.category || "", desc: editing.desc || "", ...(editing.type === "rent" ? { dailyRate: editing.dailyRate ?? "", maxDays: editing.maxDays ?? "" } : { price: editing.price ?? "" }), ...(editing.type === "product" ? { condition: editing.condition || "" } : {}) }}
+        fields={[{ key: "title", label: "Title" }, { key: "category", label: "Category" }, { key: "desc", label: "Description", multiline: true }, ...(editing.type === "rent" ? [{ key: "dailyRate", label: "Daily rate (GH₵)", type: "number" }, { key: "maxDays", label: "Max days", type: "number" }] : [{ key: "price", label: "Price (GH₵)", type: "number" }]), ...(editing.type === "product" ? [{ key: "condition", label: "Condition" }] : [])]}
+        onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(page) }} />}
       {confirm && (
         <Modal title={confirm.action === "flag" ? "Flag Listing" : "Remove Listing"} onClose={() => setConfirm(null)}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1916,7 +2032,7 @@ export default function AdminPanel({ onClose }) {
             <h1>{tabLabel}</h1>
             <p>{({dashboard:"Marketplace performance, recent activity and operational priorities.",users:"Review accounts, manage access and handle removals with full audit history.",listings:"Moderate marketplace listings and protect buyers from misleading offers.",orders:"Track transaction progress, escrow states and order exceptions.",riders:"Manage rider accounts and monitor operational availability.",deliveries:"Review delivery progress, fulfillment and OTP completion.",finance:"Review settlement reporting, revenue and payment exceptions.",security:"Investigate suspicious activity and access-related events.",admins:"Manage administrators and assign individual permissions with Owner approval.",audit:"Search administrative actions and accountability records.",commission:"Review current rates, upcoming changes and seller notices.","payment-settings":"Configure supported payment collection methods safely.",removed_records:"Review withdrawn accounts and listings; restore eligible records."})[tab] || "Manage this area of the marketplace."}</p>
           </section>
-          {tab === "dashboard"  && <DashboardTab />}
+          {tab === "dashboard"  && <DashboardTab go={goTo} />}
           {tab === "users"      && <UsersTab />}
           {tab === "listings"   && <ListingsTab />}
           {tab === "orders"     && <OrdersTab />}
